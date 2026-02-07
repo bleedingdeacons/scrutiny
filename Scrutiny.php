@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 /**
  * Plugin Name: Scrutiny
- * Description: GDPR-compliant audit logging and personal data obscuring for Amber.
- * Version: 1.2.1
+ * Description: GDPR-compliant audit logging and personal data obscuring for Unity. Required by Amber.
+ * Version: 1.1.1
  * Requires at least: 6.0
  * Requires PHP: 8.0
  * Author: The Bleeding Deacons
@@ -60,14 +60,15 @@ function scrutiny(): \Unity\Core\DependencyContainer {
     return \Scrutiny\Plugin::getContainer();
 }
 
-// Initialize the plugin after Amber is loaded (so we can intercept its UI)
-add_action('amber_loaded', function($container) {
+// Initialize the plugin after Unity is loaded (BEFORE Amber, so filters are ready)
+// This ensures data obscuring filters are in place before any ACF fields are rendered
+add_action('unity_loaded', function($unityContainer) {
     try {
         if (!class_exists('Scrutiny\Plugin')) {
             throw new \Exception('Scrutiny\Plugin class not found. Check that Plugin.php exists in the src/ directory.');
         }
 
-        \Scrutiny\Plugin::init($container);
+        \Scrutiny\Plugin::init($unityContainer);
 
         do_action('scrutiny_loaded', \Scrutiny\Plugin::getContainer());
 
@@ -99,12 +100,12 @@ add_action('amber_loaded', function($container) {
 
         return;
     }
-}, 10);
+}, 5); // Priority 5 - before Amber (which uses priority 10)
 
-// Show admin notice if Unity/Amber are not available
+// Show admin notice if Unity is not available
 add_action('admin_notices', function() {
     if (!function_exists('unity') && !did_action('unity_loaded')) {
-        echo '<div class="notice notice-warning is-dismissible"><p><strong>Scrutiny:</strong> This plugin requires the Unity and Amber plugins to be installed and activated.</p></div>';
+        echo '<div class="notice notice-warning is-dismissible"><p><strong>Scrutiny:</strong> This plugin requires the Unity plugin to be installed and activated.</p></div>';
     }
 });
 
@@ -113,7 +114,7 @@ register_activation_hook(__FILE__, function () {
     if (!class_exists('Scrutiny\Plugin')) {
         deactivate_plugins(plugin_basename(__FILE__));
         wp_die(
-            esc_html__('Scrutiny requires the Unity and Amber plugins to be installed and activated.', 'scrutiny'),
+            esc_html__('Scrutiny requires the Unity plugin to be installed and activated.', 'scrutiny'),
             esc_html__('Plugin Activation Error', 'scrutiny'),
             ['back_link' => true]
         );
