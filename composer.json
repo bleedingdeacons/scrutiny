@@ -1,0 +1,38 @@
+{
+    "name": "bleeding-deacons/scrutiny",
+    "description": "GDPR compliant audit logging and personal data obscuring for Unity",
+    "type": "wordpress-plugin",
+    "version": "1.0.0",
+    "license": "MIT (Modified)",
+    "authors": [
+        {
+            "name": "The Bleeding Deacons"
+        }
+    ],
+    "require": {
+        "php": ">=8.0"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^10.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "Scrutiny\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Scrutiny\\Tests\\": "tests/"
+        }
+    },
+    "scripts": {
+        "build": "php build.php build:production",
+        "build:production": "php build.php build:production",
+        "build:dev": "php build.php build:dev",
+        "build:clean": "php build.php clean"
+    },
+    "config": {
+        "optimize-autoloader": true,
+        "sort-packages": true
+    }
+}
