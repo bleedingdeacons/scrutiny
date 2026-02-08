@@ -34,8 +34,8 @@ class DataObscurer implements DataObscurerInterface
         $this->logger = $logger;
 
         // Obscure ACF field values when they are loaded for display
-        add_filter('acf/format_value/name=' . MemberConstants::FIELD_PERSONAL_EMAIL, [$this, 'obscureAcfPersonalEmail'], 20, 3);
-        add_filter('acf/format_value/name=' . MemberConstants::FIELD_MOBILE_NUMBER, [$this, 'obscureAcfMobileNumber'], 20, 3);
+        add_filter('acf/format_value/name=' . MemberConstants::FIELD_NAME_PERSONAL_EMAIL, [$this, 'obscureAcfPersonalEmail'], 20, 3);
+        add_filter('acf/format_value/name=' . MemberConstants::FIELD_NAME_MOBILE_NUMBER, [$this, 'obscureAcfMobileNumber'], 20, 3);
 
         // Obscure the post title (private name) in admin list tables
 //        add_filter('the_title', [$this, 'obscurePostTitle'], 20, 2);
