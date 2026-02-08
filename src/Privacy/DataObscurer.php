@@ -38,7 +38,7 @@ class DataObscurer implements DataObscurerInterface
         add_filter('acf/format_value/name=' . MemberConstants::FIELD_MOBILE_NUMBER, [$this, 'obscureAcfMobileNumber'], 20, 3);
 
         // Obscure the post title (private name) in admin list tables
-        add_filter('the_title', [$this, 'obscurePostTitle'], 20, 2);
+//        add_filter('the_title', [$this, 'obscurePostTitle'], 20, 2);
     }
 
     /**
