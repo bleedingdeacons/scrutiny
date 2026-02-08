@@ -6,8 +6,8 @@ namespace Scrutiny\Audit;
 
 use Scrutiny\Audit\Interfaces\AuditLoggerInterface;
 use Scrutiny\Privacy\PersonalDataFields;
+use TsmlForUnity\TsmlMemberFields;
 use Unity\Members\Interfaces\MemberInterface;
-use Unity\Members\MemberConstants;
 use function add_action;
 use function add_filter;
 use function get_post_type;
@@ -72,7 +72,7 @@ class AuditTracker
         }
 
         // Verify it's a member post type
-        if ($screen->post_type !== MemberConstants::MEMBER_POST_TYPE) {
+        if ($screen->post_type !== TsmlMemberFields::MEMBER_POST_TYPE) {
             return;
         }
 
@@ -125,7 +125,7 @@ class AuditTracker
         }
 
         // Verify it's a member post type
-        if (get_post_type($postId) !== MemberConstants::MEMBER_POST_TYPE) {
+        if (get_post_type($postId) !== TsmlMemberFields::MEMBER_POST_TYPE) {
             return $value;
         }
 
