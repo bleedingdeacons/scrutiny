@@ -6,6 +6,7 @@ namespace Scrutiny\Privacy;
 
 use Scrutiny\Audit\Interfaces\AuditLoggerInterface;
 use Scrutiny\Privacy\Interfaces\DataObscurerInterface;
+use TsmlForUnity\TsmlMemberFields;
 use Unity\Members\MemberConstants;
 use function add_filter;
 use function current_user_can;
@@ -34,8 +35,8 @@ class DataObscurer implements DataObscurerInterface
         $this->logger = $logger;
 
         // Obscure ACF field values when they are loaded for display
-        add_filter('acf/format_value/name=' . MemberConstants::FIELD_NAME_PERSONAL_EMAIL, [$this, 'obscureAcfPersonalEmail'], 20, 3);
-        add_filter('acf/format_value/name=' . MemberConstants::FIELD_NAME_MOBILE_NUMBER, [$this, 'obscureAcfMobileNumber'], 20, 3);
+        add_filter('acf/format_value/name=' . TsmlMemberFields::FIELD_PERSONAL_EMAIL, [$this, 'obscureAcfPersonalEmail'], 20, 3);
+        add_filter('acf/format_value/name=' . TsmlMemberFields::FIELD_MOBILE_NUMBER, [$this, 'obscureAcfMobileNumber'], 20, 3);
 
         // Obscure the post title (private name) in admin list tables
 //        add_filter('the_title', [$this, 'obscurePostTitle'], 20, 2);

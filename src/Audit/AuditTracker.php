@@ -72,7 +72,7 @@ class AuditTracker
         }
 
         // Verify it's a member post type
-        if ($screen->post_type !== TsmlMemberFields::MEMBER_POST_TYPE) {
+        if ($screen->post_type !== TsmlMemberFields::POST_TYPE) {
             return;
         }
 
@@ -125,7 +125,7 @@ class AuditTracker
         }
 
         // Verify it's a member post type
-        if (get_post_type($postId) !== TsmlMemberFields::MEMBER_POST_TYPE) {
+        if (get_post_type($postId) !== TsmlMemberFields::POST_TYPE) {
             return $value;
         }
 
@@ -220,7 +220,7 @@ class AuditTracker
      */
     public function onMemberDeleted(int $postId, $post = null): void
     {
-        if (get_post_type($postId) !== MemberConstants::MEMBER_POST_TYPE) {
+        if (get_post_type($postId) !== TsmlMemberFields::POST_TYPE) {
             return;
         }
 
@@ -241,7 +241,7 @@ class AuditTracker
      */
     public function onMemberTrashed(int $postId): void
     {
-        if (get_post_type($postId) !== MemberConstants::MEMBER_POST_TYPE) {
+        if (get_post_type($postId) !== TsmlMemberFields::POST_TYPE) {
             return;
         }
 
