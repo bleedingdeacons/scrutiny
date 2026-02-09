@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Scrutiny\Privacy;
 
+use TsmlForUnity\TsmlMemberFields;
 use Unity\Members\MemberConstants;
 
 /**
@@ -46,8 +47,8 @@ final class PersonalDataFields
      * @var array<string, string>
      */
     public const ACF_FIELD_MAP = [
-        MemberConstants::FIELD_PERSONAL_EMAIL => self::PERSONAL_EMAIL,
-        MemberConstants::FIELD_MOBILE_NUMBER  => self::MOBILE_NUMBER,
+        TsmlMemberFields::FIELD_PERSONAL_EMAIL => self::PERSONAL_EMAIL,
+        TsmlMemberFields::FIELD_MOBILE_NUMBER  => self::MOBILE_NUMBER,
     ];
 
     /**

@@ -176,6 +176,7 @@ class DataObscurer implements DataObscurerInterface
      * @param int|null $postId The post ID
      * @return string The potentially obscured title
      */
+    // TODO Remove this method and remove the field references
     public function obscurePostTitle(string $title, ?int $postId = null): string
     {
         if ($postId === null || !is_admin()) {
