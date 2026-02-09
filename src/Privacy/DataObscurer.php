@@ -6,8 +6,7 @@ namespace Scrutiny\Privacy;
 
 use Scrutiny\Audit\Interfaces\AuditLoggerInterface;
 use Scrutiny\Privacy\Interfaces\DataObscurerInterface;
-use TsmlForUnity\TsmlMemberFields;
-use Unity\Members\MemberConstants;
+use TsmlForUnity\Members\TsmlMemberFields;
 use function add_filter;
 use function current_user_can;
 

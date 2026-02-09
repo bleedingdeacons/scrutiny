@@ -6,7 +6,7 @@ namespace Scrutiny\Audit;
 
 use Scrutiny\Audit\Interfaces\AuditLoggerInterface;
 use Scrutiny\Privacy\PersonalDataFields;
-use TsmlForUnity\TsmlMemberFields;
+use TsmlForUnity\Members\TsmlMemberFields;
 use Unity\Members\Interfaces\MemberInterface;
 use function add_action;
 use function add_filter;
