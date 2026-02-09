@@ -8,7 +8,7 @@ use PHPUnit\Framework\TestCase;
 use Scrutiny\Audit\AuditTracker;
 use Scrutiny\Audit\Interfaces\AuditLoggerInterface;
 use Scrutiny\Privacy\PersonalDataFields;
-use Unity\Members\Interfaces\MemberInterface;
+use Unity\Members\Interfaces\Member;
 use Mockery;
 
 /**
@@ -37,7 +37,7 @@ class AuditTrackerTest extends TestCase
         return $instance;
     }
 
-    private function createMember(array $overrides = []): MemberInterface
+    private function createMember(array $overrides = []): Member
     {
         $defaults = [
             'getId' => 42,
@@ -47,7 +47,7 @@ class AuditTrackerTest extends TestCase
         ];
 
         $data = array_merge($defaults, $overrides);
-        $member = Mockery::mock(MemberInterface::class);
+        $member = Mockery::mock(Member::class);
 
         foreach ($data as $method => $value) {
             $member->shouldReceive($method)->andReturn($value);

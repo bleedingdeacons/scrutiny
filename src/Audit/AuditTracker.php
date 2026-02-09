@@ -7,7 +7,7 @@ namespace Scrutiny\Audit;
 use Scrutiny\Audit\Interfaces\AuditLoggerInterface;
 use Scrutiny\Privacy\PersonalDataFields;
 use TsmlForUnity\Members\TsmlMemberFields;
-use Unity\Members\Interfaces\MemberInterface;
+use Unity\Members\Interfaces\Member;
 use function add_action;
 use function add_filter;
 use function get_post_type;
@@ -172,11 +172,11 @@ class AuditTracker
      * Compares original and updated member to detect which personal
      * data fields changed, and logs each change individually.
      *
-     * @param MemberInterface $updatedMember The member after changes
-     * @param MemberInterface $originalMember The member before changes
+     * @param Member $updatedMember The member after changes
+     * @param Member $originalMember The member before changes
      * @return void
      */
-    public function onMemberChanged(MemberInterface $updatedMember, MemberInterface $originalMember): void
+    public function onMemberChanged(Member $updatedMember, Member $originalMember): void
     {
         $memberId = $updatedMember->getId();
 
