@@ -4,8 +4,7 @@ declare(strict_types=1);
 
 namespace Scrutiny\Privacy;
 
-use TsmlForUnity\TsmlMemberFields;
-use Unity\Members\MemberConstants;
+use TsmlForUnity\Members\TsmlMemberFields;
 
 /**
  * Personal Data Fields
