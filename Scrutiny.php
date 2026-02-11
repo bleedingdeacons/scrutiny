@@ -62,7 +62,7 @@ function scrutiny(): \Unity\Core\DependencyContainer {
 
 // Initialize the plugin after Unity is loaded (BEFORE Amber, so filters are ready)
 // This ensures data obscuring filters are in place before any ACF fields are rendered
-add_action('unity_loaded', function($unityContainer) {
+add_action('unity/loaded', function($unityContainer) {
     try {
         if (!class_exists('Scrutiny\Plugin')) {
             throw new \Exception('Scrutiny\Plugin class not found. Check that Plugin.php exists in the src/ directory.');
@@ -104,7 +104,7 @@ add_action('unity_loaded', function($unityContainer) {
 
 // Show admin notice if Unity is not available
 add_action('admin_notices', function() {
-    if (!function_exists('unity') && !did_action('unity_loaded')) {
+    if (!function_exists('unity') && !did_action('unity/loaded')) {
         echo '<div class="notice notice-warning is-dismissible"><p><strong>Scrutiny:</strong> This plugin requires the Unity plugin to be installed and activated.</p></div>';
     }
 });
