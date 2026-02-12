@@ -6,7 +6,8 @@ namespace Scrutiny\Audit;
 
 use Scrutiny\Audit\Interfaces\AuditLoggerInterface;
 use Scrutiny\Privacy\PersonalDataFields;
-use TsmlForUnity\Members\TsmlMemberFields;
+
+use Unity\Core\Interfaces\Configuration;
 use Unity\Members\Interfaces\Member;
 use function add_action;
 use function add_filter;
@@ -37,9 +38,11 @@ class AuditTracker
      */
     private array $loggedMemberViews = [];
 
-    public function __construct(AuditLoggerInterface $logger)
+    public function __construct(Configuration $configuration, AuditLoggerInterface $logger)
     {
         $this->logger = $logger;
+
+        $this->member_config = $configuration->getConfig(Member::class);
 
         // Log when a member edit form is displayed in admin
         add_action('current_screen', [$this, 'onMemberAdminFormDisplayed'], 10, 1);
@@ -72,7 +75,7 @@ class AuditTracker
         }
 
         // Verify it's a member post type
-        if ($screen->post_type !== TsmlMemberFields::POST_TYPE) {
+        if ($screen->post_type !== $this->member_config['POST_TYPE']) {
             return;
         }
 
@@ -125,7 +128,7 @@ class AuditTracker
         }
 
         // Verify it's a member post type
-        if (get_post_type($postId) !== TsmlMemberFields::POST_TYPE) {
+        if (get_post_type($postId) !== $this->member_config['POST_TYPE']) {
             return $value;
         }
 

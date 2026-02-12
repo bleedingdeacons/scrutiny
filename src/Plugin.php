@@ -14,6 +14,7 @@ use Scrutiny\Audit\Interfaces\AuditRepositoryInterface;
 use Scrutiny\Privacy\DataObscurer;
 use Scrutiny\Privacy\Interfaces\DataObscurerInterface;
 use Unity\Core\DependencyContainer;
+use Unity\Core\Interfaces\Configuration;
 use function add_action;
 use function is_admin;
 
@@ -87,6 +88,7 @@ class Plugin
         // Audit Tracker (hooks into member lifecycle)
         $container->register(AuditTracker::class, function (DependencyContainer $c) {
             return new AuditTracker(
+                $c->get(Configuration::class),
                 $c->get(AuditLoggerInterface::class)
             );
         });
