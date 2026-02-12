@@ -180,16 +180,6 @@ class AuditTracker
     {
         $memberId = $updatedMember->getId();
 
-//        if ($originalMember->getPrivateName() !== $updatedMember->getPrivateName()) {
-//            $this->logger->log(
-//                AuditLoggerInterface::ACTION_UPDATE,
-//                AuditLoggerInterface::ENTITY_MEMBER,
-//                $memberId,
-//                PersonalDataFields::PRIVATE_NAME,
-//                'Value changed'
-//            );
-//        }
-
         if ($originalMember->getPersonalEmail() !== $updatedMember->getPersonalEmail()) {
             $this->logger->log(
                 AuditLoggerInterface::ACTION_UPDATE,

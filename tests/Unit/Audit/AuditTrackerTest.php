@@ -41,7 +41,6 @@ class AuditTrackerTest extends TestCase
     {
         $defaults = [
             'getId' => 42,
-            'getPrivateName' => 'John S',
             'getPersonalEmail' => 'john@example.com',
             'getMobileNumber' => '07700 900123',
         ];
@@ -66,14 +65,13 @@ class AuditTrackerTest extends TestCase
                 AuditLoggerInterface::ACTION_UPDATE,
                 AuditLoggerInterface::ENTITY_MEMBER,
                 42,
-                PersonalDataFields::PRIVATE_NAME,
                 'Value changed'
             );
 
         $tracker = $this->createTracker($logger);
 
-        $original = $this->createMember(['getPrivateName' => 'John S']);
-        $updated = $this->createMember(['getPrivateName' => 'John T']);
+        $original = $this->createMember(['getAnonymousName' => 'John S']);
+        $updated = $this->createMember(['getAnonymousName' => 'John T']);
 
         $tracker->onMemberChanged($updated, $original);
     }
@@ -131,12 +129,11 @@ class AuditTrackerTest extends TestCase
         $tracker = $this->createTracker($logger);
 
         $original = $this->createMember([
-            'getPrivateName' => 'John S',
-            'getPersonalEmail' => 'old@example.com',
+            'getAnonymousName' => 'old@example.com',
             'getMobileNumber' => '07700 900123',
         ]);
         $updated = $this->createMember([
-            'getPrivateName' => 'Jane D',
+            'getAnonymousName' => 'Jane D',
             'getPersonalEmail' => 'new@example.com',
             'getMobileNumber' => '07700 900456',
         ]);
