@@ -182,7 +182,7 @@ class DataObscurer implements DataObscurerInterface
             return $title;
         }
 
-        if (get_post_type($postId) !== MemberConstants::MEMBER_POST_TYPE) {
+        if (get_post_type($postId) !== TsmlMemberFields::POST_TYPE) {
             return $title;
         }
 
@@ -190,7 +190,7 @@ class DataObscurer implements DataObscurerInterface
             AuditLoggerInterface::ACTION_VIEW,
             AuditLoggerInterface::ENTITY_MEMBER,
             $postId,
-            PersonalDataFields::PRIVATE_NAME,
+            'post_title',
             'Post title rendered'
         );
 

@@ -54,25 +54,23 @@ class AuditLoggerTest extends TestCase
         // Actually, log() calls wp_get_current_user() which isn't available.
         // So let's test that logBatch delegates correctly.
 
-        // Test the simple contract: 3 fields = 3 inserts
-        $this->assertCount(3, PersonalDataFields::ALL_FIELDS);
+        // Test the simple contract: 2 fields = 2 inserts
+        $this->assertCount(2, PersonalDataFields::ALL_FIELDS);
     }
 
     /** @test */
     public function personal_data_fields_are_correctly_defined(): void
     {
-        $this->assertSame('private_name', PersonalDataFields::PRIVATE_NAME);
         $this->assertSame('personal_email', PersonalDataFields::PERSONAL_EMAIL);
         $this->assertSame('mobile_number', PersonalDataFields::MOBILE_NUMBER);
     }
 
     /** @test */
-    public function all_fields_constant_contains_all_three_fields(): void
+    public function all_fields_constant_contains_all_fields(): void
     {
-        $this->assertContains(PersonalDataFields::PRIVATE_NAME, PersonalDataFields::ALL_FIELDS);
         $this->assertContains(PersonalDataFields::PERSONAL_EMAIL, PersonalDataFields::ALL_FIELDS);
         $this->assertContains(PersonalDataFields::MOBILE_NUMBER, PersonalDataFields::ALL_FIELDS);
-        $this->assertCount(3, PersonalDataFields::ALL_FIELDS);
+        $this->assertCount(2, PersonalDataFields::ALL_FIELDS);
     }
 
     /** @test */

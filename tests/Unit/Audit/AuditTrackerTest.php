@@ -56,7 +56,7 @@ class AuditTrackerTest extends TestCase
     }
 
     /** @test */
-    public function it_logs_when_private_name_changes(): void
+    public function it_logs_when_anonymous_name_changes(): void
     {
         $logger = Mockery::mock(AuditLoggerInterface::class);
         $logger->shouldReceive('log')
