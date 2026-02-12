@@ -213,7 +213,7 @@ class AuditTracker
      */
     public function onMemberDeleted(int $postId, $post = null): void
     {
-        if (get_post_type($postId) !== TsmlMemberFields::POST_TYPE) {
+        if (get_post_type($postId) !== $this->member_config['POST_TYPE']) {
             return;
         }
 
@@ -234,7 +234,7 @@ class AuditTracker
      */
     public function onMemberTrashed(int $postId): void
     {
-        if (get_post_type($postId) !== TsmlMemberFields::POST_TYPE) {
+        if (get_post_type($postId) !== $this->member_config['POST_TYPE']) {
             return;
         }
 
