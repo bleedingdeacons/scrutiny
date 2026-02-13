@@ -35,7 +35,6 @@ final class PersonalDataFields
      * @var array<string>
      */
     public const ALL_FIELDS = [
-//        self::PRIVATE_NAME,
         self::PERSONAL_EMAIL,
         self::MOBILE_NUMBER,
     ];
@@ -56,7 +55,6 @@ final class PersonalDataFields
      * @var array<string, string>
      */
     public const LABELS = [
-//        self::PRIVATE_NAME   => 'Private Name',
         self::PERSONAL_EMAIL => 'Personal Email',
         self::MOBILE_NUMBER  => 'Mobile Number',
     ];

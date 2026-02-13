@@ -38,6 +38,8 @@ class AuditTracker
      */
     private array $loggedMemberViews = [];
 
+    private readonly array $member_config;
+
     public function __construct(Configuration $configuration, AuditLoggerInterface $logger)
     {
         $this->logger = $logger;
