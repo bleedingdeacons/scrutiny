@@ -21,7 +21,7 @@ use function is_admin;
 /**
  * Main Scrutiny Plugin Class
  *
- * Provides GDPR compliant audit logging and personal data obscuring for Unity.
+ * Provides GDPR-compliant audit logging and personal data obscuring for Unity.
  *
  * Architecture:
  *   AuditRepository  – stores audit log entries in a custom database table
