@@ -1,0 +1,108 @@
+# Wordpress - ignore core, configuration, examples, uploads and logs.
+# https://github.com/github/gitignore/blob/main/WordPress.gitignore
+
+# Core
+#
+# Note: if you want to stage/commit WP core files
+# you can delete this whole section/until UnityConfiguration.
+/wp-admin/
+/wp-content/index.php
+/wp-content/languages
+/wp-content/plugins/index.php
+/wp-content/themes/index.php
+/wp-includes/
+/index.php
+/license.txt
+/readme.html
+/wp-*.php
+/xmlrpc.php
+
+# UnityConfiguration
+wp-config.php
+
+# Example themes
+/wp-content/themes/twenty*/
+
+# Example plugin
+/wp-content/plugins/hello.php
+
+# Uploads
+/wp-content/uploads/
+
+# Log files
+*.log
+
+# htaccess
+/.htaccess
+
+# All plugins
+#
+# Note: If you wish to whitelist plugins,
+# uncomment the next line
+#/wp-content/plugins
+
+# All themes
+#
+# Note: If you wish to whitelist themes,
+# uncomment the next line
+#/wp-content/themes
+
+# Build artifacts
+build/
+*.zip
+
+# Composer
+/vendor/
+composer.lock
+
+# IDE - PhpStorm / IntelliJ IDEA
+/.idea/
+.idea/codeStyles/codeStyleConfig.xml
+.idea/codeStyles/Project.xml
+.idea/confur.iml
+.idea/modules.xml
+.idea/php.xml
+.idea/vcs.xml
+.idea/laravel-idea.xml
+
+# IDE - Visual Studio Code
+.vscode/
+*.code-workspace
+
+# IDE - Other
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# PHPUnit Testing
+/.phpunit.cache/
+/coverage/
+phpunit.xml.local
+.phpunit.result.cache
+
+# PHPStan
+/phpstan.neon
+/phpstan-baseline.neon
+phpstan-baseline.php
+
+# PHP_CodeSniffer
+.phpcs-cache
+
+# Node.js (if using any frontend build tools)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Environment files
+.env
+.env.local
+.env.*.local
+.env.backup
+
+# Temporary files
+*.tmp
+*.temp
+*.cache
