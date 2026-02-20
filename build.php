@@ -86,15 +86,8 @@ class PluginBuilder
         // Build script
         'build.php',
 
-        // ==== ALL VENDOR PACKAGES (no production dependencies) ====
-        'vendor/bin',
-        'vendor/myclabs',
-        'vendor/nikic',
-        'vendor/phar-io',
-        'vendor/phpstan',
-        'vendor/phpunit',
-        'vendor/sebastian',
-        'vendor/theseer',
+        // Vendor (no production dependencies needed)
+        'vendor',
     ];
 
     // Files and directories to exclude in dev builds
@@ -244,10 +237,13 @@ class PluginBuilder
         $this->createZip($archiveName, $excludes);
 
         // Display file size
-        $size = $this->formatBytes(filesize($archiveName));
         $this->log("Archive created successfully: " . basename($archiveName));
-        $this->log("File size: {$size}");
-        $this->log("Locations: {$archiveName}");
+        $fileSize = filesize($archiveName);
+        if ($fileSize !== false) {
+            $size = $this->formatBytes($fileSize);
+            $this->log("File size: {$size}");
+        }
+        $this->log("Location: {$archiveName}");
     }
 
     /**
@@ -286,8 +282,9 @@ class PluginBuilder
     {
         $zip = new ZipArchive();
 
-        if ($zip->open($archivePath, ZipArchive::CREATE | ZipArchive::OVERWRITE) !== true) {
-            $this->error("Failed to create ZIP archive");
+        $result = $zip->open($archivePath, ZipArchive::CREATE | ZipArchive::OVERWRITE);
+        if ($result !== true) {
+            $this->error("Failed to create ZIP archive (error code: {$result})");
             exit(1);
         }
 
@@ -303,12 +300,24 @@ class PluginBuilder
                 $relativePath = str_replace('\\', '/', $relativePath);
 
                 $zipPath = $this->pluginName . '/' . $relativePath;
-                $zip->addFile($file, $zipPath);
+
+                // Read file content and add as string to avoid keeping file handles
+                // open (which causes failures on Windows with many files)
+                $contents = file_get_contents($file);
+                if ($contents === false) {
+                    $this->error("Warning: Could not read file: {$file}");
+                    continue;
+                }
+                $zip->addFromString($zipPath, $contents);
                 $fileCount++;
             }
         }
 
-        $zip->close();
+        if (!$zip->close()) {
+            $this->error("Failed to write ZIP archive to: {$archivePath}");
+            exit(1);
+        }
+
         $this->log("Added {$fileCount} files to archive");
     }
 
