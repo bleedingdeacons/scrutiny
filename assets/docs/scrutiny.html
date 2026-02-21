@@ -1,0 +1,609 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Scrutiny Plugin — User Documentation</title>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #FAFAF8;
+            --surface: #FFFFFF;
+            --border: #E8E5E0;
+            --text: #1A1A18;
+            --text-secondary: #6B6860;
+            --accent: #D97706;
+            --accent-bg: #FEF3C7;
+            --accent-dark: #B45309;
+            --info: #1D4ED8;
+            --info-bg: #DBEAFE;
+            --danger: #DC2626;
+            --danger-bg: #FEE2E2;
+            --success: #16A34A;
+            --success-bg: #DCFCE7;
+            --code-bg: #F5F3EF;
+            --nav-width: 280px;
+            --header-height: 64px;
+            --radius: 10px;
+            --shadow-sm: 0 1px 3px rgba(0,0,0,0.04);
+            --shadow-md: 0 4px 12px rgba(0,0,0,0.06);
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html { scroll-behavior: smooth; scroll-padding-top: calc(var(--header-height) + 24px); }
+
+        body {
+            font-family: 'DM Sans', sans-serif;
+            font-size: 16px;
+            line-height: 1.7;
+            color: var(--text);
+            background: var(--bg);
+            -webkit-font-smoothing: antialiased;
+        }
+
+        .site-header {
+            position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+            height: var(--header-height);
+            background: rgba(250,250,248,0.92);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border-bottom: 1px solid var(--border);
+            display: flex; align-items: center; padding: 0 24px;
+            gap: 16px;
+        }
+        .site-header .logo {
+            display: flex; align-items: center; gap: 10px;
+            font-weight: 700; font-size: 20px; color: var(--text);
+            text-decoration: none; letter-spacing: -0.3px;
+        }
+        .site-header .logo span { color: var(--accent); }
+        .site-header .version {
+            font-size: 12px; font-weight: 500; color: var(--text-secondary);
+            background: var(--code-bg); padding: 2px 8px; border-radius: 6px;
+        }
+        .hamburger {
+            display: none; background: none; border: none; cursor: pointer;
+            width: 36px; height: 36px; flex-shrink: 0;
+            border-radius: 8px; align-items: center; justify-content: center;
+        }
+        .hamburger:hover { background: var(--code-bg); }
+        .hamburger svg { width: 22px; height: 22px; color: var(--text); }
+
+        .sidebar {
+            position: fixed; top: var(--header-height); left: 0; bottom: 0;
+            width: var(--nav-width); overflow-y: auto;
+            border-right: 1px solid var(--border);
+            background: var(--bg); padding: 24px 0;
+            z-index: 90;
+        }
+        .sidebar::-webkit-scrollbar { width: 4px; }
+        .sidebar::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+        .nav-section { padding: 0 20px; margin-bottom: 24px; }
+        .nav-section-title {
+            font-size: 11px; font-weight: 600; text-transform: uppercase;
+            letter-spacing: 1px; color: var(--text-secondary); margin-bottom: 8px;
+            padding-left: 12px;
+        }
+        .nav-link {
+            display: block; padding: 6px 12px; border-radius: 8px;
+            color: var(--text-secondary); text-decoration: none;
+            font-size: 14px; font-weight: 400; transition: all 0.15s;
+            line-height: 1.5;
+        }
+        .nav-link:hover { color: var(--text); background: var(--surface); }
+        .nav-link.active { color: var(--accent-dark); background: var(--accent-bg); font-weight: 500; }
+
+        .main {
+            margin-left: var(--nav-width);
+            padding: calc(var(--header-height) + 40px) 48px 80px;
+            max-width: 860px;
+        }
+
+        h1 {
+            font-size: 36px; font-weight: 700; letter-spacing: -0.8px;
+            line-height: 1.2; margin-bottom: 12px; color: var(--text);
+        }
+        h1 .emoji { font-size: 32px; margin-right: 4px; }
+        .subtitle {
+            font-size: 18px; color: var(--text-secondary); font-weight: 400;
+            margin-bottom: 40px; line-height: 1.6;
+        }
+        h2 {
+            font-size: 24px; font-weight: 700; letter-spacing: -0.4px;
+            margin-top: 56px; margin-bottom: 16px; padding-top: 24px;
+            border-top: 1px solid var(--border); color: var(--text);
+        }
+        h2:first-of-type { border-top: none; margin-top: 0; padding-top: 0; }
+        h3 {
+            font-size: 18px; font-weight: 600; margin-top: 32px; margin-bottom: 10px;
+            color: var(--text);
+        }
+        p { margin-bottom: 16px; }
+        ul, ol { margin-bottom: 16px; padding-left: 24px; }
+        li { margin-bottom: 6px; }
+
+        .card {
+            background: var(--surface); border: 1px solid var(--border);
+            border-radius: var(--radius); padding: 24px; margin-bottom: 24px;
+            box-shadow: var(--shadow-sm);
+        }
+        .callout {
+            border-radius: var(--radius); padding: 16px 20px; margin-bottom: 24px;
+            font-size: 15px; display: flex; gap: 12px; align-items: flex-start;
+            line-height: 1.6;
+        }
+        .callout-icon { font-size: 18px; flex-shrink: 0; margin-top: 1px; }
+        .callout.info { background: var(--info-bg); border-left: 4px solid var(--info); }
+        .callout.warning { background: var(--accent-bg); border-left: 4px solid var(--accent); }
+        .callout.danger { background: var(--danger-bg); border-left: 4px solid var(--danger); }
+        .callout.success { background: var(--success-bg); border-left: 4px solid var(--success); }
+
+        code {
+            font-family: 'JetBrains Mono', monospace; font-size: 13.5px;
+            background: var(--code-bg); padding: 2px 7px; border-radius: 5px;
+            color: var(--accent-dark);
+        }
+        pre {
+            background: #1E1E1C; color: #D4D0C8; border-radius: var(--radius);
+            padding: 20px 24px; margin-bottom: 24px; overflow-x: auto;
+            font-family: 'JetBrains Mono', monospace; font-size: 13px; line-height: 1.7;
+        }
+        pre code { background: none; padding: 0; color: inherit; }
+
+        .status-table {
+            width: 100%; border-collapse: collapse; margin-bottom: 24px;
+            font-size: 15px;
+        }
+        .status-table th {
+            text-align: left; padding: 10px 16px; font-weight: 600;
+            border-bottom: 2px solid var(--border); font-size: 13px;
+            text-transform: uppercase; letter-spacing: 0.5px;
+            color: var(--text-secondary);
+        }
+        .status-table td { padding: 10px 16px; border-bottom: 1px solid var(--border); }
+        .status-badge {
+            display: inline-block; padding: 2px 10px; border-radius: 20px;
+            font-size: 13px; font-weight: 600;
+        }
+        .badge-view { background: #e8f4fd; color: #1d5d90; }
+        .badge-create { background: var(--success-bg); color: var(--success); }
+        .badge-update { background: var(--accent-bg); color: var(--accent-dark); }
+        .badge-delete { background: var(--danger-bg); color: var(--danger); }
+        .badge-export { background: #f3e8fd; color: #6b21a8; }
+        .badge-purge { background: var(--code-bg); color: var(--text-secondary); }
+
+        .steps { counter-reset: step; list-style: none; padding-left: 0; }
+        .steps li {
+            counter-increment: step; padding-left: 44px; position: relative;
+            margin-bottom: 20px; min-height: 32px;
+        }
+        .steps li::before {
+            content: counter(step);
+            position: absolute; left: 0; top: 0;
+            width: 30px; height: 30px; border-radius: 50%;
+            background: var(--accent); color: #fff;
+            font-weight: 700; font-size: 14px;
+            display: flex; align-items: center; justify-content: center;
+        }
+
+        .obscure-demo {
+            font-family: 'JetBrains Mono', monospace; font-size: 14px;
+            display: flex; align-items: center; gap: 16px; margin: 8px 0;
+        }
+        .obscure-demo .arrow { color: var(--text-secondary); }
+
+        .overlay {
+            display: none; position: fixed; inset: 0;
+            background: rgba(0,0,0,0.3); z-index: 80;
+        }
+
+        @media (max-width: 860px) {
+            .sidebar {
+                transform: translateX(-100%);
+                transition: transform 0.25s ease;
+                box-shadow: var(--shadow-md);
+            }
+            .sidebar.open { transform: translateX(0); }
+            .overlay.visible { display: block; }
+            .hamburger { display: flex; }
+            .main { margin-left: 0; padding: calc(var(--header-height) + 24px) 20px 60px; }
+            h1 { font-size: 28px; }
+            h2 { font-size: 20px; }
+            pre { padding: 16px; font-size: 12px; }
+            .status-table { font-size: 14px; }
+            .status-table th, .status-table td { padding: 8px 10px; }
+        }
+
+        @media print {
+            .site-header, .sidebar, .hamburger, .overlay { display: none !important; }
+            .main { margin-left: 0; padding: 20px; max-width: 100%; }
+        }
+    </style>
+</head>
+<body>
+
+<header class="site-header">
+    <button class="hamburger" onclick="toggleNav()" aria-label="Toggle navigation">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+    </button>
+    <a href="#" class="logo">
+        <span>🔍</span> Scrutiny <span>Docs</span>
+    </a>
+    <span class="version">February 2026</span>
+</header>
+
+<div class="overlay" onclick="toggleNav()"></div>
+
+<nav class="sidebar" id="sidebar">
+    <div class="nav-section">
+        <div class="nav-section-title">Getting Started</div>
+        <a href="#overview" class="nav-link active">Overview</a>
+        <a href="#requirements" class="nav-link">Requirements</a>
+        <a href="#installation" class="nav-link">Installation</a>
+    </div>
+    <div class="nav-section">
+        <div class="nav-section-title">Data Obscuring</div>
+        <a href="#obscuring-overview" class="nav-link">How It Works</a>
+        <a href="#protected-fields" class="nav-link">Protected Fields</a>
+        <a href="#capability" class="nav-link">View Permission</a>
+    </div>
+    <div class="nav-section">
+        <div class="nav-section-title">Audit Log</div>
+        <a href="#audit-overview" class="nav-link">What Gets Logged</a>
+        <a href="#audit-actions" class="nav-link">Action Types</a>
+        <a href="#audit-page" class="nav-link">Viewing the Log</a>
+        <a href="#audit-filters" class="nav-link">Filtering &amp; Search</a>
+    </div>
+    <div class="nav-section">
+        <div class="nav-section-title">Data Retention</div>
+        <a href="#purging" class="nav-link">Purging Old Entries</a>
+        <a href="#ip-anonymisation" class="nav-link">IP Anonymisation</a>
+    </div>
+    <div class="nav-section">
+        <div class="nav-section-title">Help</div>
+        <a href="#troubleshooting" class="nav-link">Troubleshooting</a>
+        <a href="#faq" class="nav-link">FAQ</a>
+    </div>
+</nav>
+
+<main class="main">
+
+    <!-- Overview -->
+    <section id="overview">
+        <h1><span class="emoji">🔍</span> Scrutiny Plugin</h1>
+        <p class="subtitle">
+            GDPR-compliant audit logging and personal data obscuring for Unity. Scrutiny protects member privacy by masking personal data in the admin UI and recording every access to an audit trail.
+        </p>
+
+        <div class="card">
+            <h3>What Scrutiny Does</h3>
+            <p>Scrutiny has two jobs. First, it <strong>obscures personal data</strong> — personal emails and phone numbers are masked with bullet characters for users who don't have permission to see them. Second, it maintains a <strong>GDPR audit log</strong> that records who viewed, changed, or deleted personal data, when they did it, and from where.</p>
+            <p style="margin-bottom:0;">Scrutiny is a required dependency for the Amber plugin. If Scrutiny is deactivated, Amber will automatically shut down to prevent non-compliant handling of personal data.</p>
+        </div>
+    </section>
+
+    <!-- Requirements -->
+    <section id="requirements">
+        <h2>Requirements</h2>
+        <ul>
+            <li><strong>WordPress</strong> 6.0 or later</li>
+            <li><strong>PHP</strong> 8.0 or later</li>
+            <li><strong>Unity plugin</strong> — must be installed and activated (provides the member data layer and configuration)</li>
+            <li><strong>Advanced Custom Fields (ACF)</strong> — used for the member fields that Scrutiny protects</li>
+        </ul>
+
+        <div class="callout warning">
+            <span class="callout-icon">⚠️</span>
+            <div>If Unity is not active, you'll see: <em>"This plugin requires the Unity plugin to be installed and activated."</em> Scrutiny will not load until Unity is running.</div>
+        </div>
+
+        <div class="callout info">
+            <span class="callout-icon">💡</span>
+            <div>Scrutiny loads at priority 5 on the <code>unity/loaded</code> hook — before Amber (priority 10). This ensures data obscuring filters are in place before any member data is displayed.</div>
+        </div>
+    </section>
+
+    <!-- Installation -->
+    <section id="installation">
+        <h2>Installation</h2>
+        <ol class="steps">
+            <li>Make sure the <strong>Unity</strong> plugin is installed and activated.</li>
+            <li>Upload the <code>scrutiny</code> folder to your <code>/wp-content/plugins/</code> directory, or install via the WordPress plugin uploader.</li>
+            <li>Go to <strong>Plugins → Installed Plugins</strong> and activate <strong>Scrutiny</strong>.</li>
+            <li>On activation, Scrutiny automatically creates its database table (<code>wp_scrutiny_audit_log</code>) and grants the <code>scrutiny_view_personal_data</code> capability to Administrators.</li>
+            <li>An <strong>Audit Log</strong> submenu appears under the <strong>Intergroup</strong> menu (added by Amber).</li>
+        </ol>
+    </section>
+
+    <!-- Obscuring Overview -->
+    <section id="obscuring-overview">
+        <h2>How Data Obscuring Works</h2>
+        <p>When a member record is displayed in the admin, Scrutiny intercepts the ACF field values before they are rendered. If the current user does <strong>not</strong> have the <code>scrutiny_view_personal_data</code> capability, the values are replaced with masked versions:</p>
+
+        <div class="card">
+            <h3>Email Obscuring</h3>
+            <p>Only the first character of the local part and domain name are shown. The TLD is kept intact.</p>
+            <div class="obscure-demo">
+                <code>john@example.com</code>
+                <span class="arrow">→</span>
+                <code>j•••@e••••••.com</code>
+            </div>
+        </div>
+
+        <div class="card">
+            <h3>Phone Number Obscuring</h3>
+            <p>Only the last 3 digits are visible. Everything else is replaced with bullet characters.</p>
+            <div class="obscure-demo">
+                <code>07700 900123</code>
+                <span class="arrow">→</span>
+                <code>•••••••••123</code>
+            </div>
+        </div>
+
+        <div class="card">
+            <h3>Name Obscuring</h3>
+            <p>Only the first character of each word is shown (available as a method, currently not applied to the admin UI by default).</p>
+            <div class="obscure-demo">
+                <code>John Smith</code>
+                <span class="arrow">→</span>
+                <code>J••• S••••</code>
+            </div>
+        </div>
+
+        <div class="callout info">
+            <span class="callout-icon">💡</span>
+            <div>Every time a personal data field is rendered — whether the value is obscured or shown in full — Scrutiny logs the access to the audit trail. This happens automatically and requires no action from you.</div>
+        </div>
+    </section>
+
+    <!-- Protected Fields -->
+    <section id="protected-fields">
+        <h2>Protected Fields</h2>
+        <p>Scrutiny currently protects the following member fields:</p>
+
+        <table class="status-table">
+            <thead><tr><th>Field</th><th>Obscuring Method</th><th>Description</th></tr></thead>
+            <tbody>
+            <tr><td><strong>Personal Email</strong></td><td>Email masking</td><td>The member's private email address (not the position email).</td></tr>
+            <tr><td><strong>Mobile Number</strong></td><td>Phone masking</td><td>The member's personal mobile phone number.</td></tr>
+            </tbody>
+        </table>
+
+        <p>These fields are defined in the <code>PersonalDataFields</code> configuration. All audit log entries, filters, and the admin page use human-readable labels ("Personal Email", "Mobile Number") rather than internal field keys.</p>
+    </section>
+
+    <!-- Capability -->
+    <section id="capability">
+        <h2>View Permission</h2>
+        <p>Access to unobscured personal data is controlled by the WordPress capability <code>scrutiny_view_personal_data</code>.</p>
+
+        <div class="card">
+            <h3>Who has it by default?</h3>
+            <p>On activation, Scrutiny grants this capability to the <strong>Administrator</strong> role only. All other roles see masked values.</p>
+        </div>
+
+        <div class="card">
+            <h3>Granting it to other roles</h3>
+            <p>If you need other roles (e.g. Editors) to see full personal data, you can assign the capability using a role management plugin such as "Members" or "User Role Editor". Add <code>scrutiny_view_personal_data</code> to the desired role.</p>
+        </div>
+
+        <div class="callout danger">
+            <span class="callout-icon">🚨</span>
+            <div>Grant this capability carefully. Under GDPR, access to personal data should follow the principle of least privilege — only users who genuinely need to see the data should have it. Every access is logged in the audit trail.</div>
+        </div>
+    </section>
+
+    <!-- Audit Overview -->
+    <section id="audit-overview">
+        <h2>What Gets Logged</h2>
+        <p>Scrutiny automatically logs the following events for personal data fields:</p>
+
+        <ul>
+            <li><strong>Viewing</strong> — when a member edit form is opened in the admin, or when personal data fields are loaded on the front end</li>
+            <li><strong>Updating</strong> — when a personal email or mobile number value is changed</li>
+            <li><strong>Deleting</strong> — when a member post is moved to Trash or permanently deleted</li>
+        </ul>
+
+        <div class="callout success">
+            <span class="callout-icon">✅</span>
+            <div><strong>No raw personal data is stored in the audit log.</strong> Entries record only the field name (e.g. "Personal Email"), the member ID, the WordPress user who performed the action, and a timestamp. The actual email address or phone number is never written to the log.</div>
+        </div>
+    </section>
+
+    <!-- Action Types -->
+    <section id="audit-actions">
+        <h2>Action Types</h2>
+        <p>Each audit log entry has a colour-coded action badge:</p>
+
+        <table class="status-table">
+            <thead><tr><th>Action</th><th>Meaning</th></tr></thead>
+            <tbody>
+            <tr><td><span class="status-badge badge-view">View</span></td><td>A personal data field was displayed to a user (in admin or on the front end).</td></tr>
+            <tr><td><span class="status-badge badge-create">Create</span></td><td>A new member record with personal data was created.</td></tr>
+            <tr><td><span class="status-badge badge-update">Update</span></td><td>A personal data field value was changed.</td></tr>
+            <tr><td><span class="status-badge badge-delete">Delete</span></td><td>A member record was trashed or permanently deleted.</td></tr>
+            <tr><td><span class="status-badge badge-export">Export</span></td><td>Personal data was exported.</td></tr>
+            <tr><td><span class="status-badge badge-purge">Purge</span></td><td>An administrator purged old audit log entries (the purge action itself is logged).</td></tr>
+            </tbody>
+        </table>
+    </section>
+
+    <!-- Audit Page -->
+    <section id="audit-page">
+        <h2>Viewing the Audit Log</h2>
+        <p>Navigate to <strong>Intergroup → Audit Log</strong> (Administrators only). The page shows a paginated table of all audit entries, newest first.</p>
+
+        <p>Each row displays:</p>
+        <table class="status-table">
+            <thead><tr><th>Column</th><th>Description</th></tr></thead>
+            <tbody>
+            <tr><td><strong>Date / Time (UTC)</strong></td><td>When the event occurred, in UTC.</td></tr>
+            <tr><td><strong>User</strong></td><td>The WordPress username and user ID of who performed the action.</td></tr>
+            <tr><td><strong>Action</strong></td><td>Colour-coded badge (View, Update, Delete, etc.).</td></tr>
+            <tr><td><strong>Entity Type</strong></td><td>The type of record — typically "Member".</td></tr>
+            <tr><td><strong>Field</strong></td><td>Which personal data field was accessed (Personal Email or Mobile Number).</td></tr>
+            <tr><td><strong>Member ID</strong></td><td>A link to the member record that was accessed.</td></tr>
+            <tr><td><strong>Detail</strong></td><td>Additional context (e.g. "Member edit form displayed in admin", "Value changed").</td></tr>
+            <tr><td><strong>IP (truncated)</strong></td><td>The user's anonymised IP address (last octet zeroed out).</td></tr>
+            </tbody>
+        </table>
+
+        <p>Results are shown 50 per page with pagination at the bottom.</p>
+    </section>
+
+    <!-- Filters -->
+    <section id="audit-filters">
+        <h2>Filtering &amp; Search</h2>
+        <p>The audit log page has a filter bar at the top with the following options:</p>
+
+        <table class="status-table">
+            <thead><tr><th>Filter</th><th>Description</th></tr></thead>
+            <tbody>
+            <tr><td><strong>Entity Type</strong></td><td>Filter by record type (Member, User, Audit Log, or All).</td></tr>
+            <tr><td><strong>Action</strong></td><td>Filter by action type (View, Create, Update, Delete, Export, Purge).</td></tr>
+            <tr><td><strong>Field</strong></td><td>Filter by which personal data field was involved.</td></tr>
+            <tr><td><strong>User</strong></td><td>Filter by the WordPress user who performed the action. The dropdown lists all users who have audit entries.</td></tr>
+            <tr><td><strong>Member ID</strong></td><td>Filter by a specific member's post ID.</td></tr>
+            <tr><td><strong>From Date / To Date</strong></td><td>Filter by date range.</td></tr>
+            </tbody>
+        </table>
+
+        <p>Click <strong>Apply Filters</strong> to search, or <strong>Reset All</strong> to clear. Active filters are shown in a summary bar below the filter form.</p>
+
+        <div class="callout info">
+            <span class="callout-icon">💡</span>
+            <div>Use the <strong>Refresh</strong> button (next to the page title or in the filter bar) to reload the audit log without resetting your filters. This is useful for monitoring access in real time.</div>
+        </div>
+    </section>
+
+    <!-- Purging -->
+    <section id="purging">
+        <h2>Purging Old Entries</h2>
+        <p>Under GDPR Article 5(1)(e), personal data audit logs should not be kept longer than necessary. At the bottom of the Audit Log page, you'll find a <strong>Data Retention</strong> section with a purge button.</p>
+
+        <div class="card">
+            <h3>How Purging Works</h3>
+            <ol class="steps">
+                <li>Click <strong>"Purge entries older than 1 year"</strong> at the bottom of the Audit Log page.</li>
+                <li>Confirm the action in the browser dialog that appears.</li>
+                <li>All audit log entries older than 365 days are permanently deleted from the database.</li>
+                <li>The purge action itself is recorded as a new audit entry so there is a record of when data was cleaned up.</li>
+            </ol>
+        </div>
+
+        <div class="callout danger">
+            <span class="callout-icon">🚨</span>
+            <div>Purging is <strong>permanent and irreversible</strong>. Deleted entries cannot be recovered. Only Administrators can perform a purge.</div>
+        </div>
+    </section>
+
+    <!-- IP Anonymisation -->
+    <section id="ip-anonymisation">
+        <h2>IP Anonymisation</h2>
+        <p>To comply with GDPR, Scrutiny does not store full IP addresses. Instead, it anonymises them before writing to the database:</p>
+        <ul>
+            <li><strong>IPv4</strong> — the last octet is replaced with <code>0</code> (e.g. <code>192.168.1.42</code> → <code>192.168.1.0</code>)</li>
+            <li><strong>IPv6</strong> — the last 80 bits are zeroed out, storing only the subnet prefix</li>
+        </ul>
+        <p>This stores enough information to identify a general network location for security purposes, without pinpointing an individual device.</p>
+    </section>
+
+    <!-- Troubleshooting -->
+    <section id="troubleshooting">
+        <h2>Troubleshooting</h2>
+
+        <div class="card">
+            <h3>"Scrutiny requires the Unity plugin" error on activation</h3>
+            <p>Go to <strong>Plugins → Installed Plugins</strong>, find Unity, and activate it. Then try activating Scrutiny again.</p>
+        </div>
+
+        <div class="card">
+            <h3>I can't see the Audit Log menu</h3>
+            <p>The Audit Log appears under <strong>Intergroup → Audit Log</strong>. It requires the <code>manage_options</code> capability, which only Administrators have by default. If you don't see the Intergroup menu at all, check that Amber is also activated.</p>
+        </div>
+
+        <div class="card">
+            <h3>Personal data fields aren't being masked</h3>
+            <p>Check that your user account has the <code>scrutiny_view_personal_data</code> capability. If you do, you'll see unmasked values — that's expected. Log in with a non-administrator account to verify that masking is working.</p>
+        </div>
+
+        <div class="card">
+            <h3>Audit log table is empty</h3>
+            <p>If you just activated Scrutiny, the table starts empty. Open a member edit page and the first "View" entries will appear. If the table was created but no entries appear after editing members, check the WordPress error log for database write errors.</p>
+        </div>
+
+        <div class="card">
+            <h3>Amber was deactivated when I deactivated Scrutiny</h3>
+            <p>This is by design. Amber requires Scrutiny for GDPR compliance and will automatically deactivate itself if Scrutiny is not running. Reactivate Scrutiny first, then reactivate Amber.</p>
+        </div>
+    </section>
+
+    <!-- FAQ -->
+    <section id="faq">
+        <h2>FAQ</h2>
+
+        <div class="card">
+            <h3>Does the audit log store actual personal data?</h3>
+            <p>No. The log records the field name (e.g. "Personal Email"), the member post ID, the WordPress user who accessed it, and a timestamp. The actual email address or phone number is never written to the log table.</p>
+        </div>
+
+        <div class="card">
+            <h3>How often should I purge the audit log?</h3>
+            <p>GDPR doesn't specify an exact retention period — it should be "no longer than necessary". The built-in purge button removes entries older than 1 year, which is a reasonable default for most organisations. You may want to purge more frequently if you have many users accessing member data.</p>
+        </div>
+
+        <div class="card">
+            <h3>Can I export the audit log?</h3>
+            <p>There is no built-in export function in the current version. You can query the <code>wp_scrutiny_audit_log</code> database table directly if you need to produce reports for a GDPR subject access request or internal audit.</p>
+        </div>
+
+        <div class="card">
+            <h3>What happens to the audit log table if I deactivate Scrutiny?</h3>
+            <p>The database table and its data are preserved when you deactivate or reactivate the plugin. No data is deleted on deactivation.</p>
+        </div>
+
+        <div class="card">
+            <h3>Can I use Scrutiny without Amber?</h3>
+            <p>Yes. Scrutiny operates independently — it hooks into Unity's member system directly. Amber depends on Scrutiny, not the other way around. If you only need data obscuring and audit logging, Scrutiny works on its own.</p>
+        </div>
+
+        <div class="card" style="margin-bottom: 0;">
+            <h3>Who can access the Audit Log page?</h3>
+            <p style="margin-bottom:0;">Only users with the <code>manage_options</code> capability — typically Administrators only. This is separate from the <code>scrutiny_view_personal_data</code> capability, which controls who can see unmasked field values.</p>
+        </div>
+    </section>
+
+</main>
+
+<script>
+    function toggleNav() {
+        document.getElementById('sidebar').classList.toggle('open');
+        document.querySelector('.overlay').classList.toggle('visible');
+    }
+
+    const sections = document.querySelectorAll('section[id]');
+    const navLinks = document.querySelectorAll('.nav-link');
+
+    function updateActiveLink() {
+        let current = '';
+        const scrollY = window.scrollY + 100;
+        sections.forEach(section => {
+            if (section.offsetTop <= scrollY) current = section.getAttribute('id');
+        });
+        navLinks.forEach(link => {
+            link.classList.remove('active');
+            if (link.getAttribute('href') === '#' + current) link.classList.add('active');
+        });
+    }
+
+    window.addEventListener('scroll', updateActiveLink, { passive: true });
+
+    navLinks.forEach(link => {
+        link.addEventListener('click', () => {
+            if (window.innerWidth <= 860) toggleNav();
+        });
+    });
+</script>
+</body>
+</html>
