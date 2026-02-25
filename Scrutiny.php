@@ -53,10 +53,10 @@ spl_autoload_register(function ($class) {
 /**
  * Get the Scrutiny dependency container (Unity's container)
  *
- * @return \Unity\Core\DependencyContainer
+ * @return \Psr\Container\ContainerInterface
  * @throws \RuntimeException If Scrutiny is not initialized
  */
-function scrutiny(): \Unity\Core\DependencyContainer {
+function scrutiny(): \Psr\Container\ContainerInterface {
     return \Scrutiny\Plugin::getContainer();
 }
 

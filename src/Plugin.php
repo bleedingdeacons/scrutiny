@@ -13,7 +13,8 @@ use Scrutiny\Audit\Interfaces\AuditLoggerInterface;
 use Scrutiny\Audit\Interfaces\AuditRepositoryInterface;
 use Scrutiny\Privacy\DataObscurer;
 use Scrutiny\Privacy\Interfaces\DataObscurerInterface;
-use Unity\Core\DependencyContainer;
+use Psr\Container\ContainerInterface;
+use Unity\Core\Interfaces\Container;
 use Unity\Core\Interfaces\Configuration;
 use function add_action;
 use function is_admin;
@@ -36,15 +37,15 @@ use function is_admin;
  */
 class Plugin
 {
-    private static ?DependencyContainer $container = null;
+    private static ?ContainerInterface $container = null;
     private static bool $initialized = false;
 
     /**
      * Initialize the plugin
      *
-     * @param DependencyContainer $unityContainer The Unity dependency container
+     * @param Container $unityContainer The Unity dependency container
      */
-    public static function init(DependencyContainer $unityContainer): void
+    public static function init(Container $unityContainer): void
     {
         if (self::$initialized) {
             return;
@@ -69,9 +70,9 @@ class Plugin
     /**
      * Register all Scrutiny services in Unity's container
      *
-     * @param DependencyContainer $container
+     * @param Container $container
      */
-    private static function registerServices(DependencyContainer $container): void
+    private static function registerServices(Container $container): void
     {
         // Audit Repository
         $container->register(AuditRepositoryInterface::class, function () {
@@ -79,14 +80,14 @@ class Plugin
         });
 
         // Audit Logger
-        $container->register(AuditLoggerInterface::class, function (DependencyContainer $c) {
+        $container->register(AuditLoggerInterface::class, function (ContainerInterface $c) {
             return new AuditLogger(
                 $c->get(AuditRepositoryInterface::class)
             );
         });
 
         // Audit Tracker (hooks into member lifecycle)
-        $container->register(AuditTracker::class, function (DependencyContainer $c) {
+        $container->register(AuditTracker::class, function (ContainerInterface $c) {
             return new AuditTracker(
                 $c->get(Configuration::class),
                 $c->get(AuditLoggerInterface::class)
@@ -94,14 +95,14 @@ class Plugin
         });
 
         // Data Obscurer
-        $container->register(DataObscurerInterface::class, function (DependencyContainer $c) {
+        $container->register(DataObscurerInterface::class, function (ContainerInterface $c) {
             return new DataObscurer(
                 $c->get(AuditLoggerInterface::class)
             );
         });
 
         // Audit Log Admin Page
-        $container->register(AuditLogAdmin::class, function (DependencyContainer $c) {
+        $container->register(AuditLogAdmin::class, function (ContainerInterface $c) {
             return new AuditLogAdmin(
                 $c->get(AuditRepositoryInterface::class),
                 $c->get(AuditLoggerInterface::class)
@@ -129,10 +130,10 @@ class Plugin
     /**
      * Get the dependency container
      *
-     * @return DependencyContainer
+     * @return ContainerInterface
      * @throws RuntimeException If plugin is not initialized
      */
-    public static function getContainer(): DependencyContainer
+    public static function getContainer(): ContainerInterface
     {
         if (self::$container === null) {
             throw new RuntimeException('Scrutiny Plugin not initialized');
