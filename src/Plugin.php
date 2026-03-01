@@ -16,6 +16,8 @@ use Scrutiny\Privacy\Interfaces\DataObscurerInterface;
 use Psr\Container\ContainerInterface;
 use Unity\Core\Interfaces\Container;
 use Unity\Core\Interfaces\Configuration;
+use Unity\Members\Interfaces\MemberChangeTracker;
+use Unity\Positions\Interfaces\PositionChangeTracker;
 use function add_action;
 use function is_admin;
 
@@ -54,6 +56,11 @@ class Plugin
         self::$container = $unityContainer;
         self::registerServices($unityContainer);
         self::$initialized = true;
+
+        // Start Monitoring Changes
+        self::$container->get(MemberChangeTracker::class);
+
+        self::$container->get(PositionChangeTracker::class);
 
         // Always initialise the tracker so changes are logged
         self::$container->get(AuditTracker::class);
