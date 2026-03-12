@@ -2,7 +2,6 @@
     "name": "bleeding-deacons/scrutiny",
     "description": "GDPR compliant audit logging and personal data obscuring for Unity",
     "type": "wordpress-plugin",
-    "version": "1.0.0",
     "license": "MIT (Modified)",
     "authors": [
         {
