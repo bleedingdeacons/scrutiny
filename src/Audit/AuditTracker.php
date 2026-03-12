@@ -23,7 +23,7 @@ use function is_admin;
  * Listens to:
  *   - current_screen      (fired when admin screen loads - used for admin form view tracking)
  *   - acf/load_value      (fired when ACF loads a field value - used for frontend view tracking)
- *   - amber/member_changing      (fired by MemberChangeTracker when fields change)
+ *   - unity/member_changing      (fired by MemberChangeTracker when fields change)
  *   - before_delete_post  (WordPress hook for post deletion)
  *   - wp_trash_post       (WordPress hook for post trashing)
  */
@@ -53,7 +53,7 @@ class AuditTracker
         add_filter('acf/load_value', [$this, 'onPersonalDataFieldLoaded'], 10, 3);
 
         // Log personal data changes when a member is updated
-        add_action('amber/member_changing', [$this, 'onMemberChanged'], 10, 2);
+        add_action('unity/member_changing', [$this, 'onMemberChanged'], 10, 2);
 
         // Log personal data deletion when a member post is trashed or deleted
         add_action('before_delete_post', [$this, 'onMemberDeleted'], 10, 2);
