@@ -36,11 +36,21 @@ class DataObscurer implements DataObscurerInterface
         $this->logger = $logger;
         $this->member_config = $configuration->getConfig(Member::class);
 
-        // Obscure ACF field values when they are loaded for display.
-        // Uses acf/load_value (not format_value) so obscuring applies in admin edit screens.
-        // Uses /key= (not /name=) because the configuration stores ACF field keys.
-        add_filter('acf/load_value/key=' . $this->member_config['FIELD_PERSONAL_EMAIL'], [$this, 'obscureAcfPersonalEmail'], 20, 3);
-        add_filter('acf/load_value/key=' . $this->member_config['FIELD_MOBILE_NUMBER'], [$this, 'obscureAcfMobileNumber'], 20, 3);
+        $emailField = $this->member_config['FIELD_PERSONAL_EMAIL'];
+        $mobileField = $this->member_config['FIELD_MOBILE_NUMBER'];
+
+        // Obscure ACF field values on the frontend (get_field / the_field).
+        // acf/format_value fires when template functions render a field value.
+        add_filter('acf/format_value/name=' . $emailField, [$this, 'obscureAcfPersonalEmail'], 20, 3);
+        add_filter('acf/format_value/name=' . $mobileField, [$this, 'obscureAcfMobileNumber'], 20, 3);
+
+        // Obscure ACF field values in admin edit forms.
+        // acf/format_value does NOT fire in admin edit screens — ACF renders
+        // raw loaded values straight into form inputs. acf/prepare_field fires
+        // just before the field HTML is rendered, allowing us to swap in the
+        // obscured value and disable the input to prevent saving masked data.
+        add_filter('acf/prepare_field/name=' . $emailField, [$this, 'prepareAcfPersonalEmail']);
+        add_filter('acf/prepare_field/name=' . $mobileField, [$this, 'prepareAcfMobileNumber']);
 
         // Obscure the post title (private name) in admin list tables
 //        add_filter('the_title', [$this, 'obscurePostTitle'], 20, 2);
@@ -116,7 +126,38 @@ class DataObscurer implements DataObscurerInterface
     }
 
     /**
-     * ACF filter: obscure the personal email field value
+     * Resolve the current post ID from context.
+     *
+     * ACF's field array does not always carry a post_id, so we fall back
+     * to the global $post or the $_GET['post'] parameter used on admin
+     * edit screens.
+     *
+     * @param array $field The ACF field array (may contain 'post_id')
+     * @return int The resolved post ID, or 0 if unavailable
+     */
+    private function resolvePostId(array $field): int
+    {
+        // Try the field array first (set by some ACF contexts)
+        if (isset($field['post_id']) && is_numeric($field['post_id'])) {
+            return (int) $field['post_id'];
+        }
+
+        // Try the admin edit screen parameter
+        if (isset($_GET['post']) && is_numeric($_GET['post'])) {
+            return (int) $_GET['post'];
+        }
+
+        // Fall back to global $post
+        global $post;
+        if (isset($post->ID)) {
+            return (int) $post->ID;
+        }
+
+        return 0;
+    }
+
+    /**
+     * ACF filter: obscure the personal email field value (frontend via format_value)
      *
      * @param mixed $value The field value
      * @param mixed $postId The post ID (ACF may pass int, numeric string, or non-numeric string)
@@ -147,7 +188,7 @@ class DataObscurer implements DataObscurerInterface
     }
 
     /**
-     * ACF filter: obscure the mobile number field value
+     * ACF filter: obscure the mobile number field value (frontend via format_value)
      *
      * @param mixed $value The field value
      * @param mixed $postId The post ID (ACF may pass int, numeric string, or non-numeric string)
@@ -175,6 +216,88 @@ class DataObscurer implements DataObscurerInterface
         }
 
         return $this->obscurePhone($value);
+    }
+
+    /**
+     * ACF prepare_field: obscure personal email in admin edit forms
+     *
+     * Fires before the field is rendered in admin. Replaces the displayed
+     * value with an obscured version and disables the input so the masked
+     * value cannot be saved back to the database.
+     *
+     * @param array|false $field The ACF field array, or false if already hidden
+     * @return array|false The modified field array
+     */
+    public function prepareAcfPersonalEmail(array|false $field): array|false
+    {
+        if ($field === false) {
+            return $field;
+        }
+
+        $value = $field['value'] ?? '';
+
+        if (!is_string($value) || $value === '') {
+            return $field;
+        }
+
+        $postId = $this->resolvePostId($field);
+
+        $this->logger->log(
+            AuditLoggerInterface::ACTION_VIEW,
+            AuditLoggerInterface::ENTITY_MEMBER,
+            $postId,
+            PersonalDataFields::PERSONAL_EMAIL,
+            'ACF field rendered in admin'
+        );
+
+        if ($this->currentUserCanViewPersonalData()) {
+            return $field;
+        }
+
+        $field['value'] = $this->obscureEmail($value);
+        $field['disabled'] = 1;
+        $field['readonly'] = 1;
+
+        return $field;
+    }
+
+    /**
+     * ACF prepare_field: obscure mobile number in admin edit forms
+     *
+     * @param array|false $field The ACF field array, or false if already hidden
+     * @return array|false The modified field array
+     */
+    public function prepareAcfMobileNumber(array|false $field): array|false
+    {
+        if ($field === false) {
+            return $field;
+        }
+
+        $value = $field['value'] ?? '';
+
+        if (!is_string($value) || $value === '') {
+            return $field;
+        }
+
+        $postId = $this->resolvePostId($field);
+
+        $this->logger->log(
+            AuditLoggerInterface::ACTION_VIEW,
+            AuditLoggerInterface::ENTITY_MEMBER,
+            $postId,
+            PersonalDataFields::MOBILE_NUMBER,
+            'ACF field rendered in admin'
+        );
+
+        if ($this->currentUserCanViewPersonalData()) {
+            return $field;
+        }
+
+        $field['value'] = $this->obscurePhone($value);
+        $field['disabled'] = 1;
+        $field['readonly'] = 1;
+
+        return $field;
     }
 
     /**

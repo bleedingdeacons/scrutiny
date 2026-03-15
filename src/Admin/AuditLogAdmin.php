@@ -279,7 +279,7 @@ class AuditLogAdmin
                         $activeFilters[] = 'Action: ' . ucfirst($filters['action']);
                     }
                     if (!empty($filters['field_name'])) {
-                        $activeFilters[] = 'Field: ' . (PersonalDataFields::LABELS[$filters['field_name']] ?? $filters['field_name']);
+                        $activeFilters[] = 'Field: ' . PersonalDataFields::getLabel($filters['field_name']);
                     }
                     if (!empty($filters['user_id'])) {
                         $userData = get_userdata($filters['user_id']);
@@ -335,7 +335,7 @@ class AuditLogAdmin
                                     </span>
                             </td>
                             <td><?php echo esc_html(self::ENTITY_TYPES[$entry->entity_type] ?? $entry->entity_type); ?></td>
-                            <td><?php echo esc_html(PersonalDataFields::LABELS[$entry->field_name] ?? $entry->field_name); ?></td>
+                            <td><?php echo esc_html(PersonalDataFields::getLabel($entry->field_name)); ?></td>
                             <td>
                                 <?php if ((int) $entry->entity_id > 0): ?>
                                     <a href="<?php echo esc_url(get_edit_post_link((int) $entry->entity_id) ?? '#'); ?>">
