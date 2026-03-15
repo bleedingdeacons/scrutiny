@@ -5,7 +5,7 @@ declare(strict_types=1);
 /**
  * Plugin Name: Scrutiny
  * Description: GDPR-compliant audit logging and personal data obscuring for Unity. Required by Amber.
- * Version: 1.7.0
+ * Version: 1.7.1
  * Requires at least: 6.0
  * Requires PHP: 8.0
  * Author: The Bleeding Deacons
@@ -19,10 +19,17 @@ if (!defined('ABSPATH')) {
 
 // Define plugin constants
 if (!function_exists('get_plugin_data')) {
-    require_once(ABSPATH . 'wp-admin/includes/plugin.php');
+    if (file_exists(ABSPATH . 'wp-admin/includes/plugin.php')) {
+        require_once(ABSPATH . 'wp-admin/includes/plugin.php');
+    }
 }
-$scrutiny_plugin_data = get_plugin_data(__FILE__, false, false);
-define('SCRUTINY_VERSION', $scrutiny_plugin_data['Version']);
+
+if (function_exists('get_plugin_data')) {
+    $scrutiny_plugin_data = get_plugin_data(__FILE__, false, false);
+    define('SCRUTINY_VERSION', $scrutiny_plugin_data['Version']);
+} else {
+    define('SCRUTINY_VERSION', '1.7.0');
+}
 define('SCRUTINY_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('SCRUTINY_PLUGIN_URL', plugin_dir_url(__FILE__));
 
