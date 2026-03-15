@@ -37,8 +37,10 @@ class DataObscurer implements DataObscurerInterface
         $this->member_config = $configuration->getConfig(Member::class);
 
         // Obscure ACF field values when they are loaded for display
-        add_filter('acf/format_value/name=' . $this->member_config['FIELD_PERSONAL_EMAIL'], [$this, 'obscureAcfPersonalEmail'], 20, 3);
-        add_filter('acf/format_value/name=' . $this->member_config['FIELD_MOBILE_NUMBER'], [$this, 'obscureAcfMobileNumber'], 20, 3);
+        // Uses acf/load_value so obscuring applies in admin edit screens (not just frontend).
+        // acf/format_value only fires on get_field() calls (frontend), not in admin form rendering.
+        add_filter('acf/load_value/name=' . $this->member_config['FIELD_PERSONAL_EMAIL'], [$this, 'obscureAcfPersonalEmail'], 20, 3);
+        add_filter('acf/load_value/name=' . $this->member_config['FIELD_MOBILE_NUMBER'], [$this, 'obscureAcfMobileNumber'], 20, 3);
 
         // Obscure the post title (private name) in admin list tables
 //        add_filter('the_title', [$this, 'obscurePostTitle'], 20, 2);
