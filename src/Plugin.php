@@ -104,6 +104,7 @@ class Plugin
         // Data Obscurer
         $container->register(DataObscurerInterface::class, function (ContainerInterface $c) {
             return new DataObscurer(
+                $c->get(Configuration::class),
                 $c->get(AuditLoggerInterface::class)
             );
         });

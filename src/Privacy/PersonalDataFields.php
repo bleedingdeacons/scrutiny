@@ -4,8 +4,6 @@ declare(strict_types=1);
 
 namespace Scrutiny\Privacy;
 
-use TsmlForUnity\Members\TsmlMemberFields;
-
 /**
  * Personal Data Fields
  *
@@ -40,13 +38,16 @@ final class PersonalDataFields
     ];
 
     /**
-     * Map from ACF field keys to logical personal data field names
+     * Configuration keys that map to personal data logical field names.
+     *
+     * Each key corresponds to a constant name in the data provider's Fields class
+     * which is registered via Configuration::setConfig(Member::class, ...).
      *
      * @var array<string, string>
      */
-    public const ACF_FIELD_MAP = [
-        TsmlMemberFields::FIELD_PERSONAL_EMAIL => self::PERSONAL_EMAIL,
-        TsmlMemberFields::FIELD_MOBILE_NUMBER  => self::MOBILE_NUMBER,
+    public const CONFIG_KEY_MAP = [
+        'FIELD_PERSONAL_EMAIL' => self::PERSONAL_EMAIL,
+        'FIELD_MOBILE_NUMBER'  => self::MOBILE_NUMBER,
     ];
 
     /**

@@ -6,7 +6,8 @@ namespace Scrutiny\Privacy;
 
 use Scrutiny\Audit\Interfaces\AuditLoggerInterface;
 use Scrutiny\Privacy\Interfaces\DataObscurerInterface;
-use TsmlForUnity\Members\TsmlMemberFields;
+use Unity\Core\Interfaces\Configuration;
+use Unity\Members\Interfaces\Member;
 use function add_filter;
 use function current_user_can;
 
@@ -28,14 +29,16 @@ class DataObscurer implements DataObscurerInterface
     public const CAPABILITY = 'scrutiny_view_personal_data';
 
     private AuditLoggerInterface $logger;
+    private readonly array $member_config;
 
-    public function __construct(AuditLoggerInterface $logger)
+    public function __construct(Configuration $configuration, AuditLoggerInterface $logger)
     {
         $this->logger = $logger;
+        $this->member_config = $configuration->getConfig(Member::class);
 
         // Obscure ACF field values when they are loaded for display
-        add_filter('acf/format_value/name=' . TsmlMemberFields::FIELD_PERSONAL_EMAIL, [$this, 'obscureAcfPersonalEmail'], 20, 3);
-        add_filter('acf/format_value/name=' . TsmlMemberFields::FIELD_MOBILE_NUMBER, [$this, 'obscureAcfMobileNumber'], 20, 3);
+        add_filter('acf/format_value/name=' . $this->member_config['FIELD_PERSONAL_EMAIL'], [$this, 'obscureAcfPersonalEmail'], 20, 3);
+        add_filter('acf/format_value/name=' . $this->member_config['FIELD_MOBILE_NUMBER'], [$this, 'obscureAcfMobileNumber'], 20, 3);
 
         // Obscure the post title (private name) in admin list tables
 //        add_filter('the_title', [$this, 'obscurePostTitle'], 20, 2);
@@ -182,7 +185,7 @@ class DataObscurer implements DataObscurerInterface
             return $title;
         }
 
-        if (get_post_type($postId) !== TsmlMemberFields::POST_TYPE) {
+        if (get_post_type($postId) !== $this->member_config['POST_TYPE']) {
             return $title;
         }
 

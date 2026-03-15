@@ -40,11 +40,28 @@ class AuditTracker
 
     private readonly array $member_config;
 
+    /**
+     * Map from ACF field keys to logical personal data field names,
+     * built at runtime from configuration.
+     *
+     * @var array<string, string>
+     */
+    private readonly array $acfFieldMap;
+
     public function __construct(Configuration $configuration, AuditLoggerInterface $logger)
     {
         $this->logger = $logger;
 
         $this->member_config = $configuration->getConfig(Member::class);
+
+        // Build the ACF field map from configuration and PersonalDataFields::CONFIG_KEY_MAP
+        $map = [];
+        foreach (PersonalDataFields::CONFIG_KEY_MAP as $configKey => $logicalName) {
+            if (isset($this->member_config[$configKey])) {
+                $map[$this->member_config[$configKey]] = $logicalName;
+            }
+        }
+        $this->acfFieldMap = $map;
 
         // Log when a member edit form is displayed in admin
         add_action('current_screen', [$this, 'onMemberAdminFormDisplayed'], 10, 1);
@@ -141,12 +158,12 @@ class AuditTracker
 
         // Check if this is a personal data field
         $fieldKey = $field['key'] ?? '';
-        if (!isset(PersonalDataFields::ACF_FIELD_MAP[$fieldKey])) {
+        if (!isset($this->acfFieldMap[$fieldKey])) {
             return $value;
         }
 
         // Get the logical field name
-        $fieldName = PersonalDataFields::ACF_FIELD_MAP[$fieldKey];
+        $fieldName = $this->acfFieldMap[$fieldKey];
 
         // Create unique key for this field + post combination
         $logKey = $postId . '_' . $fieldName;
