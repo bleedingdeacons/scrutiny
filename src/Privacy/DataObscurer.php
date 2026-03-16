@@ -72,6 +72,13 @@ class DataObscurer implements DataObscurerInterface
             add_filter('acf/prepare_field/name=' . $mobileFieldFull, [$this, 'prepareAcfMobileNumber']);
         }
 
+        // Prevent empty submissions from wiping obscured field data.
+        // When the field is shown with a placeholder (value cleared), saving
+        // without typing anything would set the field to empty. These filters
+        // detect that case and preserve the original value.
+        add_filter('acf/update_value/name=' . $emailFieldFull, [$this, 'preservePersonalEmail'], 10, 3);
+        add_filter('acf/update_value/name=' . $mobileFieldFull, [$this, 'preserveMobileNumber'], 10, 3);
+
         // Obscure the post title (private name) in admin list tables
 //        add_filter('the_title', [$this, 'obscurePostTitle'], 20, 2);
     }
@@ -238,9 +245,10 @@ class DataObscurer implements DataObscurerInterface
     /**
      * ACF prepare_field: obscure personal email in admin edit forms
      *
-     * Fires before the field is rendered in admin. Replaces the displayed
-     * value with an obscured version and disables the input so the masked
-     * value cannot be saved back to the database.
+     * Shows the obscured value as a placeholder so the user can see that
+     * data exists without revealing it. The input is left editable so the
+     * user can type a replacement value. An acf/update_value filter
+     * ensures that submitting an empty field preserves the original.
      *
      * @param array|false $field The ACF field array, or false if already hidden
      * @return array|false The modified field array
@@ -271,9 +279,8 @@ class DataObscurer implements DataObscurerInterface
             return $field;
         }
 
-        $field['value'] = $this->obscureEmail($value);
-        $field['disabled'] = 1;
-        $field['readonly'] = 1;
+        $field['placeholder'] = $this->obscureEmail($value);
+        $field['value'] = '';
 
         return $field;
     }
@@ -310,11 +317,70 @@ class DataObscurer implements DataObscurerInterface
             return $field;
         }
 
-        $field['value'] = $this->obscurePhone($value);
-        $field['disabled'] = 1;
-        $field['readonly'] = 1;
+        $field['placeholder'] = $this->obscurePhone($value);
+        $field['value'] = '';
 
         return $field;
+    }
+
+    /**
+     * ACF update_value: preserve the existing personal email when the
+     * submitted value is empty.
+     *
+     * When the field is obscured via a placeholder, submitting the form
+     * without entering a new value sends an empty string. This filter
+     * detects that case and returns the existing stored value so it is
+     * not overwritten. Only applies to users who cannot view personal
+     * data — authorised users always have the real value in the input.
+     *
+     * @param mixed $value The new value being saved
+     * @param mixed $postId The post ID
+     * @param array $field The ACF field array
+     * @return mixed The value to save
+     */
+    public function preservePersonalEmail(mixed $value, mixed $postId, array $field): mixed
+    {
+        if ($this->currentUserCanViewPersonalData()) {
+            return $value;
+        }
+
+        if ($value === '' || $value === null) {
+            $numericPostId = is_numeric($postId) ? (int) $postId : 0;
+            $existing = get_post_meta($numericPostId, $field['name'] ?? '', true);
+
+            if ($existing !== '' && $existing !== false) {
+                return $existing;
+            }
+        }
+
+        return $value;
+    }
+
+    /**
+     * ACF update_value: preserve the existing mobile number when the
+     * submitted value is empty.
+     *
+     * @param mixed $value The new value being saved
+     * @param mixed $postId The post ID
+     * @param array $field The ACF field array
+     * @return mixed The value to save
+     */
+    public function preserveMobileNumber(mixed $value, mixed $postId, array $field): mixed
+    {
+        if ($this->currentUserCanViewPersonalData()) {
+            return $value;
+        }
+
+        if ($value === '' || $value === null) {
+            $numericPostId = is_numeric($postId) ? (int) $postId : 0;
+            $existing = get_post_meta($numericPostId, $field['name'] ?? '', true);
+
+            if ($existing !== '' && $existing !== false) {
+                return $existing;
+            }
+        }
+
+        return $value;
     }
 
     /**
