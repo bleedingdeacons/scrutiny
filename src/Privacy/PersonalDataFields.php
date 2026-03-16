@@ -13,11 +13,6 @@ namespace Scrutiny\Privacy;
 final class PersonalDataFields
 {
     /**
-     * Logical field name: member's private name (first name and initial)
-     */
-//    public const PRIVATE_NAME = 'private_name';
-
-    /**
      * Logical field name: member's personal email address
      */
     public const PERSONAL_EMAIL = 'personal-email';
@@ -64,7 +59,6 @@ final class PersonalDataFields
      * Legacy field name mappings for backward compatibility.
      *
      * Earlier versions stored field names with underscores in the audit log.
-     * This map allows label lookups to resolve those old entries.
      *
      * @var array<string, string>
      */
@@ -86,7 +80,6 @@ final class PersonalDataFields
             return self::LABELS[$fieldName];
         }
 
-        // Check legacy names
         if (isset(self::LEGACY_FIELD_MAP[$fieldName])) {
             $canonical = self::LEGACY_FIELD_MAP[$fieldName];
             return self::LABELS[$canonical] ?? $fieldName;
