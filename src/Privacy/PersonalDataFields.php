@@ -23,13 +23,65 @@ final class PersonalDataFields
     public const MOBILE_NUMBER = 'mobile-number';
 
     /**
-     * All personal data field names
+     * Logical field name: group contact name
+     */
+    public const GROUP_CONTACT_NAME = 'group-contact-name';
+
+    /**
+     * Logical field name: group contact email
+     */
+    public const GROUP_CONTACT_EMAIL = 'group-contact-email';
+
+    /**
+     * Logical field name: group contact phone
+     */
+    public const GROUP_CONTACT_PHONE = 'group-contact-phone';
+
+    /**
+     * Logical field name: meeting contact name
+     */
+    public const MEETING_CONTACT_NAME = 'meeting-contact-name';
+
+    /**
+     * Logical field name: meeting contact email
+     */
+    public const MEETING_CONTACT_EMAIL = 'meeting-contact-email';
+
+    /**
+     * Logical field name: meeting contact phone
+     */
+    public const MEETING_CONTACT_PHONE = 'meeting-contact-phone';
+
+    /**
+     * All personal data field names for members
      *
      * @var array<string>
      */
     public const ALL_FIELDS = [
         self::PERSONAL_EMAIL,
         self::MOBILE_NUMBER,
+    ];
+
+    /**
+     * All personal data field names for group contacts
+     *
+     * @var array<string>
+     */
+    public const GROUP_CONTACT_FIELDS = [
+        self::GROUP_CONTACT_NAME,
+        self::GROUP_CONTACT_EMAIL,
+        self::GROUP_CONTACT_PHONE,
+    ];
+
+    /**
+     * All personal data field names for meeting contacts
+     *
+     * @var array<string>
+     */
+    public const MEETING_CONTACT_FIELDS = [
+        self::MEETING_CONTACT_NAME,
+        self::MEETING_CONTACT_EMAIL,
+        self::MEETING_CONTACT_PHONE,
     ];
 
     /**
@@ -53,6 +105,12 @@ final class PersonalDataFields
     public const LABELS = [
         self::PERSONAL_EMAIL => 'Personal Email',
         self::MOBILE_NUMBER  => 'Mobile Number',
+        self::GROUP_CONTACT_NAME   => 'Group Contact Name',
+        self::GROUP_CONTACT_EMAIL  => 'Group Contact Email',
+        self::GROUP_CONTACT_PHONE  => 'Group Contact Phone',
+        self::MEETING_CONTACT_NAME  => 'Meeting Contact Name',
+        self::MEETING_CONTACT_EMAIL => 'Meeting Contact Email',
+        self::MEETING_CONTACT_PHONE => 'Meeting Contact Phone',
     ];
 
     /**

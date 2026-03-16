@@ -18,6 +18,8 @@ interface AuditLoggerInterface
     public const ACTION_EXPORT = 'export';
 
     public const ENTITY_MEMBER = 'member';
+    public const ENTITY_GROUP = 'group';
+    public const ENTITY_MEETING = 'meeting';
 
     /**
      * Log an access or change event for personal data

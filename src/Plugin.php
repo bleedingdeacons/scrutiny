@@ -17,6 +17,7 @@ use Psr\Container\ContainerInterface;
 use Unity\Core\Interfaces\Container;
 use Unity\Core\Interfaces\Configuration;
 use Unity\Members\Interfaces\MemberChangeTracker;
+use Unity\Groups\Interfaces\GroupChangeTracker;
 use Unity\Positions\Interfaces\PositionChangeTracker;
 use function add_action;
 use function is_admin;
@@ -29,7 +30,7 @@ use function is_admin;
  * Architecture:
  *   AuditRepository  – stores audit log entries in a custom database table
  *   AuditLogger      – writes log entries (who, what, when — no raw PII)
- *   AuditTracker     – hooks into Unity member lifecycle to capture changes
+ *   AuditTracker     – hooks into Unity member and group lifecycle to capture changes
  *   DataObscurer     – masks personal data in the admin UI
  *   AuditLogAdmin    – read-only admin page for viewing the audit trail
  *
@@ -61,6 +62,8 @@ class Plugin
         self::$container->get(MemberChangeTracker::class);
 
         self::$container->get(PositionChangeTracker::class);
+
+        self::$container->get(GroupChangeTracker::class);
 
         // Always initialise the tracker so changes are logged
         self::$container->get(AuditTracker::class);

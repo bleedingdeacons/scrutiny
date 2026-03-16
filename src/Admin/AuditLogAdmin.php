@@ -43,6 +43,8 @@ class AuditLogAdmin
      */
     private const ENTITY_TYPES = [
             'member' => 'Member',
+            'group' => 'Group',
+            'meeting' => 'Meeting',
             'user' => 'User',
             'audit_log' => 'Audit Log',
             'all' => 'All Entities'

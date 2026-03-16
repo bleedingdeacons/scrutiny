@@ -8,6 +8,7 @@ use Scrutiny\Audit\Interfaces\AuditLoggerInterface;
 use Scrutiny\Privacy\PersonalDataFields;
 
 use Unity\Core\Interfaces\Configuration;
+use Unity\Groups\Interfaces\Group;
 use Unity\Members\Interfaces\Member;
 use function add_action;
 use function add_filter;
@@ -17,15 +18,16 @@ use function is_admin;
 /**
  * Audit Tracker
  *
- * Hooks into Unity's member lifecycle events and ACF field loading to automatically log
+ * Hooks into Unity's member and group lifecycle events and ACF field loading to automatically log
  * creation, updates, viewing, and deletion of personal data fields.
  *
  * Listens to:
- *   - current_screen      (fired when admin screen loads - used for admin form view tracking)
- *   - acf/load_value      (fired when ACF loads a field value - used for frontend view tracking)
- *   - unity/member_changing      (fired by MemberChangeTracker when fields change)
- *   - before_delete_post  (WordPress hook for post deletion)
- *   - wp_trash_post       (WordPress hook for post trashing)
+ *   - current_screen             (fired when admin screen loads - used for admin form view tracking)
+ *   - acf/load_value             (fired when ACF loads a field value - used for frontend view tracking)
+ *   - unity/member_changing      (fired by MemberChangeTracker when member fields change)
+ *   - unity/group_changing       (fired by GroupChangeTracker when group fields change)
+ *   - before_delete_post         (WordPress hook for post deletion)
+ *   - wp_trash_post              (WordPress hook for post trashing)
  */
 class AuditTracker
 {
@@ -71,6 +73,9 @@ class AuditTracker
 
         // Log personal data changes when a member is updated
         add_action('unity/member_changing', [$this, 'onMemberChanged'], 10, 2);
+
+        // Log contact data changes when a group is updated
+        add_action('unity/group_changing', [$this, 'onGroupChanged'], 10, 2);
 
         // Log personal data deletion when a member post is trashed or deleted
         add_action('before_delete_post', [$this, 'onMemberDeleted'], 10, 2);
@@ -219,6 +224,142 @@ class AuditTracker
                 $memberId,
                 PersonalDataFields::MOBILE_NUMBER,
                 'Value changed'
+            );
+        }
+    }
+
+    /**
+     * Log changes to contact data when a group is updated
+     *
+     * Compares the original and updated group's contacts, and also compares
+     * contacts on each meeting within the group. Logs each change individually.
+     *
+     * @param Group $updatedGroup The group after changes
+     * @param Group $originalGroup The group before changes
+     * @return void
+     */
+    public function onGroupChanged(Group $updatedGroup, Group $originalGroup): void
+    {
+        $this->logContactChanges(
+            AuditLoggerInterface::ENTITY_GROUP,
+            $updatedGroup->getId(),
+            $originalGroup->getContacts(),
+            $updatedGroup->getContacts(),
+            PersonalDataFields::GROUP_CONTACT_NAME,
+            PersonalDataFields::GROUP_CONTACT_EMAIL,
+            PersonalDataFields::GROUP_CONTACT_PHONE
+        );
+
+        $this->logMeetingContactChanges($originalGroup, $updatedGroup);
+    }
+
+    /**
+     * Compare contacts on meetings within the original and updated group,
+     * logging changes for each meeting whose contacts differ.
+     *
+     * Meetings are matched by ID. Meetings that only appear in the updated group
+     * are treated as newly added; meetings that only appear in the original are ignored
+     * here (deletion is handled elsewhere).
+     *
+     * @param Group $originalGroup The group before changes
+     * @param Group $updatedGroup The group after changes
+     * @return void
+     */
+    private function logMeetingContactChanges(Group $originalGroup, Group $updatedGroup): void
+    {
+        $originalMeetings = [];
+        foreach ($originalGroup->getMeetings() as $meeting) {
+            $originalMeetings[$meeting->getId()] = $meeting;
+        }
+
+        foreach ($updatedGroup->getMeetings() as $updatedMeeting) {
+            $meetingId = $updatedMeeting->getId();
+            $originalContacts = isset($originalMeetings[$meetingId])
+                ? $originalMeetings[$meetingId]->getContacts()
+                : [];
+
+            $this->logContactChanges(
+                AuditLoggerInterface::ENTITY_MEETING,
+                $meetingId,
+                $originalContacts,
+                $updatedMeeting->getContacts(),
+                PersonalDataFields::MEETING_CONTACT_NAME,
+                PersonalDataFields::MEETING_CONTACT_EMAIL,
+                PersonalDataFields::MEETING_CONTACT_PHONE
+            );
+        }
+    }
+
+    /**
+     * Compare two arrays of contacts and log an update for each field type
+     * (name, email, phone) that differs between them.
+     *
+     * Contacts are normalised into sorted "name|email|phone" keys so that
+     * reordering alone does not trigger a log entry.
+     *
+     * @param string $entityType The entity type constant (group or meeting)
+     * @param int    $entityId   The entity post ID
+     * @param array  $originalContacts Contacts before the change
+     * @param array  $updatedContacts  Contacts after the change
+     * @param string $nameField  The PersonalDataFields constant for the name field
+     * @param string $emailField The PersonalDataFields constant for the email field
+     * @param string $phoneField The PersonalDataFields constant for the phone field
+     * @return void
+     */
+    private function logContactChanges(
+        string $entityType,
+        int $entityId,
+        array $originalContacts,
+        array $updatedContacts,
+        string $nameField,
+        string $emailField,
+        string $phoneField
+    ): void {
+        $normalize = static function (array $contacts): array {
+            $names = [];
+            $emails = [];
+            $phones = [];
+            foreach ($contacts as $contact) {
+                $names[] = $contact->getName();
+                $emails[] = $contact->getEmail();
+                $phones[] = $contact->getPhone();
+            }
+            sort($names);
+            sort($emails);
+            sort($phones);
+            return ['names' => $names, 'emails' => $emails, 'phones' => $phones];
+        };
+
+        $original = $normalize($originalContacts);
+        $updated = $normalize($updatedContacts);
+
+        if ($original['names'] !== $updated['names']) {
+            $this->logger->log(
+                AuditLoggerInterface::ACTION_UPDATE,
+                $entityType,
+                $entityId,
+                $nameField,
+                'Contact name changed'
+            );
+        }
+
+        if ($original['emails'] !== $updated['emails']) {
+            $this->logger->log(
+                AuditLoggerInterface::ACTION_UPDATE,
+                $entityType,
+                $entityId,
+                $emailField,
+                'Contact email changed'
+            );
+        }
+
+        if ($original['phones'] !== $updated['phones']) {
+            $this->logger->log(
+                AuditLoggerInterface::ACTION_UPDATE,
+                $entityType,
+                $entityId,
+                $phoneField,
+                'Contact phone changed'
             );
         }
     }
