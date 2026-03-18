@@ -5,7 +5,7 @@ declare(strict_types=1);
 /**
  * Plugin Name: Scrutiny
  * Description: GDPR-compliant audit logging and personal data obscuring for Unity. Required by Amber.
- * Version: 1.8.1
+ * Version: 1.8.2
  * Requires at least: 6.0
  * Requires PHP: 8.0
  * Author: The Bleeding Deacons
@@ -51,8 +51,10 @@ spl_autoload_register(function ($class) {
             require $file;
         }
     } catch (\Exception $e) {
+        // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
         error_log('Scrutiny Autoloader Error: ' . $e->getMessage());
     } catch (\Throwable $e) {
+        // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
         error_log('Scrutiny Autoloader Fatal Error: ' . $e->getMessage());
     }
 });
@@ -80,7 +82,9 @@ add_action('unity/loaded', function($unityContainer) {
         do_action('scrutiny_loaded', \Scrutiny\Plugin::getContainer());
 
     } catch (\Exception $e) {
+        // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
         error_log('Scrutiny Plugin Initialization Error: ' . $e->getMessage());
+        // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
         error_log('Scrutiny Plugin Stack Trace: ' . $e->getTraceAsString());
 
         if (is_admin()) {
@@ -96,7 +100,9 @@ add_action('unity/loaded', function($unityContainer) {
         return;
 
     } catch (\Throwable $e) {
+        // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
         error_log('Scrutiny Plugin Fatal Error: ' . $e->getMessage());
+        // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
         error_log('Scrutiny Plugin Stack Trace: ' . $e->getTraceAsString());
 
         if (is_admin()) {

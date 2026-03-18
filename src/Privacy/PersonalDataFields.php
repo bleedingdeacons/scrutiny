@@ -4,6 +4,11 @@ declare(strict_types=1);
 
 namespace Scrutiny\Privacy;
 
+// Prevent direct access
+if (!defined('ABSPATH')) {
+    exit;
+}
+
 /**
  * Personal Data Fields
  *

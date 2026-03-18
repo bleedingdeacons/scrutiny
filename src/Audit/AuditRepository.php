@@ -4,6 +4,11 @@ declare(strict_types=1);
 
 namespace Scrutiny\Audit;
 
+// Prevent direct access
+if (!defined('ABSPATH')) {
+    exit;
+}
+
 use Scrutiny\Audit\Interfaces\AuditRepositoryInterface;
 
 /**

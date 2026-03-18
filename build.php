@@ -233,6 +233,12 @@ class PluginBuilder
         $safeVersion = preg_replace('/[^a-zA-Z0-9._-]/', '-', $this->version);
         $archiveName .= '-' . $safeVersion . '.zip';
 
+        // Sync readme.txt Stable tag with plugin version
+        $this->syncReadmeVersion();
+
+        // Sync README.md version badge with plugin version
+        $this->syncReadmeMarkdownVersion();
+
         // Create ZIP archive
         $this->createZip($archiveName, $excludes);
 
@@ -392,6 +398,76 @@ class PluginBuilder
             }
         }
         return false;
+    }
+
+
+
+
+    /**
+     * Update the Stable tag in readme.txt to match the current plugin version
+     */
+    private function syncReadmeVersion(): void
+    {
+        $readmeFile = $this->pluginDir . DIRECTORY_SEPARATOR . 'readme.txt';
+        if (!file_exists($readmeFile)) {
+            $this->log("No readme.txt found — skipping version sync");
+            return;
+        }
+
+        $content = file_get_contents($readmeFile);
+        if ($content === false) {
+            $this->error("Failed to read readme.txt");
+            return;
+        }
+
+        $updated = preg_replace(
+            '/^Stable tag:\s*.+$/mi',
+            'Stable tag: ' . $this->version,
+            $content,
+            -1,
+            $count
+        );
+
+        if ($count > 0 && $updated !== null) {
+            file_put_contents($readmeFile, $updated);
+            $this->log("Updated readme.txt Stable tag to {$this->version}");
+        } else {
+            $this->log("No Stable tag found in readme.txt — skipping version sync");
+        }
+    }
+
+
+    /**
+     * Update the **Version:** line in README.md to match the current plugin version
+     */
+    private function syncReadmeMarkdownVersion(): void
+    {
+        $readmeFile = $this->pluginDir . DIRECTORY_SEPARATOR . 'README.md';
+        if (!file_exists($readmeFile)) {
+            $this->log("No README.md found — skipping version sync");
+            return;
+        }
+
+        $content = file_get_contents($readmeFile);
+        if ($content === false) {
+            $this->error("Failed to read README.md");
+            return;
+        }
+
+        $updated = preg_replace(
+            '/^\*\*Version:\*\*\s*.+$/m',
+            '**Version:** ' . $this->version,
+            $content,
+            -1,
+            $count
+        );
+
+        if ($count > 0 && $updated !== null) {
+            file_put_contents($readmeFile, $updated);
+            $this->log("Updated README.md version to {$this->version}");
+        } else {
+            $this->log("No **Version:** line found in README.md — skipping version sync");
+        }
     }
 
     /**

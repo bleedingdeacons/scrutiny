@@ -4,6 +4,11 @@ declare(strict_types=1);
 
 namespace Scrutiny;
 
+// Prevent direct access
+if (!defined('ABSPATH')) {
+    exit;
+}
+
 use RuntimeException;
 use Scrutiny\Admin\AuditLogAdmin;
 use Scrutiny\Audit\AuditLogger;
