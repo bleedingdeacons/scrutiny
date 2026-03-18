@@ -9,7 +9,8 @@ declare(strict_types=1);
  * Requires at least: 6.0
  * Requires PHP: 8.0
  * Author: The Bleeding Deacons
- * Author URI: thebleedingdeacons@gmail.com
+ * Author URI: https://github.com/bleedingdeacons/scrutiny
+ * Contact: thebleedingdeacons@gmail.com
  * License: MIT (Modified)
  */
 
