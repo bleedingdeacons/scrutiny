@@ -32,6 +32,8 @@ use function is_admin;
  *   - unity/member_changing      (fired by MemberChangeTracker when member fields change)
  *   - unity/member_deleted       (fired by MemberChangeTracker when a member is trashed or deleted)
  *   - unity/group_changing       (fired by GroupChangeTracker when group fields change)
+ *   - unity/group_deleted        (fired by GroupChangeTracker when a group is trashed or deleted)
+ *   - unity/group_hidden         (fired by GroupChangeTracker when a group is set to private)
  */
 class AuditTracker
 {
@@ -83,6 +85,12 @@ class AuditTracker
 
         // Log personal data deletion when a member is deleted or trashed
         add_action('unity/member_deleted', [$this, 'onMemberDeleted'], 10, 2);
+
+        // Log contact data deletion when a group is deleted or trashed
+        add_action('unity/group_deleted', [$this, 'onGroupDeleted'], 10, 2);
+
+        // Log when a group is hidden (set to private)
+        add_action('unity/group_hidden', [$this, 'onGroupHidden'], 10, 2);
     }
 
     /**
@@ -384,6 +392,46 @@ class AuditTracker
             $postId,
             PersonalDataFields::ALL_FIELDS,
             'Member deleted'
+        );
+    }
+
+    /**
+     * Log contact data deletion when a group is deleted or trashed
+     *
+     * Triggered by the unity/group_deleted hook fired from GroupChangeTracker.
+     *
+     * @param int $postId The post ID being deleted or trashed
+     * @param Group|null $group The group at the time of deletion (may be null)
+     * @return void
+     */
+    public function onGroupDeleted(int $postId, ?Group $group = null): void
+    {
+        $this->logger->logBatch(
+            AuditLoggerInterface::ACTION_DELETE,
+            AuditLoggerInterface::ENTITY_GROUP,
+            $postId,
+            PersonalDataFields::GROUP_CONTACT_FIELDS,
+            'Group deleted'
+        );
+    }
+
+    /**
+     * Log when a group is hidden (post status set to private)
+     *
+     * Triggered by the unity/group_hidden hook fired from GroupChangeTracker.
+     *
+     * @param int $postId The post ID that was hidden
+     * @param Group|null $group The group at the time of hiding (may be null)
+     * @return void
+     */
+    public function onGroupHidden(int $postId, ?Group $group = null): void
+    {
+        $this->logger->logBatch(
+            AuditLoggerInterface::ACTION_UPDATE,
+            AuditLoggerInterface::ENTITY_GROUP,
+            $postId,
+            PersonalDataFields::GROUP_CONTACT_FIELDS,
+            'Group hidden (set to private)'
         );
     }
 }
