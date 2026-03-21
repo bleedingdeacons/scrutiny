@@ -30,9 +30,8 @@ use function is_admin;
  *   - current_screen             (fired when admin screen loads - used for admin form view tracking)
  *   - acf/load_value             (fired when ACF loads a field value - used for frontend view tracking)
  *   - unity/member_changing      (fired by MemberChangeTracker when member fields change)
+ *   - unity/member_deleted       (fired by MemberChangeTracker when a member is trashed or deleted)
  *   - unity/group_changing       (fired by GroupChangeTracker when group fields change)
- *   - before_delete_post         (WordPress hook for post deletion)
- *   - wp_trash_post              (WordPress hook for post trashing)
  */
 class AuditTracker
 {
@@ -82,9 +81,8 @@ class AuditTracker
         // Log contact data changes when a group is updated
         add_action('unity/group_changing', [$this, 'onGroupChanged'], 10, 2);
 
-        // Log personal data deletion when a member post is trashed or deleted
-        add_action('before_delete_post', [$this, 'onMemberDeleted'], 10, 2);
-        add_action('wp_trash_post', [$this, 'onMemberTrashed'], 10, 1);
+        // Log personal data deletion when a member is deleted or trashed
+        add_action('unity/member_deleted', [$this, 'onMemberDeleted'], 10, 2);
     }
 
     /**
@@ -370,45 +368,22 @@ class AuditTracker
     }
 
     /**
-     * Log personal data deletion when a member post is permanently deleted
+     * Log personal data deletion when a member is deleted or trashed
      *
-     * @param int $postId The post ID being deleted
-     * @param \WP_Post|null $post The post object
+     * Triggered by the unity/member_deleted hook fired from MemberChangeTracker.
+     *
+     * @param int $postId The post ID being deleted or trashed
+     * @param Member|null $member The member at the time of deletion (may be null)
      * @return void
      */
-    public function onMemberDeleted(int $postId, $post = null): void
+    public function onMemberDeleted(int $postId, ?Member $member = null): void
     {
-        if (get_post_type($postId) !== $this->member_config['POST_TYPE']) {
-            return;
-        }
-
         $this->logger->logBatch(
             AuditLoggerInterface::ACTION_DELETE,
             AuditLoggerInterface::ENTITY_MEMBER,
             $postId,
             PersonalDataFields::ALL_FIELDS,
-            'Member permanently deleted'
-        );
-    }
-
-    /**
-     * Log personal data when a member post is trashed
-     *
-     * @param int $postId The post ID being trashed
-     * @return void
-     */
-    public function onMemberTrashed(int $postId): void
-    {
-        if (get_post_type($postId) !== $this->member_config['POST_TYPE']) {
-            return;
-        }
-
-        $this->logger->logBatch(
-            AuditLoggerInterface::ACTION_DELETE,
-            AuditLoggerInterface::ENTITY_MEMBER,
-            $postId,
-            PersonalDataFields::ALL_FIELDS,
-            'Member moved to trash'
+            'Member deleted'
         );
     }
 }
