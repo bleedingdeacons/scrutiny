@@ -70,6 +70,8 @@ class Plugin
         self::registerServices($unityContainer);
         self::$initialized = true;
 
+        self::logInfo('Scrutiny initialised', ['version' => defined('SCRUTINY_VERSION') ? SCRUTINY_VERSION : 'unknown']);
+
         // Start Monitoring Changes
         self::$container->get(MemberChangeTracker::class);
 
