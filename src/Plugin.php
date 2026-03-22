@@ -45,6 +45,13 @@ use function is_admin;
  */
 class Plugin
 {
+    use \Scrutiny\Logger\HasLogger;
+
+    protected static function logChannel(): string
+    {
+        return 'scrutiny';
+    }
+
     private static ?ContainerInterface $container = null;
     private static bool $initialized = false;
 

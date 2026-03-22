@@ -5,9 +5,10 @@ declare(strict_types=1);
 /**
  * Plugin Name: Scrutiny
  * Description: GDPR-compliant audit logging and personal data obscuring for Unity. Required by Amber.
- * Version: 1.9.0
+ * Version: 1.10.0
  * Requires at least: 6.0
  * Requires PHP: 8.0
+ * Requires Plugins: sentinel
  * Author: The Bleeding Deacons
  * Author URI: https://github.com/bleedingdeacons/scrutiny
  * Contact: thebleedingdeacons@gmail.com
@@ -52,11 +53,13 @@ spl_autoload_register(function ($class) {
             require $file;
         }
     } catch (\Exception $e) {
-        // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
-        error_log('Scrutiny Autoloader Error: ' . $e->getMessage());
+        function_exists('wp_log')
+            ? wp_log('scrutiny')->error('Scrutiny Autoloader Error: ' . $e->getMessage(), ['exception' => $e->getMessage(), 'trace' => $e->getTraceAsString()])
+            : error_log('Scrutiny Autoloader Error: ' . $e->getMessage());
     } catch (\Throwable $e) {
-        // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
-        error_log('Scrutiny Autoloader Fatal Error: ' . $e->getMessage());
+        function_exists('wp_log')
+            ? wp_log('scrutiny')->critical('Scrutiny Autoloader Fatal Error: ' . $e->getMessage(), ['exception' => $e->getMessage(), 'trace' => $e->getTraceAsString()])
+            : error_log('Scrutiny Autoloader Fatal Error: ' . $e->getMessage());
     }
 });
 
@@ -83,10 +86,9 @@ add_action('unity/loaded', function($unityContainer) {
         do_action('scrutiny_loaded', \Scrutiny\Plugin::getContainer());
 
     } catch (\Exception $e) {
-        // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
-        error_log('Scrutiny Plugin Initialization Error: ' . $e->getMessage());
-        // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
-        error_log('Scrutiny Plugin Stack Trace: ' . $e->getTraceAsString());
+        function_exists('wp_log')
+            ? wp_log('scrutiny')->error('Scrutiny Plugin Initialization Error: ' . $e->getMessage(), ['exception' => $e->getMessage(), 'trace' => $e->getTraceAsString()])
+            : error_log('Scrutiny Plugin Initialization Error: ' . $e->getMessage());
 
         if (is_admin()) {
             add_action('admin_notices', function() use ($e) {
@@ -101,10 +103,9 @@ add_action('unity/loaded', function($unityContainer) {
         return;
 
     } catch (\Throwable $e) {
-        // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
-        error_log('Scrutiny Plugin Fatal Error: ' . $e->getMessage());
-        // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
-        error_log('Scrutiny Plugin Stack Trace: ' . $e->getTraceAsString());
+        function_exists('wp_log')
+            ? wp_log('scrutiny')->critical('Scrutiny Plugin Fatal Error: ' . $e->getMessage(), ['exception' => $e->getMessage(), 'trace' => $e->getTraceAsString()])
+            : error_log('Scrutiny Plugin Fatal Error: ' . $e->getMessage());
 
         if (is_admin()) {
             add_action('admin_notices', function() {

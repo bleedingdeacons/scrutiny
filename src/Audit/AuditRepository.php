@@ -56,7 +56,7 @@ class AuditRepository implements AuditRepositoryInterface
         );
 
         if ($result === false) {
-            error_log('Scrutiny: Failed to insert audit log entry: ' . $wpdb->last_error);
+            \Scrutiny\Plugin::logError('Scrutiny: Failed to insert audit log entry: ' . $wpdb->last_error);
             return false;
         }
 
