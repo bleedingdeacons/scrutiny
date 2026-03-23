@@ -17,7 +17,7 @@ if (!defined('ABSPATH')) {
  */
 trait HasLogger
 {
-    private static ?\BD_Log_Channel $loggerChannel = null;
+    private static ?\Sentinel_Log_Channel $loggerChannel = null;
 
     protected static function logChannel(): string
     {
@@ -25,7 +25,7 @@ trait HasLogger
         return sanitize_key(end($parts));
     }
 
-    public static function log(): ?\BD_Log_Channel
+    public static function log(): ?\Sentinel_Log_Channel
     {
         if (self::$loggerChannel === null && function_exists('wp_log')) {
             self::$loggerChannel = wp_log(static::logChannel());

@@ -5,7 +5,7 @@ declare(strict_types=1);
 /**
  * Plugin Name: Scrutiny
  * Description: GDPR-compliant audit logging and personal data obscuring for Unity. Required by Amber.
- * Version: 1.11.2
+ * Version: 1.11.3
  * Requires at least: 6.0
  * Requires PHP: 8.0
  * Requires Plugins: sentinel
