@@ -52,4 +52,11 @@ interface DataObscurerInterface
      * @return bool
      */
     public function currentUserCanViewPersonalData(): bool;
+
+    /**
+     * Check whether the current user has permission to update personal data fields
+     *
+     * @return bool
+     */
+    public function currentUserCanEditPersonalData(): bool;
 }

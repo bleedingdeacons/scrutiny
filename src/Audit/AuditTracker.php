@@ -10,6 +10,7 @@ if (!defined('ABSPATH')) {
 }
 
 use Scrutiny\Audit\Interfaces\AuditLoggerInterface;
+use Scrutiny\Privacy\Interfaces\DataObscurerInterface;
 use Scrutiny\Privacy\PersonalDataFields;
 
 use Unity\Core\Interfaces\Configuration;
@@ -26,6 +27,11 @@ use function is_admin;
  * Hooks into Unity's member and group lifecycle events and ACF field loading to automatically log
  * creation, updates, viewing, and deletion of personal data fields.
  *
+ * View events are only logged when the current user holds the
+ * `scrutiny_view_personal_data` capability — only users who can
+ * actually see the unobscured values are tracked, since users
+ * without the capability only ever see masked placeholders.
+ *
  * Listens to:
  *   - current_screen             (fired when admin screen loads - used for admin form view tracking)
  *   - acf/load_value             (fired when ACF loads a field value - used for frontend view tracking)
@@ -38,6 +44,7 @@ use function is_admin;
 class AuditTracker
 {
     private AuditLoggerInterface $logger;
+    private DataObscurerInterface $obscurer;
 
     /**
      * Track which member fields have been logged in this request to prevent duplicates
@@ -56,9 +63,10 @@ class AuditTracker
      */
     private readonly array $acfFieldMap;
 
-    public function __construct(Configuration $configuration, AuditLoggerInterface $logger)
+    public function __construct(Configuration $configuration, AuditLoggerInterface $logger, DataObscurerInterface $obscurer)
     {
         $this->logger = $logger;
+        $this->obscurer = $obscurer;
 
         $this->member_config = $configuration->getConfig(Member::class);
 
@@ -122,6 +130,11 @@ class AuditTracker
             return;
         }
 
+        // Only log views for users who can actually see the unobscured personal data
+        if (!$this->obscurer->currentUserCanViewPersonalData()) {
+            return;
+        }
+
         // Create unique key for this post
         $logKey = 'admin_' . $postId;
 
@@ -169,6 +182,11 @@ class AuditTracker
 
         // Only log on frontend, not in admin
         if (is_admin()) {
+            return $value;
+        }
+
+        // Only log views for users who can actually see the unobscured personal data
+        if (!$this->obscurer->currentUserCanViewPersonalData()) {
             return $value;
         }
 

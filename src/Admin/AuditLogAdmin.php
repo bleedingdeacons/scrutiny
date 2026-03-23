@@ -41,7 +41,7 @@ class AuditLogAdmin
     /**
      * Available action types for filtering
      */
-    private const ACTION_TYPES = ['view', 'create', 'update', 'delete', 'export', 'purge'];
+    private const ACTION_TYPES = ['view', 'create', 'update', 'delete', 'export', 'import', 'purge'];
 
     /**
      * Available entity types for filtering
@@ -411,6 +411,7 @@ class AuditLogAdmin
             .scrutiny-badge--update { background: #fff3e0; color: #b45309; }
             .scrutiny-badge--delete { background: #fde8e8; color: #991b1b; }
             .scrutiny-badge--export { background: #f3e8fd; color: #6b21a8; }
+            .scrutiny-badge--import { background: #e0f2fe; color: #0369a1; }
             .scrutiny-badge--purge  { background: #f1f1f1; color: #555; }
         </style>
         <?php

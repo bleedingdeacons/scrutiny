@@ -21,6 +21,7 @@ interface AuditLoggerInterface
     public const ACTION_UPDATE = 'update';
     public const ACTION_DELETE = 'delete';
     public const ACTION_EXPORT = 'export';
+    public const ACTION_IMPORT = 'import';
 
     public const ENTITY_MEMBER = 'member';
     public const ENTITY_GROUP = 'group';
@@ -29,7 +30,7 @@ interface AuditLoggerInterface
     /**
      * Log an access or change event for personal data
      *
-     * @param string $action The action performed (view, create, update, delete, export)
+     * @param string $action The action performed (view, create, update, delete, export, import)
      * @param string $entityType The type of entity (e.g. 'member')
      * @param int $entityId The ID of the entity
      * @param string $fieldName The personal data field accessed or changed

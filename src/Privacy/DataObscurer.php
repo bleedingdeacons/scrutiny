@@ -28,10 +28,15 @@ use function current_user_can;
  *
  * Users with the `scrutiny_view_personal_data` capability see unobscured
  * values; all other users see masked placeholders.
+ *
+ * Users with the `scrutiny_edit_personal_data` capability may update
+ * personal data fields; all other users have their changes silently
+ * rejected and the existing stored value preserved.
  */
 class DataObscurer implements DataObscurerInterface
 {
     public const CAPABILITY = 'scrutiny_view_personal_data';
+    public const EDIT_CAPABILITY = 'scrutiny_edit_personal_data';
 
     private AuditLoggerInterface $logger;
     private readonly array $member_config;
@@ -158,6 +163,14 @@ class DataObscurer implements DataObscurerInterface
     }
 
     /**
+     * @inheritDoc
+     */
+    public function currentUserCanEditPersonalData(): bool
+    {
+        return current_user_can(self::EDIT_CAPABILITY);
+    }
+
+    /**
      * Resolve the current post ID from context.
      *
      * ACF's field array does not always carry a post_id, so we fall back
@@ -199,16 +212,6 @@ class DataObscurer implements DataObscurerInterface
             return $value;
         }
 
-        $numericPostId = is_numeric($postId) ? (int) $postId : 0;
-
-        $this->logger->log(
-            AuditLoggerInterface::ACTION_VIEW,
-            AuditLoggerInterface::ENTITY_MEMBER,
-            $numericPostId,
-            PersonalDataFields::PERSONAL_EMAIL,
-            'ACF field rendered'
-        );
-
         if ($this->currentUserCanViewPersonalData()) {
             return $value;
         }
@@ -229,16 +232,6 @@ class DataObscurer implements DataObscurerInterface
         if (!is_string($value) || $value === '') {
             return $value;
         }
-
-        $numericPostId = is_numeric($postId) ? (int) $postId : 0;
-
-        $this->logger->log(
-            AuditLoggerInterface::ACTION_VIEW,
-            AuditLoggerInterface::ENTITY_MEMBER,
-            $numericPostId,
-            PersonalDataFields::MOBILE_NUMBER,
-            'ACF field rendered'
-        );
 
         if ($this->currentUserCanViewPersonalData()) {
             return $value;
@@ -272,15 +265,11 @@ class DataObscurer implements DataObscurerInterface
 
         $postId = $this->resolvePostId($field);
 
-        $this->logger->log(
-            AuditLoggerInterface::ACTION_VIEW,
-            AuditLoggerInterface::ENTITY_MEMBER,
-            $postId,
-            PersonalDataFields::PERSONAL_EMAIL,
-            'ACF field rendered in admin'
-        );
-
         if ($this->currentUserCanViewPersonalData()) {
+            // User can see the real value — make it read-only if they cannot edit
+            if (!$this->currentUserCanEditPersonalData()) {
+                $field['readonly'] = 1;
+            }
             return $field;
         }
 
@@ -310,15 +299,11 @@ class DataObscurer implements DataObscurerInterface
 
         $postId = $this->resolvePostId($field);
 
-        $this->logger->log(
-            AuditLoggerInterface::ACTION_VIEW,
-            AuditLoggerInterface::ENTITY_MEMBER,
-            $postId,
-            PersonalDataFields::MOBILE_NUMBER,
-            'ACF field rendered in admin'
-        );
-
         if ($this->currentUserCanViewPersonalData()) {
+            // User can see the real value — make it read-only if they cannot edit
+            if (!$this->currentUserCanEditPersonalData()) {
+                $field['readonly'] = 1;
+            }
             return $field;
         }
 
@@ -329,14 +314,13 @@ class DataObscurer implements DataObscurerInterface
     }
 
     /**
-     * ACF update_value: preserve the existing personal email when the
-     * submitted value is empty.
+     * ACF update_value: guard personal email updates behind the edit capability.
      *
-     * When the field is obscured via a placeholder, submitting the form
-     * without entering a new value sends an empty string. This filter
-     * detects that case and returns the existing stored value so it is
-     * not overwritten. Only applies to users who cannot view personal
-     * data — authorised users always have the real value in the input.
+     * Users with `scrutiny_edit_personal_data` may update the value freely.
+     * Users who can view but not edit will have their change rejected and
+     * the existing stored value preserved. Users who cannot view personal
+     * data see an obscured placeholder and submit an empty string — the
+     * existing value is likewise preserved.
      *
      * @param mixed $value The new value being saved
      * @param mixed $postId The post ID
@@ -345,25 +329,29 @@ class DataObscurer implements DataObscurerInterface
      */
     public function preservePersonalEmail(mixed $value, mixed $postId, array $field): mixed
     {
-        if ($this->currentUserCanViewPersonalData()) {
+        if ($this->currentUserCanEditPersonalData()) {
             return $value;
         }
 
-        if ($value === '' || $value === null) {
-            $numericPostId = is_numeric($postId) ? (int) $postId : 0;
-            $existing = get_post_meta($numericPostId, $field['name'] ?? '', true);
+        // User cannot edit — always preserve the existing value
+        $numericPostId = is_numeric($postId) ? (int) $postId : 0;
+        $existing = get_post_meta($numericPostId, $field['name'] ?? '', true);
 
-            if ($existing !== '' && $existing !== false) {
-                return $existing;
-            }
+        if ($existing !== '' && $existing !== false) {
+            return $existing;
+        }
+
+        // No existing value stored — allow the initial value through only
+        // when it is genuinely empty (i.e. a new post, not an attempted edit)
+        if ($value === '' || $value === null) {
+            return $value;
         }
 
         return $value;
     }
 
     /**
-     * ACF update_value: preserve the existing mobile number when the
-     * submitted value is empty.
+     * ACF update_value: guard mobile number updates behind the edit capability.
      *
      * @param mixed $value The new value being saved
      * @param mixed $postId The post ID
@@ -372,17 +360,22 @@ class DataObscurer implements DataObscurerInterface
      */
     public function preserveMobileNumber(mixed $value, mixed $postId, array $field): mixed
     {
-        if ($this->currentUserCanViewPersonalData()) {
+        if ($this->currentUserCanEditPersonalData()) {
             return $value;
         }
 
-        if ($value === '' || $value === null) {
-            $numericPostId = is_numeric($postId) ? (int) $postId : 0;
-            $existing = get_post_meta($numericPostId, $field['name'] ?? '', true);
+        // User cannot edit — always preserve the existing value
+        $numericPostId = is_numeric($postId) ? (int) $postId : 0;
+        $existing = get_post_meta($numericPostId, $field['name'] ?? '', true);
 
-            if ($existing !== '' && $existing !== false) {
-                return $existing;
-            }
+        if ($existing !== '' && $existing !== false) {
+            return $existing;
+        }
+
+        // No existing value stored — allow the initial value through only
+        // when it is genuinely empty (i.e. a new post, not an attempted edit)
+        if ($value === '' || $value === null) {
+            return $value;
         }
 
         return $value;

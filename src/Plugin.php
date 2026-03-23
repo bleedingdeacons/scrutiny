@@ -42,6 +42,8 @@ use function is_admin;
  * Capabilities:
  *   scrutiny_view_personal_data – grants a user the right to see unmasked values
  *                                  (assigned to administrators on activation)
+ *   scrutiny_edit_personal_data – grants a user the right to update personal data
+ *                                  fields (assigned to administrators on activation)
  */
 class Plugin
 {
@@ -114,7 +116,8 @@ class Plugin
         $container->register(AuditTracker::class, function (ContainerInterface $c) {
             return new AuditTracker(
                 $c->get(Configuration::class),
-                $c->get(AuditLoggerInterface::class)
+                $c->get(AuditLoggerInterface::class),
+                $c->get(DataObscurerInterface::class)
             );
         });
 
@@ -139,16 +142,18 @@ class Plugin
      * Run on plugin activation
      *
      * Creates the audit log database table and assigns the
-     * scrutiny_view_personal_data capability to administrators.
+     * scrutiny_view_personal_data and scrutiny_edit_personal_data
+     * capabilities to administrators.
      */
     public static function activate(): void
     {
         AuditRepository::createTable();
 
-        // Grant the capability to administrators
+        // Grant the capabilities to administrators
         $adminRole = get_role('administrator');
         if ($adminRole) {
             $adminRole->add_cap(DataObscurer::CAPABILITY);
+            $adminRole->add_cap(DataObscurer::EDIT_CAPABILITY);
         }
     }
 
