@@ -72,8 +72,6 @@ class Plugin
         self::registerServices($unityContainer);
         self::$initialized = true;
 
-        self::logInfo('Scrutiny initialised', ['version' => defined('SCRUTINY_VERSION') ? SCRUTINY_VERSION : 'unknown']);
-
         // Start Monitoring Changes
         self::$container->get(MemberChangeTracker::class);
 
@@ -91,6 +89,8 @@ class Plugin
         if (is_admin()) {
             self::$container->get(AuditLogAdmin::class);
         }
+
+        self::logDebug('Initialised', ['version' => defined('SCRUTINY_VERSION') ? SCRUTINY_VERSION : 'unknown']);
     }
 
     /**

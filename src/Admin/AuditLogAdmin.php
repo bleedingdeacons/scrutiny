@@ -171,7 +171,7 @@ class AuditLogAdmin
         ?>
         <div class="wrap">
             <h1>
-                Scrutiny – GDPR Audit Log
+                Scrutiny – Audit Log
                 <button type="button" class="page-title-action" onclick="location.reload();" title="Refresh the audit log" style="margin-left: 10px;">
                     <span class="dashicons dashicons-update" style="vertical-align: middle;"></span> Refresh
                 </button>
