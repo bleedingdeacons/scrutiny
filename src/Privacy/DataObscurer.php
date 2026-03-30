@@ -41,6 +41,19 @@ class DataObscurer implements DataObscurerInterface
     private AuditLoggerInterface $logger;
     private readonly array $member_config;
 
+    /**
+     * Guards against double-firing of update_value filters.
+     *
+     * When both the full and short field name variants are registered,
+     * ACF may invoke the filter twice for the same field during a single
+     * save. These flags ensure the second invocation is a no-op
+     * pass-through that returns the value determined by the first call.
+     */
+    private bool $emailPreserved = false;
+    private mixed $emailPreservedValue = null;
+    private bool $mobilePreserved = false;
+    private mixed $mobilePreservedValue = null;
+
     public function __construct(Configuration $configuration, AuditLoggerInterface $logger)
     {
         $this->logger = $logger;
@@ -86,8 +99,21 @@ class DataObscurer implements DataObscurerInterface
         // When the field is shown with a placeholder (value cleared), saving
         // without typing anything would set the field to empty. These filters
         // detect that case and preserve the original value.
+        //
+        // Unlike prepare_field (which matches _name, i.e. the short sub-field
+        // name), update_value matches against the field's full name attribute.
+        // Registering with BOTH names would cause the filter to fire twice
+        // and the second invocation can receive an empty value, blanking the
+        // field. Only register with the full name here.
         add_filter('acf/update_value/name=' . $emailFieldFull, [$this, 'preservePersonalEmail'], 10, 3);
         add_filter('acf/update_value/name=' . $mobileFieldFull, [$this, 'preserveMobileNumber'], 10, 3);
+
+        // Also register with the short name in case ACF resolves the
+        // sub-field _name instead of the full name during save.
+        if ($emailFieldShort !== $emailFieldFull) {
+            add_filter('acf/update_value/name=' . $emailFieldShort, [$this, 'preservePersonalEmail'], 10, 3);
+            add_filter('acf/update_value/name=' . $mobileFieldShort, [$this, 'preserveMobileNumber'], 10, 3);
+        }
 
         // Obscure the post title (private name) in admin list tables
 //        add_filter('the_title', [$this, 'obscurePostTitle'], 20, 2);
@@ -329,24 +355,35 @@ class DataObscurer implements DataObscurerInterface
      */
     public function preservePersonalEmail(mixed $value, mixed $postId, array $field): mixed
     {
+        // Guard against double-firing when both the full and short field
+        // name variants are registered — return the first-call result.
+        if ($this->emailPreserved) {
+            return $this->emailPreservedValue;
+        }
+
+        $this->emailPreserved = true;
+
         if ($this->currentUserCanEditPersonalData()) {
+            $this->emailPreservedValue = $value;
             return $value;
         }
 
-        // User cannot edit — always preserve the existing value
+        // User cannot edit — always preserve the existing value.
+        // Use the full meta key from configuration because $field['name']
+        // may be the short sub-field name (e.g. "personal-email") while
+        // ACF stores the value under the group-prefixed key
+        // (e.g. "about-layout-group_personal-email").
         $numericPostId = is_numeric($postId) ? (int) $postId : 0;
-        $existing = get_post_meta($numericPostId, $field['name'] ?? '', true);
+        $metaKey = $this->member_config['FIELD_PERSONAL_EMAIL'] ?? $field['name'] ?? '';
+        $existing = get_post_meta($numericPostId, $metaKey, true);
 
         if ($existing !== '' && $existing !== false) {
+            $this->emailPreservedValue = $existing;
             return $existing;
         }
 
-        // No existing value stored — allow the initial value through only
-        // when it is genuinely empty (i.e. a new post, not an attempted edit)
-        if ($value === '' || $value === null) {
-            return $value;
-        }
-
+        // No existing value stored — allow the initial value through
+        $this->emailPreservedValue = $value;
         return $value;
     }
 
@@ -360,24 +397,35 @@ class DataObscurer implements DataObscurerInterface
      */
     public function preserveMobileNumber(mixed $value, mixed $postId, array $field): mixed
     {
+        // Guard against double-firing when both the full and short field
+        // name variants are registered — return the first-call result.
+        if ($this->mobilePreserved) {
+            return $this->mobilePreservedValue;
+        }
+
+        $this->mobilePreserved = true;
+
         if ($this->currentUserCanEditPersonalData()) {
+            $this->mobilePreservedValue = $value;
             return $value;
         }
 
-        // User cannot edit — always preserve the existing value
+        // User cannot edit — always preserve the existing value.
+        // Use the full meta key from configuration because $field['name']
+        // may be the short sub-field name (e.g. "mobile-number") while
+        // ACF stores the value under the group-prefixed key
+        // (e.g. "about-layout-group_mobile-number").
         $numericPostId = is_numeric($postId) ? (int) $postId : 0;
-        $existing = get_post_meta($numericPostId, $field['name'] ?? '', true);
+        $metaKey = $this->member_config['FIELD_MOBILE_NUMBER'] ?? $field['name'] ?? '';
+        $existing = get_post_meta($numericPostId, $metaKey, true);
 
         if ($existing !== '' && $existing !== false) {
+            $this->mobilePreservedValue = $existing;
             return $existing;
         }
 
-        // No existing value stored — allow the initial value through only
-        // when it is genuinely empty (i.e. a new post, not an attempted edit)
-        if ($value === '' || $value === null) {
-            return $value;
-        }
-
+        // No existing value stored — allow the initial value through
+        $this->mobilePreservedValue = $value;
         return $value;
     }
 
