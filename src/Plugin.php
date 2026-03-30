@@ -82,6 +82,10 @@ class Plugin
         // Always initialise the tracker so changes are logged
         self::$container->get(AuditTracker::class);
 
+        // Ensure capabilities are up-to-date (handles upgrades where
+        // the activation hook did not re-run after new caps were added)
+        self::ensureCapabilities();
+
         // Always initialise the obscurer so personal data is masked
         self::$container->get(DataObscurerInterface::class);
 
@@ -136,6 +140,36 @@ class Plugin
                 $c->get(AuditLoggerInterface::class)
             );
         });
+    }
+
+    /**
+     * Ensure custom capabilities exist on the administrator role.
+     *
+     * WordPress stores role capabilities in the database. They are only
+     * written when add_cap() is explicitly called — typically in the
+     * plugin activation hook. If the plugin is updated and new
+     * capabilities are introduced (e.g. scrutiny_edit_personal_data)
+     * without the activation hook re-running, they will be missing.
+     *
+     * This method checks once per plugin version (tracked via a
+     * wp_option) and adds any missing capabilities.
+     */
+    private static function ensureCapabilities(): void
+    {
+        $optionKey = 'scrutiny_caps_version';
+        $currentVersion = defined('SCRUTINY_VERSION') ? SCRUTINY_VERSION : '0.0.0';
+
+        if (get_option($optionKey) === $currentVersion) {
+            return;
+        }
+
+        $adminRole = get_role('administrator');
+        if ($adminRole) {
+            $adminRole->add_cap(DataObscurer::CAPABILITY);
+            $adminRole->add_cap(DataObscurer::EDIT_CAPABILITY);
+        }
+
+        update_option($optionKey, $currentVersion);
     }
 
     /**
