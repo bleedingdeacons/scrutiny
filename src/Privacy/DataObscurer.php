@@ -15,6 +15,7 @@ use Unity\Core\Interfaces\Configuration;
 use Unity\Members\Interfaces\Member;
 use function add_filter;
 use function current_user_can;
+use function get_field;
 
 /**
  * Data Obscurer
@@ -38,21 +39,14 @@ class DataObscurer implements DataObscurerInterface
     public const CAPABILITY = 'scrutiny_view_personal_data';
     public const EDIT_CAPABILITY = 'scrutiny_edit_personal_data';
 
+    /**
+     * Sentinel value submitted by the Clear button to signal an
+     * intentional clear. Converted to an empty string before saving.
+     */
+    public const CLEAR_SENTINEL = '__CLEAR__';
+
     private AuditLoggerInterface $logger;
     private readonly array $member_config;
-
-    /**
-     * Guards against double-firing of update_value filters.
-     *
-     * When both the full and short field name variants are registered,
-     * ACF may invoke the filter twice for the same field during a single
-     * save. These flags ensure the second invocation is a no-op
-     * pass-through that returns the value determined by the first call.
-     */
-    private bool $emailPreserved = false;
-    private mixed $emailPreservedValue = null;
-    private bool $mobilePreserved = false;
-    private mixed $mobilePreservedValue = null;
 
     public function __construct(Configuration $configuration, AuditLoggerInterface $logger)
     {
@@ -100,19 +94,19 @@ class DataObscurer implements DataObscurerInterface
         // without typing anything would set the field to empty. These filters
         // detect that case and preserve the original value.
         //
-        // Unlike prepare_field (which matches _name, i.e. the short sub-field
-        // name), update_value matches against the field's full name attribute.
-        // Registering with BOTH names would cause the filter to fire twice
-        // and the second invocation can receive an empty value, blanking the
-        // field. Only register with the full name here.
-        add_filter('acf/update_value/name=' . $emailFieldFull, [$this, 'preservePersonalEmail'], 10, 3);
-        add_filter('acf/update_value/name=' . $mobileFieldFull, [$this, 'preserveMobileNumber'], 10, 3);
+        // For sub-fields inside ACF groups, name-based update_value filters
+        // are unreliable — ACF may resolve the name differently during the
+        // group save, causing double-firing or missed matches that blank
+        // fields. Key-based filters (acf/update_value/key=) are guaranteed
+        // to fire exactly once per field with the correct value.
+        $emailFieldKey = $this->member_config['KEY_PERSONAL_EMAIL'] ?? '';
+        $mobileFieldKey = $this->member_config['KEY_MOBILE_NUMBER'] ?? '';
 
-        // Also register with the short name in case ACF resolves the
-        // sub-field _name instead of the full name during save.
-        if ($emailFieldShort !== $emailFieldFull) {
-            add_filter('acf/update_value/name=' . $emailFieldShort, [$this, 'preservePersonalEmail'], 10, 3);
-            add_filter('acf/update_value/name=' . $mobileFieldShort, [$this, 'preserveMobileNumber'], 10, 3);
+        if ($emailFieldKey !== '') {
+            add_filter('acf/update_value/key=' . $emailFieldKey, [$this, 'preservePersonalEmail'], 10, 3);
+        }
+        if ($mobileFieldKey !== '') {
+            add_filter('acf/update_value/key=' . $mobileFieldKey, [$this, 'preserveMobileNumber'], 10, 3);
         }
 
         // Obscure the post title (private name) in admin list tables
@@ -292,9 +286,9 @@ class DataObscurer implements DataObscurerInterface
         $postId = $this->resolvePostId($field);
 
         if ($this->currentUserCanViewPersonalData()) {
-            // User can see the real value — make it read-only if they cannot edit
+            // User can see the real value — disable the input if they cannot edit
             if (!$this->currentUserCanEditPersonalData()) {
-                $field['readonly'] = 1;
+                $field['disabled'] = 1;
             }
             return $field;
         }
@@ -326,9 +320,9 @@ class DataObscurer implements DataObscurerInterface
         $postId = $this->resolvePostId($field);
 
         if ($this->currentUserCanViewPersonalData()) {
-            // User can see the real value — make it read-only if they cannot edit
+            // User can see the real value — disable the input if they cannot edit
             if (!$this->currentUserCanEditPersonalData()) {
-                $field['readonly'] = 1;
+                $field['disabled'] = 1;
             }
             return $field;
         }
@@ -355,35 +349,38 @@ class DataObscurer implements DataObscurerInterface
      */
     public function preservePersonalEmail(mixed $value, mixed $postId, array $field): mixed
     {
-        // Guard against double-firing when both the full and short field
-        // name variants are registered — return the first-call result.
-        if ($this->emailPreserved) {
-            return $this->emailPreservedValue;
+        $numericPostId = is_numeric($postId) ? (int) $postId : 0;
+        $fieldName = $this->member_config['FIELD_PERSONAL_EMAIL'] ?? '';
+
+        // The Clear button submits a sentinel value rather than an empty
+        // string so the server can tell an intentional clear apart from
+        // an untouched field. Convert the sentinel to empty before saving.
+        if ($value === self::CLEAR_SENTINEL) {
+            return '';
         }
 
-        $this->emailPreserved = true;
-
         if ($this->currentUserCanEditPersonalData()) {
-            $this->emailPreservedValue = $value;
+            // Users who cannot view personal data see an empty input with
+            // an obscured placeholder. If they don't type anything the form
+            // submits an empty string — preserve the existing value since
+            // the user simply didn't touch the field.
+            if (!$this->currentUserCanViewPersonalData() && ($value === '' || $value === null)) {
+                $existing = $fieldName !== '' ? get_field($fieldName, $numericPostId, false) : null;
+                if (is_string($existing) && $existing !== '') {
+                    return $existing;
+                }
+            }
             return $value;
         }
 
         // User cannot edit — always preserve the existing value.
-        // Use the full meta key from configuration because $field['name']
-        // may be the short sub-field name (e.g. "personal-email") while
-        // ACF stores the value under the group-prefixed key
-        // (e.g. "about-layout-group_personal-email").
-        $numericPostId = is_numeric($postId) ? (int) $postId : 0;
-        $metaKey = $this->member_config['FIELD_PERSONAL_EMAIL'] ?? $field['name'] ?? '';
-        $existing = get_post_meta($numericPostId, $metaKey, true);
+        $existing = $fieldName !== '' ? get_field($fieldName, $numericPostId, false) : null;
 
-        if ($existing !== '' && $existing !== false) {
-            $this->emailPreservedValue = $existing;
+        if (is_string($existing) && $existing !== '') {
             return $existing;
         }
 
         // No existing value stored — allow the initial value through
-        $this->emailPreservedValue = $value;
         return $value;
     }
 
@@ -397,35 +394,38 @@ class DataObscurer implements DataObscurerInterface
      */
     public function preserveMobileNumber(mixed $value, mixed $postId, array $field): mixed
     {
-        // Guard against double-firing when both the full and short field
-        // name variants are registered — return the first-call result.
-        if ($this->mobilePreserved) {
-            return $this->mobilePreservedValue;
+        $numericPostId = is_numeric($postId) ? (int) $postId : 0;
+        $fieldName = $this->member_config['FIELD_MOBILE_NUMBER'] ?? '';
+
+        // The Clear button submits a sentinel value rather than an empty
+        // string so the server can tell an intentional clear apart from
+        // an untouched field. Convert the sentinel to empty before saving.
+        if ($value === self::CLEAR_SENTINEL) {
+            return '';
         }
 
-        $this->mobilePreserved = true;
-
         if ($this->currentUserCanEditPersonalData()) {
-            $this->mobilePreservedValue = $value;
+            // Users who cannot view personal data see an empty input with
+            // an obscured placeholder. If they don't type anything the form
+            // submits an empty string — preserve the existing value since
+            // the user simply didn't touch the field.
+            if (!$this->currentUserCanViewPersonalData() && ($value === '' || $value === null)) {
+                $existing = $fieldName !== '' ? get_field($fieldName, $numericPostId, false) : null;
+                if (is_string($existing) && $existing !== '') {
+                    return $existing;
+                }
+            }
             return $value;
         }
 
         // User cannot edit — always preserve the existing value.
-        // Use the full meta key from configuration because $field['name']
-        // may be the short sub-field name (e.g. "mobile-number") while
-        // ACF stores the value under the group-prefixed key
-        // (e.g. "about-layout-group_mobile-number").
-        $numericPostId = is_numeric($postId) ? (int) $postId : 0;
-        $metaKey = $this->member_config['FIELD_MOBILE_NUMBER'] ?? $field['name'] ?? '';
-        $existing = get_post_meta($numericPostId, $metaKey, true);
+        $existing = $fieldName !== '' ? get_field($fieldName, $numericPostId, false) : null;
 
-        if ($existing !== '' && $existing !== false) {
-            $this->mobilePreservedValue = $existing;
+        if (is_string($existing) && $existing !== '') {
             return $existing;
         }
 
         // No existing value stored — allow the initial value through
-        $this->mobilePreservedValue = $value;
         return $value;
     }
 

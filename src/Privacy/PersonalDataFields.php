@@ -103,6 +103,19 @@ final class PersonalDataFields
     ];
 
     /**
+     * Configuration keys that hold the ACF field keys for personal data fields.
+     *
+     * Used by DataObscurer to register acf/update_value/key= filters which
+     * are more reliable than name-based filters for group sub-fields.
+     *
+     * @var array<string, string>
+     */
+    public const CONFIG_ACF_KEY_MAP = [
+        'KEY_PERSONAL_EMAIL' => self::PERSONAL_EMAIL,
+        'KEY_MOBILE_NUMBER'  => self::MOBILE_NUMBER,
+    ];
+
+    /**
      * Human-readable labels for each personal data field
      *
      * @var array<string, string>
