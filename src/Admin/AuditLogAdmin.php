@@ -175,7 +175,8 @@ class AuditLogAdmin
                 <button type="button" class="page-title-action" onclick="location.reload();" title="Refresh the audit log" style="margin-left: 10px;">
                     <span class="dashicons dashicons-update" style="vertical-align: middle;"></span> Refresh
                 </button>
-                <a href="<?php echo esc_url(plugins_url('assets/docs/scrutiny.html', dirname(__DIR__, 2) . '/Scrutiny.php')); ?>" target="_blank" class="page-title-action" title="View Scrutiny documentation" style="margin-left: 5px;">
+                <a href="#" class="page-title-action" title="View Scrutiny documentation" style="margin-left: 5px;"
+                   onclick="event.preventDefault(); window.name = 'scrutiny-admin'; window.open('<?php echo esc_js(plugins_url('assets/docs/scrutiny.html', dirname(__DIR__, 2) . '/Scrutiny.php')); ?>' + '?back=' + encodeURIComponent(window.location.href), 'scrutiny-help');">
                     <span class="dashicons dashicons-editor-help" style="vertical-align: middle;"></span> Help
                 </a>
             </h1>
@@ -264,12 +265,6 @@ class AuditLogAdmin
                     <!-- Filter Buttons -->
                     <button type="submit" class="button button-primary">Apply Filters</button>
                     <a href="<?php echo esc_url(admin_url('admin.php?page=' . self::MENU_SLUG)); ?>" class="button">Reset All</a>
-                    <button type="button" class="button" onclick="location.reload();" title="Refresh the audit log">
-                        <span class="dashicons dashicons-update" style="vertical-align: middle; margin-top: 3px;"></span> Refresh
-                    </button>
-                    <a href="<?php echo esc_url(plugins_url('assets/docs/scrutiny.html', dirname(__DIR__, 2) . '/Scrutiny.php')); ?>" target="_blank" class="button" title="View Scrutiny documentation">
-                        <span class="dashicons dashicons-editor-help" style="vertical-align: middle; margin-top: 3px;"></span> Help
-                    </a>
                 </div>
             </form>
 

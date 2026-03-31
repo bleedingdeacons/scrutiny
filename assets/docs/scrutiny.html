@@ -57,6 +57,14 @@
             text-decoration: none; letter-spacing: -0.3px;
         }
         .site-header .logo span { color: var(--accent); }
+        .site-header .back-link {
+            display: flex; align-items: center; justify-content: center;
+            width: 36px; height: 36px; flex-shrink: 0;
+            border-radius: 8px; text-decoration: none;
+            font-family: 'DM Sans', sans-serif; font-size: 20px; font-weight: 700;
+            color: var(--text); letter-spacing: -0.3px;
+        }
+        .site-header .back-link:hover { background: var(--code-bg); }
         .site-header .version {
             font-size: 12px; font-weight: 500; color: var(--text-secondary);
             background: var(--code-bg); padding: 2px 8px; border-radius: 6px;
@@ -171,6 +179,7 @@
         .badge-update { background: var(--accent-bg); color: var(--accent-dark); }
         .badge-delete { background: var(--danger-bg); color: var(--danger); }
         .badge-export { background: #f3e8fd; color: #6b21a8; }
+        .badge-import { background: #e0f2fe; color: #0369a1; }
         .badge-purge { background: var(--code-bg); color: var(--text-secondary); }
 
         .steps { counter-reset: step; list-style: none; padding-left: 0; }
@@ -224,13 +233,14 @@
 <body>
 
 <header class="site-header">
+    <a href="#" class="back-link" title="Back to admin" onclick="event.preventDefault(); var params = new URLSearchParams(window.location.search); var backUrl = params.get('back'); if (backUrl) { window.open(backUrl, 'scrutiny-admin'); }"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg></a>
     <button class="hamburger" onclick="toggleNav()" aria-label="Toggle navigation">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
     </button>
     <a href="#" class="logo">
         <span>🔍</span> Scrutiny <span>Docs</span>
     </a>
-    <span class="version">February 2026</span>
+    <span class="version">March 2026</span>
 </header>
 
 <div class="overlay" onclick="toggleNav()"></div>
@@ -247,6 +257,7 @@
         <a href="#obscuring-overview" class="nav-link">How It Works</a>
         <a href="#protected-fields" class="nav-link">Protected Fields</a>
         <a href="#capability" class="nav-link">View Permission</a>
+        <a href="#edit-capability" class="nav-link">Edit Permission</a>
     </div>
     <div class="nav-section">
         <div class="nav-section-title">Audit Log</div>
@@ -311,7 +322,7 @@
             <li>Make sure the <strong>Unity</strong> plugin is installed and activated.</li>
             <li>Upload the <code>scrutiny</code> folder to your <code>/wp-content/plugins/</code> directory, or install via the WordPress plugin uploader.</li>
             <li>Go to <strong>Plugins → Installed Plugins</strong> and activate <strong>Scrutiny</strong>.</li>
-            <li>On activation, Scrutiny automatically creates its database table (<code>wp_scrutiny_audit_log</code>) and grants the <code>scrutiny_view_personal_data</code> capability to Administrators.</li>
+            <li>On activation, Scrutiny automatically creates its database table (<code>wp_scrutiny_audit_log</code>) and grants the <code>scrutiny_view_personal_data</code> and <code>scrutiny_edit_personal_data</code> capabilities to Administrators.</li>
             <li>An <strong>Audit Log</strong> submenu appears under the <strong>Intergroup</strong> menu (added by Amber).</li>
         </ol>
     </section>
@@ -363,14 +374,20 @@
         <p>Scrutiny currently protects the following member fields:</p>
 
         <table class="status-table">
-            <thead><tr><th>Field</th><th>Obscuring Method</th><th>Description</th></tr></thead>
+            <thead><tr><th>Field</th><th>Entity</th><th>Obscuring Method</th><th>Description</th></tr></thead>
             <tbody>
-            <tr><td><strong>Personal Email</strong></td><td>Email masking</td><td>The member's private email address (not the position email).</td></tr>
-            <tr><td><strong>Mobile Number</strong></td><td>Phone masking</td><td>The member's personal mobile phone number.</td></tr>
+            <tr><td><strong>Personal Email</strong></td><td>Member</td><td>Email masking</td><td>The member's private email address (not the position email).</td></tr>
+            <tr><td><strong>Mobile Number</strong></td><td>Member</td><td>Phone masking</td><td>The member's personal mobile phone number.</td></tr>
+            <tr><td><strong>Group Contact Name</strong></td><td>Group</td><td>Name masking</td><td>The name of the group's primary contact person.</td></tr>
+            <tr><td><strong>Group Contact Email</strong></td><td>Group</td><td>Email masking</td><td>The email address of the group's primary contact.</td></tr>
+            <tr><td><strong>Group Contact Phone</strong></td><td>Group</td><td>Phone masking</td><td>The phone number of the group's primary contact.</td></tr>
+            <tr><td><strong>Meeting Contact Name</strong></td><td>Meeting</td><td>Name masking</td><td>The name of the meeting's contact person.</td></tr>
+            <tr><td><strong>Meeting Contact Email</strong></td><td>Meeting</td><td>Email masking</td><td>The email address of the meeting's contact.</td></tr>
+            <tr><td><strong>Meeting Contact Phone</strong></td><td>Meeting</td><td>Phone masking</td><td>The phone number of the meeting's contact.</td></tr>
             </tbody>
         </table>
 
-        <p>These fields are defined in the <code>PersonalDataFields</code> configuration. All audit log entries, filters, and the admin page use human-readable labels ("Personal Email", "Mobile Number") rather than internal field keys.</p>
+        <p>These fields are defined in the <code>PersonalDataFields</code> configuration. All audit log entries, filters, and the admin page use human-readable labels rather than internal field keys.</p>
     </section>
 
     <!-- Capability -->
@@ -394,16 +411,70 @@
         </div>
     </section>
 
+    <!-- Edit Capability -->
+    <section id="edit-capability">
+        <h2>Edit Permission</h2>
+        <p>The ability to <strong>modify</strong> personal data values is controlled by a separate capability: <code>scrutiny_edit_personal_data</code>.</p>
+
+        <div class="card">
+            <h3>How view and edit interact</h3>
+            <p>These two capabilities work together to give fine-grained control over personal data access:</p>
+            <table class="status-table">
+                <thead><tr><th>Has View?</th><th>Has Edit?</th><th>Behaviour</th></tr></thead>
+                <tbody>
+                <tr><td>✅</td><td>✅</td><td>Sees the real value and can change it freely.</td></tr>
+                <tr><td>✅</td><td>❌</td><td>Sees the real value but the field is <strong>disabled</strong> — read-only.</td></tr>
+                <tr><td>❌</td><td>✅</td><td>Sees an obscured placeholder. Can type a new value to replace it, but cannot see the current one.</td></tr>
+                <tr><td>❌</td><td>❌</td><td>Sees an obscured placeholder. Any submitted changes are silently rejected and the existing value is preserved.</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="card">
+            <h3>Who has it by default?</h3>
+            <p>On activation, Scrutiny grants <code>scrutiny_edit_personal_data</code> to the <strong>Administrator</strong> role alongside the view capability. Other roles can be granted it via a role management plugin.</p>
+        </div>
+
+        <div class="card">
+            <h3>Clearing a field value</h3>
+            <p>When a user with edit permission needs to intentionally remove a value (e.g. a member has withdrawn their email), a <strong>Clear</strong> button is available alongside the field. This sends a special sentinel value so Scrutiny can distinguish an intentional clear from an untouched empty form submission.</p>
+        </div>
+
+        <div class="callout warning">
+            <span class="callout-icon">⚠️</span>
+            <div>If a user without the edit capability saves the member form, Scrutiny silently preserves the existing stored value — no data is lost, and no error is shown. This prevents accidental overwrites by users who can see but not change personal data.</div>
+        </div>
+    </section>
+
     <!-- Audit Overview -->
     <section id="audit-overview">
         <h2>What Gets Logged</h2>
         <p>Scrutiny automatically logs the following events for personal data fields:</p>
 
-        <ul>
-            <li><strong>Viewing</strong> — when a member edit form is opened in the admin, or when personal data fields are loaded on the front end</li>
-            <li><strong>Updating</strong> — when a personal email or mobile number value is changed</li>
-            <li><strong>Deleting</strong> — when a member post is moved to Trash or permanently deleted</li>
-        </ul>
+        <div class="card">
+            <h3>Member Events</h3>
+            <ul>
+                <li><strong>Viewing</strong> — when a member edit form is opened in the admin, or when personal data fields are loaded on the front end</li>
+                <li><strong>Updating</strong> — when a personal email or mobile number value is changed</li>
+                <li><strong>Deleting</strong> — when a member post is moved to Trash or permanently deleted</li>
+            </ul>
+        </div>
+
+        <div class="card">
+            <h3>Group Events</h3>
+            <ul>
+                <li><strong>Updating</strong> — when a group's contact name, email, or phone number is changed</li>
+                <li><strong>Hiding</strong> — when a group's post status is set to private (logged as an update to all contact fields)</li>
+                <li><strong>Deleting</strong> — when a group is moved to Trash or permanently deleted</li>
+            </ul>
+        </div>
+
+        <div class="card">
+            <h3>Meeting Events</h3>
+            <ul>
+                <li><strong>Updating</strong> — when a meeting's contact name, email, or phone number is changed (tracked as part of the parent group save)</li>
+            </ul>
+        </div>
 
         <div class="callout success">
             <span class="callout-icon">✅</span>
@@ -424,6 +495,7 @@
             <tr><td><span class="status-badge badge-update">Update</span></td><td>A personal data field value was changed.</td></tr>
             <tr><td><span class="status-badge badge-delete">Delete</span></td><td>A member record was trashed or permanently deleted.</td></tr>
             <tr><td><span class="status-badge badge-export">Export</span></td><td>Personal data was exported.</td></tr>
+            <tr><td><span class="status-badge badge-import">Import</span></td><td>Personal data was imported from an external source.</td></tr>
             <tr><td><span class="status-badge badge-purge">Purge</span></td><td>An administrator purged old audit log entries (the purge action itself is logged).</td></tr>
             </tbody>
         </table>
@@ -441,8 +513,8 @@
             <tr><td><strong>Date / Time (UTC)</strong></td><td>When the event occurred, in UTC.</td></tr>
             <tr><td><strong>User</strong></td><td>The WordPress username and user ID of who performed the action.</td></tr>
             <tr><td><strong>Action</strong></td><td>Colour-coded badge (View, Update, Delete, etc.).</td></tr>
-            <tr><td><strong>Entity Type</strong></td><td>The type of record — typically "Member".</td></tr>
-            <tr><td><strong>Field</strong></td><td>Which personal data field was accessed (Personal Email or Mobile Number).</td></tr>
+            <tr><td><strong>Entity Type</strong></td><td>The type of record — Member, Group, Meeting, User, or Audit Log.</td></tr>
+            <tr><td><strong>Field</strong></td><td>Which personal data field was accessed (e.g. Personal Email, Mobile Number, Group Contact Name).</td></tr>
             <tr><td><strong>Member ID</strong></td><td>A link to the member record that was accessed.</td></tr>
             <tr><td><strong>Detail</strong></td><td>Additional context (e.g. "Member edit form displayed in admin", "Value changed").</td></tr>
             <tr><td><strong>IP (truncated)</strong></td><td>The user's anonymised IP address (last octet zeroed out).</td></tr>
@@ -460,9 +532,9 @@
         <table class="status-table">
             <thead><tr><th>Filter</th><th>Description</th></tr></thead>
             <tbody>
-            <tr><td><strong>Entity Type</strong></td><td>Filter by record type (Member, User, Audit Log, or All).</td></tr>
-            <tr><td><strong>Action</strong></td><td>Filter by action type (View, Create, Update, Delete, Export, Purge).</td></tr>
-            <tr><td><strong>Field</strong></td><td>Filter by which personal data field was involved.</td></tr>
+            <tr><td><strong>Entity Type</strong></td><td>Filter by record type (Member, Group, Meeting, User, Audit Log, or All Entities).</td></tr>
+            <tr><td><strong>Action</strong></td><td>Filter by action type (View, Create, Update, Delete, Export, Import, Purge).</td></tr>
+            <tr><td><strong>Field</strong></td><td>Filter by which personal data field was involved (e.g. Personal Email, Mobile Number, Group Contact Name, Meeting Contact Email).</td></tr>
             <tr><td><strong>User</strong></td><td>Filter by the WordPress user who performed the action. The dropdown lists all users who have audit entries.</td></tr>
             <tr><td><strong>Member ID</strong></td><td>Filter by a specific member's post ID.</td></tr>
             <tr><td><strong>From Date / To Date</strong></td><td>Filter by date range.</td></tr>
@@ -473,7 +545,7 @@
 
         <div class="callout info">
             <span class="callout-icon">💡</span>
-            <div>Use the <strong>Refresh</strong> button (next to the page title or in the filter bar) to reload the audit log without resetting your filters. This is useful for monitoring access in real time.</div>
+            <div>Use the <strong>Refresh</strong> button (next to the page title) to reload the audit log without resetting your filters. This is useful for monitoring access in real time.</div>
         </div>
     </section>
 
@@ -525,7 +597,7 @@
 
         <div class="card">
             <h3>Personal data fields aren't being masked</h3>
-            <p>Check that your user account has the <code>scrutiny_view_personal_data</code> capability. If you do, you'll see unmasked values — that's expected. Log in with a non-administrator account to verify that masking is working.</p>
+            <p>Check that your user account has the <code>scrutiny_view_personal_data</code> capability. If you do, you'll see unmasked values — that's expected. Log in with a non-administrator account to verify that masking is working. Note that a separate <code>scrutiny_edit_personal_data</code> capability controls whether the field can be changed — users with view but not edit will see the real value in a disabled (read-only) input.</p>
         </div>
 
         <div class="card">
@@ -545,7 +617,7 @@
 
         <div class="card">
             <h3>Does the audit log store actual personal data?</h3>
-            <p>No. The log records the field name (e.g. "Personal Email"), the member post ID, the WordPress user who accessed it, and a timestamp. The actual email address or phone number is never written to the log table.</p>
+            <p>No. The log records the field name (e.g. "Personal Email", "Group Contact Phone"), the entity post ID, the WordPress user who accessed it, and a timestamp. The actual email address, phone number, or contact name is never written to the log table.</p>
         </div>
 
         <div class="card">
@@ -570,7 +642,7 @@
 
         <div class="card" style="margin-bottom: 0;">
             <h3>Who can access the Audit Log page?</h3>
-            <p style="margin-bottom:0;">Only users with the <code>manage_options</code> capability — typically Administrators only. This is separate from the <code>scrutiny_view_personal_data</code> capability, which controls who can see unmasked field values.</p>
+            <p style="margin-bottom:0;">Only users with the <code>manage_options</code> capability — typically Administrators only. This is separate from <code>scrutiny_view_personal_data</code> (which controls who can see unmasked field values) and <code>scrutiny_edit_personal_data</code> (which controls who can change them).</p>
         </div>
     </section>
 
