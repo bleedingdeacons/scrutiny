@@ -11,11 +11,11 @@ if (!defined('ABSPATH')) {
 
 use RuntimeException;
 use Scrutiny\Admin\AuditLogAdmin;
-use Scrutiny\Audit\AuditLogger;
-use Scrutiny\Audit\AuditRepository;
+use Scrutiny\Audit\GdprAuditLogger;
+use Scrutiny\Audit\GdprAuditRepository;
 use Scrutiny\Audit\AuditTracker;
-use Scrutiny\Audit\Interfaces\AuditLoggerInterface;
-use Scrutiny\Audit\Interfaces\AuditRepositoryInterface;
+use Scrutiny\Audit\Interfaces\AuditLogger;
+use Scrutiny\Audit\Interfaces\AuditRepository;
 use Scrutiny\Privacy\DataObscurer;
 use Scrutiny\Privacy\Interfaces\DataObscurerInterface;
 use Psr\Container\ContainerInterface;
@@ -33,8 +33,8 @@ use function is_admin;
  * Provides GDPR-compliant audit logging and personal data obscuring for Unity.
  *
  * Architecture:
- *   AuditRepository  – stores audit log entries in a custom database table
- *   AuditLogger      – writes log entries (who, what, when — no raw PII)
+ *   GdprAuditRepository  – stores audit log entries in a custom database table
+ *   GdprAuditLogger      – writes log entries (who, what, when — no raw PII)
  *   AuditTracker     – hooks into Unity member and group lifecycle to capture changes
  *   DataObscurer     – masks personal data in the admin UI
  *   AuditLogAdmin    – read-only admin page for viewing the audit trail
@@ -105,14 +105,14 @@ class Plugin
     private static function registerServices(Container $container): void
     {
         // Audit Repository
-        $container->register(AuditRepositoryInterface::class, function () {
-            return new AuditRepository();
+        $container->register(AuditRepository::class, function () {
+            return new GdprAuditRepository();
         });
 
         // Audit Logger
-        $container->register(AuditLoggerInterface::class, function (ContainerInterface $c) {
-            return new AuditLogger(
-                $c->get(AuditRepositoryInterface::class)
+        $container->register(AuditLogger::class, function (ContainerInterface $c) {
+            return new GdprAuditLogger(
+                $c->get(AuditRepository::class)
             );
         });
 
@@ -120,7 +120,7 @@ class Plugin
         $container->register(AuditTracker::class, function (ContainerInterface $c) {
             return new AuditTracker(
                 $c->get(Configuration::class),
-                $c->get(AuditLoggerInterface::class),
+                $c->get(AuditLogger::class),
                 $c->get(DataObscurerInterface::class)
             );
         });
@@ -129,15 +129,15 @@ class Plugin
         $container->register(DataObscurerInterface::class, function (ContainerInterface $c) {
             return new DataObscurer(
                 $c->get(Configuration::class),
-                $c->get(AuditLoggerInterface::class)
+                $c->get(AuditLogger::class)
             );
         });
 
         // Audit Log Admin Page
         $container->register(AuditLogAdmin::class, function (ContainerInterface $c) {
             return new AuditLogAdmin(
-                $c->get(AuditRepositoryInterface::class),
-                $c->get(AuditLoggerInterface::class)
+                $c->get(AuditRepository::class),
+                $c->get(AuditLogger::class)
             );
         });
     }
@@ -181,7 +181,7 @@ class Plugin
      */
     public static function activate(): void
     {
-        AuditRepository::createTable();
+        GdprAuditRepository::createTable();
 
         // Grant the capabilities to administrators
         $adminRole = get_role('administrator');

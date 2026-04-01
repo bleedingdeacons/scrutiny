@@ -14,7 +14,7 @@ if (!defined('ABSPATH')) {
  *
  * Defines the contract for GDPR compliant audit logging of personal data access and changes.
  */
-interface AuditLoggerInterface
+interface AuditLogger
 {
     public const ACTION_VIEW = 'view';
     public const ACTION_CREATE = 'create';

@@ -9,8 +9,8 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-use Scrutiny\Audit\Interfaces\AuditLoggerInterface;
-use Scrutiny\Audit\Interfaces\AuditRepositoryInterface;
+use Scrutiny\Audit\Interfaces\AuditLogger;
+use Scrutiny\Audit\Interfaces\AuditRepository;
 use function get_current_user_id;
 use function wp_get_current_user;
 
@@ -21,11 +21,11 @@ use function wp_get_current_user;
  * Logs are stored without raw PII — only field names, entity references, and
  * the identity of the accessing user are recorded.
  */
-class AuditLogger implements AuditLoggerInterface
+class GdprAuditLogger implements AuditLogger
 {
-    private AuditRepositoryInterface $repository;
+    private AuditRepository $repository;
 
-    public function __construct(AuditRepositoryInterface $repository)
+    public function __construct(AuditRepository $repository)
     {
         $this->repository = $repository;
     }

@@ -6,7 +6,7 @@ namespace Scrutiny\Tests\Unit\Audit;
 
 use PHPUnit\Framework\TestCase;
 use Scrutiny\Audit\AuditTracker;
-use Scrutiny\Audit\Interfaces\AuditLoggerInterface;
+use Scrutiny\Audit\Interfaces\AuditLogger;
 use Scrutiny\Privacy\PersonalDataFields;
 use Unity\Contacts\Interfaces\Contact;
 use Unity\Groups\Interfaces\Group;
@@ -27,7 +27,7 @@ class AuditTrackerGroupTest extends TestCase
     /**
      * Create an AuditTracker without WP hooks by using reflection
      */
-    private function createTracker(AuditLoggerInterface $logger): AuditTracker
+    private function createTracker(AuditLogger $logger): AuditTracker
     {
         $reflection = new \ReflectionClass(AuditTracker::class);
         $instance = $reflection->newInstanceWithoutConstructor();
@@ -81,12 +81,12 @@ class AuditTrackerGroupTest extends TestCase
     /** @test */
     public function it_logs_when_group_contact_email_changes(): void
     {
-        $logger = Mockery::mock(AuditLoggerInterface::class);
+        $logger = Mockery::mock(AuditLogger::class);
         $logger->shouldReceive('log')
             ->once()
             ->with(
-                AuditLoggerInterface::ACTION_UPDATE,
-                AuditLoggerInterface::ENTITY_GROUP,
+                AuditLogger::ACTION_UPDATE,
+                AuditLogger::ENTITY_GROUP,
                 10,
                 PersonalDataFields::GROUP_CONTACT_EMAIL,
                 'Contact email changed'
@@ -107,12 +107,12 @@ class AuditTrackerGroupTest extends TestCase
     /** @test */
     public function it_logs_when_group_contact_name_changes(): void
     {
-        $logger = Mockery::mock(AuditLoggerInterface::class);
+        $logger = Mockery::mock(AuditLogger::class);
         $logger->shouldReceive('log')
             ->once()
             ->with(
-                AuditLoggerInterface::ACTION_UPDATE,
-                AuditLoggerInterface::ENTITY_GROUP,
+                AuditLogger::ACTION_UPDATE,
+                AuditLogger::ENTITY_GROUP,
                 10,
                 PersonalDataFields::GROUP_CONTACT_NAME,
                 'Contact name changed'
@@ -133,12 +133,12 @@ class AuditTrackerGroupTest extends TestCase
     /** @test */
     public function it_logs_when_group_contact_phone_changes(): void
     {
-        $logger = Mockery::mock(AuditLoggerInterface::class);
+        $logger = Mockery::mock(AuditLogger::class);
         $logger->shouldReceive('log')
             ->once()
             ->with(
-                AuditLoggerInterface::ACTION_UPDATE,
-                AuditLoggerInterface::ENTITY_GROUP,
+                AuditLogger::ACTION_UPDATE,
+                AuditLogger::ENTITY_GROUP,
                 10,
                 PersonalDataFields::GROUP_CONTACT_PHONE,
                 'Contact phone changed'
@@ -159,7 +159,7 @@ class AuditTrackerGroupTest extends TestCase
     /** @test */
     public function it_logs_all_group_contact_fields_when_all_change(): void
     {
-        $logger = Mockery::mock(AuditLoggerInterface::class);
+        $logger = Mockery::mock(AuditLogger::class);
         $logger->shouldReceive('log')->times(3);
 
         $tracker = $this->createTracker($logger);
@@ -177,7 +177,7 @@ class AuditTrackerGroupTest extends TestCase
     /** @test */
     public function it_does_not_log_when_group_contacts_are_unchanged(): void
     {
-        $logger = Mockery::mock(AuditLoggerInterface::class);
+        $logger = Mockery::mock(AuditLogger::class);
         $logger->shouldNotReceive('log');
 
         $tracker = $this->createTracker($logger);
@@ -195,7 +195,7 @@ class AuditTrackerGroupTest extends TestCase
     /** @test */
     public function it_logs_when_a_group_contact_is_added(): void
     {
-        $logger = Mockery::mock(AuditLoggerInterface::class);
+        $logger = Mockery::mock(AuditLogger::class);
         // Adding a contact changes name, email, and phone lists
         $logger->shouldReceive('log')->times(3);
 
@@ -212,7 +212,7 @@ class AuditTrackerGroupTest extends TestCase
     /** @test */
     public function it_logs_when_a_group_contact_is_removed(): void
     {
-        $logger = Mockery::mock(AuditLoggerInterface::class);
+        $logger = Mockery::mock(AuditLogger::class);
         $logger->shouldReceive('log')->times(3);
 
         $tracker = $this->createTracker($logger);
@@ -232,12 +232,12 @@ class AuditTrackerGroupTest extends TestCase
     /** @test */
     public function it_logs_when_meeting_contact_email_changes(): void
     {
-        $logger = Mockery::mock(AuditLoggerInterface::class);
+        $logger = Mockery::mock(AuditLogger::class);
         $logger->shouldReceive('log')
             ->once()
             ->with(
-                AuditLoggerInterface::ACTION_UPDATE,
-                AuditLoggerInterface::ENTITY_MEETING,
+                AuditLogger::ACTION_UPDATE,
+                AuditLogger::ENTITY_MEETING,
                 99,
                 PersonalDataFields::MEETING_CONTACT_EMAIL,
                 'Contact email changed'
@@ -261,12 +261,12 @@ class AuditTrackerGroupTest extends TestCase
     /** @test */
     public function it_logs_when_meeting_contact_name_changes(): void
     {
-        $logger = Mockery::mock(AuditLoggerInterface::class);
+        $logger = Mockery::mock(AuditLogger::class);
         $logger->shouldReceive('log')
             ->once()
             ->with(
-                AuditLoggerInterface::ACTION_UPDATE,
-                AuditLoggerInterface::ENTITY_MEETING,
+                AuditLogger::ACTION_UPDATE,
+                AuditLogger::ENTITY_MEETING,
                 99,
                 PersonalDataFields::MEETING_CONTACT_NAME,
                 'Contact name changed'
@@ -290,12 +290,12 @@ class AuditTrackerGroupTest extends TestCase
     /** @test */
     public function it_logs_when_meeting_contact_phone_changes(): void
     {
-        $logger = Mockery::mock(AuditLoggerInterface::class);
+        $logger = Mockery::mock(AuditLogger::class);
         $logger->shouldReceive('log')
             ->once()
             ->with(
-                AuditLoggerInterface::ACTION_UPDATE,
-                AuditLoggerInterface::ENTITY_MEETING,
+                AuditLogger::ACTION_UPDATE,
+                AuditLogger::ENTITY_MEETING,
                 99,
                 PersonalDataFields::MEETING_CONTACT_PHONE,
                 'Contact phone changed'
@@ -319,7 +319,7 @@ class AuditTrackerGroupTest extends TestCase
     /** @test */
     public function it_does_not_log_when_meeting_contacts_are_unchanged(): void
     {
-        $logger = Mockery::mock(AuditLoggerInterface::class);
+        $logger = Mockery::mock(AuditLogger::class);
         $logger->shouldNotReceive('log');
 
         $tracker = $this->createTracker($logger);
@@ -340,13 +340,13 @@ class AuditTrackerGroupTest extends TestCase
     /** @test */
     public function it_logs_contacts_for_newly_added_meeting_with_contacts(): void
     {
-        $logger = Mockery::mock(AuditLoggerInterface::class);
+        $logger = Mockery::mock(AuditLogger::class);
         // New meeting has contacts → name, email, phone all logged
         $logger->shouldReceive('log')
             ->times(3)
             ->with(
-                AuditLoggerInterface::ACTION_UPDATE,
-                AuditLoggerInterface::ENTITY_MEETING,
+                AuditLogger::ACTION_UPDATE,
+                AuditLogger::ENTITY_MEETING,
                 99,
                 Mockery::type('string'),
                 Mockery::type('string')
@@ -371,14 +371,14 @@ class AuditTrackerGroupTest extends TestCase
     /** @test */
     public function it_logs_both_group_and_meeting_contact_changes(): void
     {
-        $logger = Mockery::mock(AuditLoggerInterface::class);
+        $logger = Mockery::mock(AuditLogger::class);
 
         // Group contact email changed (1 log)
         $logger->shouldReceive('log')
             ->once()
             ->with(
-                AuditLoggerInterface::ACTION_UPDATE,
-                AuditLoggerInterface::ENTITY_GROUP,
+                AuditLogger::ACTION_UPDATE,
+                AuditLogger::ENTITY_GROUP,
                 10,
                 PersonalDataFields::GROUP_CONTACT_EMAIL,
                 'Contact email changed'
@@ -388,8 +388,8 @@ class AuditTrackerGroupTest extends TestCase
         $logger->shouldReceive('log')
             ->once()
             ->with(
-                AuditLoggerInterface::ACTION_UPDATE,
-                AuditLoggerInterface::ENTITY_MEETING,
+                AuditLogger::ACTION_UPDATE,
+                AuditLogger::ENTITY_MEETING,
                 99,
                 PersonalDataFields::MEETING_CONTACT_PHONE,
                 'Contact phone changed'
@@ -417,14 +417,14 @@ class AuditTrackerGroupTest extends TestCase
     /** @test */
     public function it_handles_multiple_meetings_independently(): void
     {
-        $logger = Mockery::mock(AuditLoggerInterface::class);
+        $logger = Mockery::mock(AuditLogger::class);
 
         // Meeting 99 has a contact email change
         $logger->shouldReceive('log')
             ->once()
             ->with(
-                AuditLoggerInterface::ACTION_UPDATE,
-                AuditLoggerInterface::ENTITY_MEETING,
+                AuditLogger::ACTION_UPDATE,
+                AuditLogger::ENTITY_MEETING,
                 99,
                 PersonalDataFields::MEETING_CONTACT_EMAIL,
                 'Contact email changed'
@@ -457,7 +457,7 @@ class AuditTrackerGroupTest extends TestCase
     /** @test */
     public function it_does_not_log_when_contacts_are_reordered(): void
     {
-        $logger = Mockery::mock(AuditLoggerInterface::class);
+        $logger = Mockery::mock(AuditLogger::class);
         $logger->shouldNotReceive('log');
 
         $tracker = $this->createTracker($logger);

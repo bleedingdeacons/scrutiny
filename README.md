@@ -166,7 +166,7 @@ add_action('scrutiny_loaded', function (\Psr\Container\ContainerInterface $conta
 ### Logging an event manually
 
 ```php
-$logger = scrutiny()->get(\Scrutiny\Audit\Interfaces\AuditLoggerInterface::class);
+$logger = scrutiny()->get(\Scrutiny\Audit\Interfaces\AuditLogger::class);
 
 // Single field
 $logger->log('view', 'member', $postId, 'personal-email', 'Custom detail');

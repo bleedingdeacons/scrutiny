@@ -9,8 +9,8 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-use Scrutiny\Audit\Interfaces\AuditLoggerInterface;
-use Scrutiny\Audit\Interfaces\AuditRepositoryInterface;
+use Scrutiny\Audit\Interfaces\AuditLogger;
+use Scrutiny\Audit\Interfaces\AuditRepository;
 use Scrutiny\Privacy\PersonalDataFields;
 use function add_action;
 use function add_submenu_page;
@@ -31,8 +31,8 @@ use function wp_nonce_url;
  */
 class AuditLogAdmin
 {
-    private AuditRepositoryInterface $repository;
-    private AuditLoggerInterface $logger;
+    private AuditRepository $repository;
+    private AuditLogger $logger;
 
     public const MENU_SLUG = 'scrutiny-audit-log';
     public const CAPABILITY = 'manage_options';
@@ -55,7 +55,7 @@ class AuditLogAdmin
             'all' => 'All Entities'
     ];
 
-    public function __construct(AuditRepositoryInterface $repository, AuditLoggerInterface $logger)
+    public function __construct(AuditRepository $repository, AuditLogger $logger)
     {
         $this->repository = $repository;
         $this->logger = $logger;

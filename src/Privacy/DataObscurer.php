@@ -9,7 +9,7 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-use Scrutiny\Audit\Interfaces\AuditLoggerInterface;
+use Scrutiny\Audit\Interfaces\AuditLogger;
 use Scrutiny\Privacy\Interfaces\DataObscurerInterface;
 use Unity\Core\Interfaces\Configuration;
 use Unity\Members\Interfaces\Member;
@@ -45,10 +45,10 @@ class DataObscurer implements DataObscurerInterface
      */
     public const CLEAR_SENTINEL = '__CLEAR__';
 
-    private AuditLoggerInterface $logger;
+    private AuditLogger $logger;
     private readonly array $member_config;
 
-    public function __construct(Configuration $configuration, AuditLoggerInterface $logger)
+    public function __construct(Configuration $configuration, AuditLogger $logger)
     {
         $this->logger = $logger;
         $this->member_config = $configuration->getConfig(Member::class);

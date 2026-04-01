@@ -6,7 +6,7 @@ namespace Scrutiny\Tests\Unit\Audit;
 
 use PHPUnit\Framework\TestCase;
 use Scrutiny\Audit\AuditTracker;
-use Scrutiny\Audit\Interfaces\AuditLoggerInterface;
+use Scrutiny\Audit\Interfaces\AuditLogger;
 use Scrutiny\Privacy\PersonalDataFields;
 use Unity\Members\Interfaces\Member;
 use Mockery;
@@ -25,7 +25,7 @@ class AuditTrackerTest extends TestCase
     /**
      * Create an AuditTracker without WP hooks by using reflection
      */
-    private function createTracker(AuditLoggerInterface $logger): AuditTracker
+    private function createTracker(AuditLogger $logger): AuditTracker
     {
         $reflection = new \ReflectionClass(AuditTracker::class);
         $instance = $reflection->newInstanceWithoutConstructor();
@@ -58,12 +58,12 @@ class AuditTrackerTest extends TestCase
     /** @test */
     public function it_logs_when_anonymous_name_changes(): void
     {
-        $logger = Mockery::mock(AuditLoggerInterface::class);
+        $logger = Mockery::mock(AuditLogger::class);
         $logger->shouldReceive('log')
             ->once()
             ->with(
-                AuditLoggerInterface::ACTION_UPDATE,
-                AuditLoggerInterface::ENTITY_MEMBER,
+                AuditLogger::ACTION_UPDATE,
+                AuditLogger::ENTITY_MEMBER,
                 42,
                 'Value changed'
             );
@@ -79,12 +79,12 @@ class AuditTrackerTest extends TestCase
     /** @test */
     public function it_logs_when_personal_email_changes(): void
     {
-        $logger = Mockery::mock(AuditLoggerInterface::class);
+        $logger = Mockery::mock(AuditLogger::class);
         $logger->shouldReceive('log')
             ->once()
             ->with(
-                AuditLoggerInterface::ACTION_UPDATE,
-                AuditLoggerInterface::ENTITY_MEMBER,
+                AuditLogger::ACTION_UPDATE,
+                AuditLogger::ENTITY_MEMBER,
                 42,
                 PersonalDataFields::PERSONAL_EMAIL,
                 'Value changed'
@@ -101,12 +101,12 @@ class AuditTrackerTest extends TestCase
     /** @test */
     public function it_logs_when_mobile_number_changes(): void
     {
-        $logger = Mockery::mock(AuditLoggerInterface::class);
+        $logger = Mockery::mock(AuditLogger::class);
         $logger->shouldReceive('log')
             ->once()
             ->with(
-                AuditLoggerInterface::ACTION_UPDATE,
-                AuditLoggerInterface::ENTITY_MEMBER,
+                AuditLogger::ACTION_UPDATE,
+                AuditLogger::ENTITY_MEMBER,
                 42,
                 PersonalDataFields::MOBILE_NUMBER,
                 'Value changed'
@@ -123,7 +123,7 @@ class AuditTrackerTest extends TestCase
     /** @test */
     public function it_logs_all_three_fields_when_all_change(): void
     {
-        $logger = Mockery::mock(AuditLoggerInterface::class);
+        $logger = Mockery::mock(AuditLogger::class);
         $logger->shouldReceive('log')->times(3);
 
         $tracker = $this->createTracker($logger);
@@ -144,7 +144,7 @@ class AuditTrackerTest extends TestCase
     /** @test */
     public function it_does_not_log_when_no_personal_data_changes(): void
     {
-        $logger = Mockery::mock(AuditLoggerInterface::class);
+        $logger = Mockery::mock(AuditLogger::class);
         $logger->shouldNotReceive('log');
 
         $tracker = $this->createTracker($logger);

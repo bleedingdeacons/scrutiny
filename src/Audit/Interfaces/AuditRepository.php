@@ -14,7 +14,7 @@ if (!defined('ABSPATH')) {
  *
  * Defines the contract for storing and retrieving audit log entries.
  */
-interface AuditRepositoryInterface
+interface AuditRepository
 {
     /**
      * Insert a new audit log entry

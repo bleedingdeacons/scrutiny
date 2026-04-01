@@ -9,7 +9,7 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-use Scrutiny\Audit\Interfaces\AuditLoggerInterface;
+use Scrutiny\Audit\Interfaces\AuditLogger;
 use Scrutiny\Privacy\Interfaces\DataObscurerInterface;
 use Scrutiny\Privacy\PersonalDataFields;
 
@@ -43,7 +43,7 @@ use function is_admin;
  */
 class AuditTracker
 {
-    private AuditLoggerInterface $logger;
+    private AuditLogger $logger;
     private DataObscurerInterface $obscurer;
 
     /**
@@ -63,7 +63,7 @@ class AuditTracker
      */
     private readonly array $acfFieldMap;
 
-    public function __construct(Configuration $configuration, AuditLoggerInterface $logger, DataObscurerInterface $obscurer)
+    public function __construct(Configuration $configuration, AuditLogger $logger, DataObscurerInterface $obscurer)
     {
         $this->logger = $logger;
         $this->obscurer = $obscurer;
@@ -148,8 +148,8 @@ class AuditTracker
 
         // Log viewing of all personal data fields
         $this->logger->logBatch(
-            AuditLoggerInterface::ACTION_VIEW,
-            AuditLoggerInterface::ENTITY_MEMBER,
+            AuditLogger::ACTION_VIEW,
+            AuditLogger::ENTITY_MEMBER,
             $postId,
             PersonalDataFields::ALL_FIELDS,
             'Member edit form displayed in admin'
@@ -212,8 +212,8 @@ class AuditTracker
 
         // Log the field view
         $this->logger->log(
-            AuditLoggerInterface::ACTION_VIEW,
-            AuditLoggerInterface::ENTITY_MEMBER,
+            AuditLogger::ACTION_VIEW,
+            AuditLogger::ENTITY_MEMBER,
             $postId,
             $fieldName,
             'Personal data field accessed'
@@ -238,8 +238,8 @@ class AuditTracker
 
         if ($originalMember->getPersonalEmail() !== $updatedMember->getPersonalEmail()) {
             $this->logger->log(
-                AuditLoggerInterface::ACTION_UPDATE,
-                AuditLoggerInterface::ENTITY_MEMBER,
+                AuditLogger::ACTION_UPDATE,
+                AuditLogger::ENTITY_MEMBER,
                 $memberId,
                 PersonalDataFields::PERSONAL_EMAIL,
                 'Value changed'
@@ -248,8 +248,8 @@ class AuditTracker
 
         if ($originalMember->getMobileNumber() !== $updatedMember->getMobileNumber()) {
             $this->logger->log(
-                AuditLoggerInterface::ACTION_UPDATE,
-                AuditLoggerInterface::ENTITY_MEMBER,
+                AuditLogger::ACTION_UPDATE,
+                AuditLogger::ENTITY_MEMBER,
                 $memberId,
                 PersonalDataFields::MOBILE_NUMBER,
                 'Value changed'
@@ -270,7 +270,7 @@ class AuditTracker
     public function onGroupChanged(Group $updatedGroup, Group $originalGroup): void
     {
         $this->logContactChanges(
-            AuditLoggerInterface::ENTITY_GROUP,
+            AuditLogger::ENTITY_GROUP,
             $updatedGroup->getId(),
             $originalGroup->getContacts(),
             $updatedGroup->getContacts(),
@@ -308,7 +308,7 @@ class AuditTracker
                 : [];
 
             $this->logContactChanges(
-                AuditLoggerInterface::ENTITY_MEETING,
+                AuditLogger::ENTITY_MEETING,
                 $meetingId,
                 $originalContacts,
                 $updatedMeeting->getContacts(),
@@ -364,7 +364,7 @@ class AuditTracker
 
         if ($original['names'] !== $updated['names']) {
             $this->logger->log(
-                AuditLoggerInterface::ACTION_UPDATE,
+                AuditLogger::ACTION_UPDATE,
                 $entityType,
                 $entityId,
                 $nameField,
@@ -374,7 +374,7 @@ class AuditTracker
 
         if ($original['emails'] !== $updated['emails']) {
             $this->logger->log(
-                AuditLoggerInterface::ACTION_UPDATE,
+                AuditLogger::ACTION_UPDATE,
                 $entityType,
                 $entityId,
                 $emailField,
@@ -384,7 +384,7 @@ class AuditTracker
 
         if ($original['phones'] !== $updated['phones']) {
             $this->logger->log(
-                AuditLoggerInterface::ACTION_UPDATE,
+                AuditLogger::ACTION_UPDATE,
                 $entityType,
                 $entityId,
                 $phoneField,
@@ -405,8 +405,8 @@ class AuditTracker
     public function onMemberDeleted(int $postId, ?Member $member = null): void
     {
         $this->logger->logBatch(
-            AuditLoggerInterface::ACTION_DELETE,
-            AuditLoggerInterface::ENTITY_MEMBER,
+            AuditLogger::ACTION_DELETE,
+            AuditLogger::ENTITY_MEMBER,
             $postId,
             PersonalDataFields::ALL_FIELDS,
             'Member deleted'
@@ -425,8 +425,8 @@ class AuditTracker
     public function onGroupDeleted(int $postId, ?Group $group = null): void
     {
         $this->logger->logBatch(
-            AuditLoggerInterface::ACTION_DELETE,
-            AuditLoggerInterface::ENTITY_GROUP,
+            AuditLogger::ACTION_DELETE,
+            AuditLogger::ENTITY_GROUP,
             $postId,
             PersonalDataFields::GROUP_CONTACT_FIELDS,
             'Group deleted'
@@ -445,8 +445,8 @@ class AuditTracker
     public function onGroupHidden(int $postId, ?Group $group = null): void
     {
         $this->logger->logBatch(
-            AuditLoggerInterface::ACTION_UPDATE,
-            AuditLoggerInterface::ENTITY_GROUP,
+            AuditLogger::ACTION_UPDATE,
+            AuditLogger::ENTITY_GROUP,
             $postId,
             PersonalDataFields::GROUP_CONTACT_FIELDS,
             'Group hidden (set to private)'

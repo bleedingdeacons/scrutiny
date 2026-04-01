@@ -9,7 +9,7 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-use Scrutiny\Audit\Interfaces\AuditRepositoryInterface;
+use Scrutiny\Audit\Interfaces\AuditRepository;
 
 /**
  * Audit Repository
@@ -17,7 +17,7 @@ use Scrutiny\Audit\Interfaces\AuditRepositoryInterface;
  * Handles database operations for the GDPR audit log.
  * Stores audit entries in a dedicated WordPress custom table.
  */
-class AuditRepository implements AuditRepositoryInterface
+class GdprAuditRepository implements AuditRepository
 {
     private const TABLE_NAME = 'scrutiny_audit_log';
 

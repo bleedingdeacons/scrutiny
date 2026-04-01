@@ -5,14 +5,14 @@ declare(strict_types=1);
 namespace Scrutiny\Tests\Unit\Audit;
 
 use PHPUnit\Framework\TestCase;
-use Scrutiny\Audit\AuditLogger;
-use Scrutiny\Audit\Interfaces\AuditLoggerInterface;
-use Scrutiny\Audit\Interfaces\AuditRepositoryInterface;
+use Scrutiny\Audit\GdprAuditLogger;
+use Scrutiny\Audit\Interfaces\AuditLogger;
+use Scrutiny\Audit\Interfaces\AuditRepository;
 use Scrutiny\Privacy\PersonalDataFields;
 use Mockery;
 
 /**
- * Tests for AuditLogger
+ * Tests for GdprAuditLogger
  */
 class AuditLoggerTest extends TestCase
 {
@@ -23,11 +23,11 @@ class AuditLoggerTest extends TestCase
     }
 
     /**
-     * Create an AuditLogger without WP dependencies by using reflection
+     * Create an GdprAuditLogger without WP dependencies by using reflection
      */
-    private function createLogger(AuditRepositoryInterface $repository): AuditLogger
+    private function createLogger(AuditRepository $repository): GdprAuditLogger
     {
-        $reflection = new \ReflectionClass(AuditLogger::class);
+        $reflection = new \ReflectionClass(GdprAuditLogger::class);
         $instance = $reflection->newInstanceWithoutConstructor();
 
         $prop = $reflection->getProperty('repository');
@@ -40,7 +40,7 @@ class AuditLoggerTest extends TestCase
     /** @test */
     public function log_batch_calls_log_for_each_field(): void
     {
-        $repository = Mockery::mock(AuditRepositoryInterface::class);
+        $repository = Mockery::mock(AuditRepository::class);
         $repository->shouldReceive('insert')->times(3)->andReturn(1);
 
         $logger = $this->createLogger($repository);

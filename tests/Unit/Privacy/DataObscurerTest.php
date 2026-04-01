@@ -6,7 +6,7 @@ namespace Scrutiny\Tests\Unit\Privacy;
 
 use PHPUnit\Framework\TestCase;
 use Scrutiny\Privacy\DataObscurer;
-use Scrutiny\Audit\Interfaces\AuditLoggerInterface;
+use Scrutiny\Audit\Interfaces\AuditLogger;
 use Mockery;
 
 /**
@@ -40,7 +40,7 @@ class DataObscurerTest extends TestCase
      */
     private function createObscurer(): DataObscurer
     {
-        $logger = Mockery::mock(AuditLoggerInterface::class);
+        $logger = Mockery::mock(AuditLogger::class);
 
         // Use reflection to create without calling constructor (avoids WP hooks)
         $reflection = new \ReflectionClass(DataObscurer::class);
