@@ -26,6 +26,7 @@ interface AuditLogger
     public const ENTITY_MEMBER = 'member';
     public const ENTITY_GROUP = 'group';
     public const ENTITY_MEETING = 'meeting';
+    public const ENTITY_POSITION = 'position';
 
     /**
      * Log an access or change event for personal data

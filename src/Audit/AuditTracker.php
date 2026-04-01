@@ -482,7 +482,7 @@ class AuditTracker
         $this->logger->log(
             AuditLogger::ACTION_IMPORT,
             AuditLogger::ENTITY_MEMBER,
-            -1,
+            0,
             $fieldNames,
             $count . ' member(s) imported from spreadsheet.'
         );
@@ -501,7 +501,7 @@ class AuditTracker
         $this->logger->log(
             AuditLogger::ACTION_EXPORT,
             AuditLogger::ENTITY_MEMBER,
-            -1,
+            0,
             $fieldNames,
             $count . ' member(s) exported to spreadsheet.'
         );
@@ -520,7 +520,7 @@ class AuditTracker
         $this->logger->log(
             AuditLogger::ACTION_IMPORT,
             AuditLogger::ENTITY_GROUP,
-            -1,
+            0,
             $fieldNames,
             $count . ' group(s) imported from spreadsheet.'
         );
@@ -539,7 +539,7 @@ class AuditTracker
         $this->logger->log(
             AuditLogger::ACTION_EXPORT,
             AuditLogger::ENTITY_GROUP,
-            -1,
+            0,
             $fieldNames,
             $count . ' group(s) exported to spreadsheet.'
         );
@@ -557,8 +557,8 @@ class AuditTracker
     {
         $this->logger->log(
             AuditLogger::ACTION_IMPORT,
-            'position',
-            -1,
+            AuditLogger::ENTITY_POSITION,
+            0,
             $fieldNames,
             $count . ' position(s) imported from spreadsheet.'
         );
@@ -576,8 +576,8 @@ class AuditTracker
     {
         $this->logger->log(
             AuditLogger::ACTION_EXPORT,
-            'position',
-            -1,
+            AuditLogger::ENTITY_POSITION,
+            0,
             $fieldNames,
             $count . ' position(s) exported to spreadsheet.'
         );

@@ -50,9 +50,9 @@ class AuditLogAdmin
             'member' => 'Member',
             'group' => 'Group',
             'meeting' => 'Meeting',
+            'position' => 'Position',
             'user' => 'User',
             'audit_log' => 'Audit Log',
-            'all' => 'All Entities'
     ];
 
     public function __construct(AuditRepository $repository, AuditLogger $logger)
