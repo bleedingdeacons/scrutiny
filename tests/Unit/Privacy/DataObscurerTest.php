@@ -5,24 +5,24 @@ declare(strict_types=1);
 namespace Scrutiny\Tests\Unit\Privacy;
 
 use PHPUnit\Framework\TestCase;
-use Scrutiny\Privacy\DataObscurer;
+use Scrutiny\Privacy\AcfDataObscurer;
 use Scrutiny\Audit\Interfaces\AuditLogger;
 use Mockery;
 
 /**
- * Tests for DataObscurer masking logic
+ * Tests for AcfDataObscurer masking logic
  *
  * These tests verify the obscuring algorithms independently of WordPress.
  */
 class DataObscurerTest extends TestCase
 {
-    private DataObscurer $obscurer;
+    private AcfDataObscurer $obscurer;
 
     protected function setUp(): void
     {
         parent::setUp();
 
-        // DataObscurer constructor registers WP hooks, so we mock it
+        // AcfDataObscurer constructor registers WP hooks, so we mock it
         // by testing the public masking methods directly via reflection
         // or by creating the object in a context where hooks are no-ops.
         // For pure logic tests we use a lightweight approach.
@@ -35,15 +35,15 @@ class DataObscurerTest extends TestCase
     }
 
     /**
-     * Helper to get a DataObscurer with mocked dependencies
+     * Helper to get a AcfDataObscurer with mocked dependencies
      * without triggering WordPress hook registration.
      */
-    private function createObscurer(): DataObscurer
+    private function createObscurer(): AcfDataObscurer
     {
         $logger = Mockery::mock(AuditLogger::class);
 
         // Use reflection to create without calling constructor (avoids WP hooks)
-        $reflection = new \ReflectionClass(DataObscurer::class);
+        $reflection = new \ReflectionClass(AcfDataObscurer::class);
         $instance = $reflection->newInstanceWithoutConstructor();
 
         // Set the logger property

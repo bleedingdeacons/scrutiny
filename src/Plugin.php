@@ -16,7 +16,7 @@ use Scrutiny\Audit\GdprAuditRepository;
 use Scrutiny\Audit\AuditTracker;
 use Scrutiny\Audit\Interfaces\AuditLogger;
 use Scrutiny\Audit\Interfaces\AuditRepository;
-use Scrutiny\Privacy\DataObscurer;
+use Scrutiny\Privacy\AcfDataObscurer;
 use Scrutiny\Privacy\Interfaces\DataObscurerInterface;
 use Psr\Container\ContainerInterface;
 use Unity\Core\Interfaces\Container;
@@ -36,7 +36,7 @@ use function is_admin;
  *   GdprAuditRepository  – stores audit log entries in a custom database table
  *   GdprAuditLogger      – writes log entries (who, what, when — no raw PII)
  *   AuditTracker     – hooks into Unity member and group lifecycle to capture changes
- *   DataObscurer     – masks personal data in the admin UI
+ *   AcfDataObscurer     – masks personal data in the admin UI
  *   AuditLogAdmin    – read-only admin page for viewing the audit trail
  *
  * Capabilities:
@@ -127,7 +127,7 @@ class Plugin
 
         // Data Obscurer
         $container->register(DataObscurerInterface::class, function (ContainerInterface $c) {
-            return new DataObscurer(
+            return new AcfDataObscurer(
                 $c->get(Configuration::class),
                 $c->get(AuditLogger::class)
             );
@@ -165,8 +165,8 @@ class Plugin
 
         $adminRole = get_role('administrator');
         if ($adminRole) {
-            $adminRole->add_cap(DataObscurer::CAPABILITY);
-            $adminRole->add_cap(DataObscurer::EDIT_CAPABILITY);
+            $adminRole->add_cap(AcfDataObscurer::CAPABILITY);
+            $adminRole->add_cap(AcfDataObscurer::EDIT_CAPABILITY);
         }
 
         update_option($optionKey, $currentVersion);
@@ -186,8 +186,8 @@ class Plugin
         // Grant the capabilities to administrators
         $adminRole = get_role('administrator');
         if ($adminRole) {
-            $adminRole->add_cap(DataObscurer::CAPABILITY);
-            $adminRole->add_cap(DataObscurer::EDIT_CAPABILITY);
+            $adminRole->add_cap(AcfDataObscurer::CAPABILITY);
+            $adminRole->add_cap(AcfDataObscurer::EDIT_CAPABILITY);
         }
     }
 

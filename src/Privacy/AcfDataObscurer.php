@@ -34,7 +34,7 @@ use function get_field;
  * personal data fields; all other users have their changes silently
  * rejected and the existing stored value preserved.
  */
-class DataObscurer implements DataObscurerInterface
+class AcfDataObscurer implements DataObscurerInterface
 {
     public const CAPABILITY = 'scrutiny_view_personal_data';
     public const EDIT_CAPABILITY = 'scrutiny_edit_personal_data';
