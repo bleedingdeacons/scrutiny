@@ -6,7 +6,7 @@ Scrutiny is a WordPress plugin that hooks into the Unity plugin ecosystem to pro
 
 It is a required dependency of the **Amber** plugin and must be loaded before it.
 
-**Version:** 1.12.0
+**Version:** 1.13.0
 **Requires:** WordPress 6.0+ · PHP 8.0+
 **License:** MIT (Modified — see [License](#license))
 **Author:** [The Bleeding Deacons](mailto:thebleedingdeacons@gmail.com)

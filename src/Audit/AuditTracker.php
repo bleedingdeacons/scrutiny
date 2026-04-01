@@ -40,6 +40,12 @@ use function is_admin;
  *   - unity/group_changing       (fired by GroupChangeTracker when group fields change)
  *   - unity/group_deleted        (fired by GroupChangeTracker when a group is trashed or deleted)
  *   - unity/group_hidden         (fired by GroupChangeTracker when a group is set to private)
+ *   - unity/member_import       (fired by Reconcile when members are imported from a spreadsheet)
+ *   - unity/member_export       (fired by Reconcile when members are exported to a spreadsheet)
+ *   - unity/group_import        (fired by Reconcile when groups are imported from a spreadsheet)
+ *   - unity/group_export        (fired by Reconcile when groups are exported to a spreadsheet)
+ *   - unity/position_import     (fired by Reconcile when positions are imported from a spreadsheet)
+ *   - unity/position_export     (fired by Reconcile when positions are exported to a spreadsheet)
  */
 class AuditTracker
 {
@@ -99,6 +105,14 @@ class AuditTracker
 
         // Log when a group is hidden (set to private)
         add_action('unity/group_hidden', [$this, 'onGroupHidden'], 10, 2);
+
+        // Log import/export events fired by Reconcile
+        add_action('unity/member_import', [$this, 'onMemberImport'], 10, 2);
+        add_action('unity/member_export', [$this, 'onMemberExport'], 10, 2);
+        add_action('unity/group_import', [$this, 'onGroupImport'], 10, 2);
+        add_action('unity/group_export', [$this, 'onGroupExport'], 10, 2);
+        add_action('unity/position_import', [$this, 'onPositionImport'], 10, 2);
+        add_action('unity/position_export', [$this, 'onPositionExport'], 10, 2);
     }
 
     /**
@@ -450,6 +464,122 @@ class AuditTracker
             $postId,
             PersonalDataFields::GROUP_CONTACT_FIELDS,
             'Group hidden (set to private)'
+        );
+    }
+
+    // ── Import / Export hooks (fired by Reconcile) ─────────────────────
+
+    /**
+     * Log when members are imported from a spreadsheet.
+     *
+     * Triggered by the unity/member_import hook.
+     *
+     * @param int    $count      Number of members imported
+     * @param string $fieldNames Comma-separated personal data field names
+     */
+    public function onMemberImport(int $count, string $fieldNames): void
+    {
+        $this->logger->log(
+            AuditLogger::ACTION_IMPORT,
+            AuditLogger::ENTITY_MEMBER,
+            -1,
+            $fieldNames,
+            $count . ' member(s) imported from spreadsheet.'
+        );
+    }
+
+    /**
+     * Log when members are exported to a spreadsheet.
+     *
+     * Triggered by the unity/member_export hook.
+     *
+     * @param int    $count      Number of members exported
+     * @param string $fieldNames Comma-separated personal data field names
+     */
+    public function onMemberExport(int $count, string $fieldNames): void
+    {
+        $this->logger->log(
+            AuditLogger::ACTION_EXPORT,
+            AuditLogger::ENTITY_MEMBER,
+            -1,
+            $fieldNames,
+            $count . ' member(s) exported to spreadsheet.'
+        );
+    }
+
+    /**
+     * Log when groups are imported from a spreadsheet.
+     *
+     * Triggered by the unity/group_import hook.
+     *
+     * @param int    $count      Number of groups imported
+     * @param string $fieldNames Comma-separated personal data field names
+     */
+    public function onGroupImport(int $count, string $fieldNames): void
+    {
+        $this->logger->log(
+            AuditLogger::ACTION_IMPORT,
+            AuditLogger::ENTITY_GROUP,
+            -1,
+            $fieldNames,
+            $count . ' group(s) imported from spreadsheet.'
+        );
+    }
+
+    /**
+     * Log when groups are exported to a spreadsheet.
+     *
+     * Triggered by the unity/group_export hook.
+     *
+     * @param int    $count      Number of groups exported
+     * @param string $fieldNames Comma-separated personal data field names
+     */
+    public function onGroupExport(int $count, string $fieldNames): void
+    {
+        $this->logger->log(
+            AuditLogger::ACTION_EXPORT,
+            AuditLogger::ENTITY_GROUP,
+            -1,
+            $fieldNames,
+            $count . ' group(s) exported to spreadsheet.'
+        );
+    }
+
+    /**
+     * Log when positions are imported from a spreadsheet.
+     *
+     * Triggered by the unity/position_import hook.
+     *
+     * @param int    $count      Number of positions imported
+     * @param string $fieldNames Comma-separated personal data field names
+     */
+    public function onPositionImport(int $count, string $fieldNames): void
+    {
+        $this->logger->log(
+            AuditLogger::ACTION_IMPORT,
+            'position',
+            -1,
+            $fieldNames,
+            $count . ' position(s) imported from spreadsheet.'
+        );
+    }
+
+    /**
+     * Log when positions are exported to a spreadsheet.
+     *
+     * Triggered by the unity/position_export hook.
+     *
+     * @param int    $count      Number of positions exported
+     * @param string $fieldNames Comma-separated personal data field names
+     */
+    public function onPositionExport(int $count, string $fieldNames): void
+    {
+        $this->logger->log(
+            AuditLogger::ACTION_EXPORT,
+            'position',
+            -1,
+            $fieldNames,
+            $count . ' position(s) exported to spreadsheet.'
         );
     }
 }
