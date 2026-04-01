@@ -108,9 +108,6 @@ class DataObscurer implements DataObscurerInterface
         if ($mobileFieldKey !== '') {
             add_filter('acf/update_value/key=' . $mobileFieldKey, [$this, 'preserveMobileNumber'], 10, 3);
         }
-
-        // Obscure the post title (private name) in admin list tables
-//        add_filter('the_title', [$this, 'obscurePostTitle'], 20, 2);
     }
 
     /**
@@ -191,34 +188,6 @@ class DataObscurer implements DataObscurerInterface
     }
 
     /**
-     * Resolve the current post ID from context.
-     *
-     * ACF's field array does not always carry a post_id, so we fall back
-     * to the global $post or the $_GET['post'] parameter used on admin
-     * edit screens.
-     *
-     * @param array $field The ACF field array (may contain 'post_id')
-     * @return int The resolved post ID, or 0 if unavailable
-     */
-    private function resolvePostId(array $field): int
-    {
-        if (isset($field['post_id']) && is_numeric($field['post_id'])) {
-            return (int) $field['post_id'];
-        }
-
-        if (isset($_GET['post']) && is_numeric($_GET['post'])) {
-            return (int) $_GET['post'];
-        }
-
-        global $post;
-        if (isset($post->ID)) {
-            return (int) $post->ID;
-        }
-
-        return 0;
-    }
-
-    /**
      * ACF filter: obscure the personal email field value (frontend via format_value)
      *
      * @param mixed $value The field value
@@ -283,8 +252,6 @@ class DataObscurer implements DataObscurerInterface
             return $field;
         }
 
-        $postId = $this->resolvePostId($field);
-
         if ($this->currentUserCanViewPersonalData()) {
             // User can see the real value — disable the input if they cannot edit
             if (!$this->currentUserCanEditPersonalData()) {
@@ -316,8 +283,6 @@ class DataObscurer implements DataObscurerInterface
         if (!is_string($value) || $value === '') {
             return $field;
         }
-
-        $postId = $this->resolvePostId($field);
 
         if ($this->currentUserCanViewPersonalData()) {
             // User can see the real value — disable the input if they cannot edit
@@ -427,38 +392,5 @@ class DataObscurer implements DataObscurerInterface
 
         // No existing value stored — allow the initial value through
         return $value;
-    }
-
-    /**
-     * WordPress filter: obscure the post title (private name) for member posts
-     *
-     * @param string $title The post title
-     * @param int|null $postId The post ID
-     * @return string The potentially obscured title
-     */
-    // TODO Remove this method and remove the field references
-    public function obscurePostTitle(string $title, ?int $postId = null): string
-    {
-        if ($postId === null || !is_admin()) {
-            return $title;
-        }
-
-        if (get_post_type($postId) !== $this->member_config['POST_TYPE']) {
-            return $title;
-        }
-
-        $this->logger->log(
-            AuditLoggerInterface::ACTION_VIEW,
-            AuditLoggerInterface::ENTITY_MEMBER,
-            $postId,
-            'post_title',
-            'Post title rendered'
-        );
-
-        if ($this->currentUserCanViewPersonalData()) {
-            return $title;
-        }
-
-        return $this->obscureName($title);
     }
 }
