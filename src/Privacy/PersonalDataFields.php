@@ -105,7 +105,7 @@ final class PersonalDataFields
     /**
      * Configuration keys that hold the ACF field keys for personal data fields.
      *
-     * Used by AcfDataObscurer to register acf/update_value/key= filters which
+     * Used by PersonalDataObscurer to register acf/update_value/key= filters which
      * are more reliable than name-based filters for group sub-fields.
      *
      * @var array<string, string>

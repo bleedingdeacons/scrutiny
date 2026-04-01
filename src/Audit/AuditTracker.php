@@ -10,7 +10,7 @@ if (!defined('ABSPATH')) {
 }
 
 use Scrutiny\Audit\Interfaces\AuditLogger;
-use Scrutiny\Privacy\Interfaces\DataObscurerInterface;
+use Scrutiny\Privacy\Interfaces\DataObscurer;
 use Scrutiny\Privacy\PersonalDataFields;
 
 use Unity\Core\Interfaces\Configuration;
@@ -50,7 +50,7 @@ use function is_admin;
 class AuditTracker
 {
     private AuditLogger $logger;
-    private DataObscurerInterface $obscurer;
+    private DataObscurer $obscurer;
 
     /**
      * Track which member fields have been logged in this request to prevent duplicates
@@ -69,7 +69,7 @@ class AuditTracker
      */
     private readonly array $acfFieldMap;
 
-    public function __construct(Configuration $configuration, AuditLogger $logger, DataObscurerInterface $obscurer)
+    public function __construct(Configuration $configuration, AuditLogger $logger, DataObscurer $obscurer)
     {
         $this->logger = $logger;
         $this->obscurer = $obscurer;

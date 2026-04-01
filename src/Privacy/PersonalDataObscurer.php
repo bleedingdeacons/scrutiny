@@ -10,7 +10,7 @@ if (!defined('ABSPATH')) {
 }
 
 use Scrutiny\Audit\Interfaces\AuditLogger;
-use Scrutiny\Privacy\Interfaces\DataObscurerInterface;
+use Scrutiny\Privacy\Interfaces\DataObscurer;
 use Unity\Core\Interfaces\Configuration;
 use Unity\Members\Interfaces\Member;
 use function add_filter;
@@ -34,9 +34,9 @@ use function get_field;
  * personal data fields; all other users have their changes silently
  * rejected and the existing stored value preserved.
  */
-class AcfDataObscurer implements DataObscurerInterface
+class PersonalDataObscurer implements DataObscurer
 {
-    public const CAPABILITY = 'scrutiny_view_personal_data';
+    public const VIEW_CAPABILITY = 'scrutiny_view_personal_data';
     public const EDIT_CAPABILITY = 'scrutiny_edit_personal_data';
 
     /**
@@ -176,7 +176,7 @@ class AcfDataObscurer implements DataObscurerInterface
      */
     public function currentUserCanViewPersonalData(): bool
     {
-        return current_user_can(self::CAPABILITY);
+        return current_user_can(self::VIEW_CAPABILITY);
     }
 
     /**

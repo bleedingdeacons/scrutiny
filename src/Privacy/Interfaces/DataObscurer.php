@@ -14,7 +14,7 @@ if (!defined('ABSPATH')) {
  *
  * Defines the contract for obscuring personal data values in the UI.
  */
-interface DataObscurerInterface
+interface DataObscurer
 {
     /**
      * Obscure a personal name (first name and initial)

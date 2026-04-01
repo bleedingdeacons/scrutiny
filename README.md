@@ -6,7 +6,7 @@ Scrutiny is a WordPress plugin that hooks into the Unity plugin ecosystem to pro
 
 It is a required dependency of the **Amber** plugin and must be loaded before it.
 
-**Version:** 1.13.2
+**Version:** 1.13.3
 **Requires:** WordPress 6.0+ · PHP 8.0+
 **License:** MIT (Modified — see [License](#license))
 **Author:** [The Bleeding Deacons](mailto:thebleedingdeacons@gmail.com)
@@ -178,7 +178,7 @@ $logger->logBatch('delete', 'member', $postId, ['personal-email', 'mobile-number
 ### Checking a user's clearance
 
 ```php
-$obscurer = scrutiny()->get(\Scrutiny\Privacy\Interfaces\DataObscurerInterface::class);
+$obscurer = scrutiny()->get(\Scrutiny\Privacy\Interfaces\DataObscurer::class);
 
 if ($obscurer->currentUserCanViewPersonalData()) {
     // show raw value

@@ -16,8 +16,8 @@ use Scrutiny\Audit\GdprAuditRepository;
 use Scrutiny\Audit\AuditTracker;
 use Scrutiny\Audit\Interfaces\AuditLogger;
 use Scrutiny\Audit\Interfaces\AuditRepository;
-use Scrutiny\Privacy\AcfDataObscurer;
-use Scrutiny\Privacy\Interfaces\DataObscurerInterface;
+use Scrutiny\Privacy\PersonalDataObscurer;
+use Scrutiny\Privacy\Interfaces\DataObscurer;
 use Psr\Container\ContainerInterface;
 use Unity\Core\Interfaces\Container;
 use Unity\Core\Interfaces\Configuration;
@@ -36,7 +36,7 @@ use function is_admin;
  *   GdprAuditRepository  – stores audit log entries in a custom database table
  *   GdprAuditLogger      – writes log entries (who, what, when — no raw PII)
  *   AuditTracker     – hooks into Unity member and group lifecycle to capture changes
- *   AcfDataObscurer     – masks personal data in the admin UI
+ *   PersonalDataObscurer     – masks personal data in the admin UI
  *   AuditLogAdmin    – read-only admin page for viewing the audit trail
  *
  * Capabilities:
@@ -87,7 +87,7 @@ class Plugin
         self::ensureCapabilities();
 
         // Always initialise the obscurer so personal data is masked
-        self::$container->get(DataObscurerInterface::class);
+        self::$container->get(DataObscurer::class);
 
         // Initialise admin page when in the dashboard
         if (is_admin()) {
@@ -121,13 +121,13 @@ class Plugin
             return new AuditTracker(
                 $c->get(Configuration::class),
                 $c->get(AuditLogger::class),
-                $c->get(DataObscurerInterface::class)
+                $c->get(DataObscurer::class)
             );
         });
 
         // Data Obscurer
-        $container->register(DataObscurerInterface::class, function (ContainerInterface $c) {
-            return new AcfDataObscurer(
+        $container->register(DataObscurer::class, function (ContainerInterface $c) {
+            return new PersonalDataObscurer(
                 $c->get(Configuration::class),
                 $c->get(AuditLogger::class)
             );
@@ -165,8 +165,8 @@ class Plugin
 
         $adminRole = get_role('administrator');
         if ($adminRole) {
-            $adminRole->add_cap(AcfDataObscurer::CAPABILITY);
-            $adminRole->add_cap(AcfDataObscurer::EDIT_CAPABILITY);
+            $adminRole->add_cap(PersonalDataObscurer::VIEW_CAPABILITY);
+            $adminRole->add_cap(PersonalDataObscurer::EDIT_CAPABILITY);
         }
 
         update_option($optionKey, $currentVersion);
@@ -186,8 +186,8 @@ class Plugin
         // Grant the capabilities to administrators
         $adminRole = get_role('administrator');
         if ($adminRole) {
-            $adminRole->add_cap(AcfDataObscurer::CAPABILITY);
-            $adminRole->add_cap(AcfDataObscurer::EDIT_CAPABILITY);
+            $adminRole->add_cap(PersonalDataObscurer::VIEW_CAPABILITY);
+            $adminRole->add_cap(PersonalDataObscurer::EDIT_CAPABILITY);
         }
     }
 
