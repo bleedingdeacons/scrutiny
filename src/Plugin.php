@@ -11,6 +11,7 @@ if (!defined('ABSPATH')) {
 
 use RuntimeException;
 use Scrutiny\Admin\AuditLogAdmin;
+use Scrutiny\Admin\Members\PersonalDataMinder;
 use Scrutiny\Audit\GdprAuditLogger;
 use Scrutiny\Audit\GdprAuditRepository;
 use Scrutiny\Audit\AuditTracker;
@@ -92,6 +93,7 @@ class Plugin
         // Initialise admin page when in the dashboard
         if (is_admin()) {
             self::$container->get(AuditLogAdmin::class);
+            self::$container->get(PersonalDataMinder::class);
         }
 
         self::logDebug('Initialised', ['version' => defined('SCRUTINY_VERSION') ? SCRUTINY_VERSION : 'unknown']);
@@ -138,6 +140,13 @@ class Plugin
             return new AuditLogAdmin(
                 $c->get(AuditRepository::class),
                 $c->get(AuditLogger::class)
+            );
+        });
+
+        // Personal Data Minder (Clear/Undo buttons on member edit screen)
+        $container->register(PersonalDataMinder::class, function (ContainerInterface $c) {
+            return new PersonalDataMinder(
+                $c->get(Configuration::class)
             );
         });
     }
