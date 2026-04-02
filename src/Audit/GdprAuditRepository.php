@@ -118,14 +118,17 @@ class GdprAuditRepository implements AuditRepository
         $page = max((int) ($args['page'] ?? 1), 1);
         $offset = ($page - 1) * $perPage;
 
-        $sql = "SELECT * FROM {$table} {$whereClause} ORDER BY logged_at DESC LIMIT %d OFFSET %d";
+        // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- table name from $wpdb->prefix; cannot be parameterised with prepare()
+        $sql = "SELECT * FROM `" . esc_sql($table) . "` {$whereClause} ORDER BY logged_at DESC LIMIT %d OFFSET %d";
         $values[] = $perPage;
         $values[] = $offset;
 
         if (!empty($values)) {
+            // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
             $sql = $wpdb->prepare($sql, ...$values);
         }
 
+        // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
         return $wpdb->get_results($sql);
     }
 
@@ -180,12 +183,15 @@ class GdprAuditRepository implements AuditRepository
             $whereClause = 'WHERE ' . implode(' AND ', $where);
         }
 
-        $sql = "SELECT COUNT(*) FROM {$table} {$whereClause}";
+        // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- table name from $wpdb->prefix; cannot be parameterised with prepare()
+        $sql = "SELECT COUNT(*) FROM `" . esc_sql($table) . "` {$whereClause}";
 
         if (!empty($values)) {
+            // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
             $sql = $wpdb->prepare($sql, ...$values);
         }
 
+        // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
         return (int) $wpdb->get_var($sql);
     }
 
@@ -232,8 +238,9 @@ class GdprAuditRepository implements AuditRepository
         $table = self::tableName();
         $cutoff = gmdate('Y-m-d H:i:s', strtotime("-{$days} days"));
 
+        // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- table name from $wpdb->prefix; cannot be parameterised with prepare()
         return (int) $wpdb->query(
-            $wpdb->prepare("DELETE FROM {$table} WHERE logged_at < %s", $cutoff)
+            $wpdb->prepare("DELETE FROM `" . esc_sql($table) . "` WHERE logged_at < %s", $cutoff)
         );
     }
 }
