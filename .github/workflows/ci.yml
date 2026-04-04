@@ -42,6 +42,14 @@ jobs:
       - name: Install dependencies
         run: composer install --prefer-dist --no-progress --no-suggest
       
+      - name: Update Version with Build Number
+        run: |
+          FILE="${{ github.event.repository.name }}.php"
+          CURRENT_VERSION=$(grep -oP '(?<=\* Version: )[0-9]+\.[0-9]+\.[0-9]+' "$FILE" | head -1)
+          NEW_VERSION="$CURRENT_VERSION-build.${{ github.run_number }}"
+          sed -i "s/\* Version: $CURRENT_VERSION/\* Version: $NEW_VERSION/" "$FILE"
+          echo "Updated $FILE to version $NEW_VERSION"
+      
       - name: Run build script
         run: composer build
         continue-on-error: true
