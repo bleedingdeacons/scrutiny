@@ -50,7 +50,7 @@ class PersonalDataMinder
 
         wp_enqueue_script(
             'scrutiny-personal-data-minder',
-            plugin_dir_url(dirname(__DIR__, 3) . '/Scrutiny.php') . 'assets/js/personal-data-minder.js',
+            plugin_dir_url(dirname(__DIR__, 3) . '/scrutiny.php') . 'assets/js/personal-data-minder.js',
             ['jquery', 'acf-input'],
             defined('SCRUTINY_VERSION') ? SCRUTINY_VERSION : '1.0.0',
             true

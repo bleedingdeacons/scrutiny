@@ -176,7 +176,7 @@ class AuditLogAdmin
                     <span class="dashicons dashicons-update" style="vertical-align: middle;"></span> Refresh
                 </button>
                 <a href="#" class="page-title-action" title="View Scrutiny documentation" style="margin-left: 5px;"
-                   onclick="event.preventDefault(); window.name = 'scrutiny-admin'; window.open('<?php echo esc_js(plugins_url('assets/docs/scrutiny.html', dirname(__DIR__, 2) . '/Scrutiny.php')); ?>' + '?back=' + encodeURIComponent(window.location.href), 'scrutiny-help');">
+                   onclick="event.preventDefault(); window.name = 'scrutiny-admin'; window.open('<?php echo esc_js(plugins_url('assets/docs/scrutiny.html', dirname(__DIR__, 2) . '/scrutiny.php')); ?>' + '?back=' + encodeURIComponent(window.location.href), 'scrutiny-help');">
                     <span class="dashicons dashicons-editor-help" style="vertical-align: middle;"></span> Help
                 </a>
             </h1>
