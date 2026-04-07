@@ -8,7 +8,6 @@ declare(strict_types=1);
  * Version: 1.14.1
  * Requires at least: 6.0
  * Requires PHP: 8.1
- * Requires Plugins: sentinel
  * GitHub Plugin URI: https://github.com/thebleedingdeacons/scrutiny
  * GitHub Branch: main
  * Author: The Bleeding Deacons
