@@ -119,7 +119,7 @@ class AuditLogAdmin
         $table = $wpdb->prefix . 'scrutiny_audit_log';
 
         $users = $wpdb->get_results(
-        // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- table names cannot be parameterised with prepare(); esc_sql used as defence-in-depth
+        // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- table name from $wpdb->prefix; cannot be parameterised with prepare()
                 "SELECT DISTINCT user_id, user_login 
              FROM `" . esc_sql($table) . "` 
              ORDER BY user_login ASC"
