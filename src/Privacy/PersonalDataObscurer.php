@@ -32,6 +32,22 @@ use function get_field;
  * Users with the `scrutiny_edit_personal_data` capability may update
  * personal data fields; all other users have their changes silently
  * rejected and the existing stored value preserved.
+ *
+ * ## Obscuring policy
+ *
+ * The obscurer emits a fixed-width placeholder for any non-empty value.
+ * It deliberately does not preserve any portion of the original (no first
+ * letter, no length, no TLD, no last-N digits) because the member data
+ * surfaces on screens that already expose the member's group, role, and
+ * rotation — for small intergroups in the dozens-to-hundreds range, even
+ * a few leaked characters are usually enough to re-identify an individual.
+ *
+ * This differs from the REST API obscurer in {@see \Integrity\Utils\Mask},
+ * which retains first characters and TLDs so that update requests can
+ * round-trip the masked value and the server can detect it as such.
+ * Scrutiny's obscured values never round-trip through an editable pathway
+ * — the edit form submits an empty string or a real replacement, and
+ * {@see self::preservePersonalEmail} handles the empty-submission case.
  */
 class PersonalDataObscurer implements DataObscurer
 {
@@ -43,6 +59,13 @@ class PersonalDataObscurer implements DataObscurer
      * intentional clear. Converted to an empty string before saving.
      */
     public const CLEAR_SENTINEL = '__CLEAR__';
+
+    /**
+     * Fixed-width placeholder returned for any non-empty obscured value.
+     * Width is intentionally uniform so that it leaks no information about
+     * the original. See class docblock for the re-identification rationale.
+     */
+    public const FIXED_PLACEHOLDER = '•••••';
 
     private AuditLogger $logger;
     private readonly array $member_config;
@@ -111,40 +134,36 @@ class PersonalDataObscurer implements DataObscurer
 
     /**
      * @inheritDoc
+     *
+     * Returns a fixed-width bullet string for any non-empty email. The output
+     * deliberately reveals nothing about the input — no length, no first
+     * character of the local part or domain, no TLD. This prevents
+     * re-identification within small member sets (e.g. an AA intergroup of a
+     * few hundred people) where knowledge of local-part length, domain length
+     * and TLD is often enough to narrow down to a single individual when
+     * combined with other context visible on the same screen.
+     *
+     * A non-empty placeholder is retained (rather than returning the empty
+     * string) so that {@see self::prepareAcfPersonalEmail} can use the output
+     * as an ACF field placeholder and still signal to the viewer that a
+     * value is stored.
      */
     public function obscureEmail(string $email): string
     {
-        if ($email === '' || !str_contains($email, '@')) {
-            return $email !== '' ? str_repeat('•', mb_strlen($email)) : '';
-        }
-
-        [$local, $domain] = explode('@', $email, 2);
-
-        $obscuredLocal = mb_substr($local, 0, 1) . str_repeat('•', max(mb_strlen($local) - 1, 2));
-
-        $domainParts = explode('.', $domain);
-        $tld = array_pop($domainParts);
-        $domainName = implode('.', $domainParts);
-        $obscuredDomain = mb_substr($domainName, 0, 1) . str_repeat('•', max(mb_strlen($domainName) - 1, 2)) . '.' . $tld;
-
-        return $obscuredLocal . '@' . $obscuredDomain;
+        return $email === '' ? '' : self::FIXED_PLACEHOLDER;
     }
 
     /**
      * @inheritDoc
+     *
+     * Returns a fixed-width bullet string for any non-empty phone number.
+     * The output deliberately reveals nothing about the input — no digit
+     * count, no last-N digits. See {@see self::obscureEmail} for the
+     * re-identification rationale.
      */
     public function obscurePhone(string $number): string
     {
-        if ($number === '') {
-            return '';
-        }
-
-        // Keep only the last 3 digits visible, replace the rest with bullets
-        $digits = preg_replace('/[^0-9]/', '', $number);
-        $visibleSuffix = substr($digits, -3);
-        $hiddenLength = max(strlen($digits) - 3, 0);
-
-        return str_repeat('•', $hiddenLength) . $visibleSuffix;
+        return $number === '' ? '' : self::FIXED_PLACEHOLDER;
     }
 
     /**

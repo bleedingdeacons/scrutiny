@@ -19,7 +19,11 @@ interface DataObscurer
     /**
      * Obscure an email address
      *
-     * Example: "john@example.com" → "j***@e***.com"
+     * Implementations should return a fixed-width placeholder that reveals
+     * nothing about the original value (no length, first character, or TLD).
+     * Empty input returns an empty string.
+     *
+     * Example: "john@example.com" → "•••••"
      *
      * @param string $email The email to obscure
      * @return string The obscured email
@@ -29,7 +33,11 @@ interface DataObscurer
     /**
      * Obscure a mobile phone number
      *
-     * Example: "07700 900123" → "•••••• •••123"
+     * Implementations should return a fixed-width placeholder that reveals
+     * nothing about the original value (no digit count or last-N digits).
+     * Empty input returns an empty string.
+     *
+     * Example: "07700 900123" → "•••••"
      *
      * @param string $number The phone number to obscure
      * @return string The obscured number

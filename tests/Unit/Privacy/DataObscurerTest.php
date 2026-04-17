@@ -57,29 +57,32 @@ class DataObscurerTest extends TestCase
     // ─── Email Obscuring ─────────────────────────────────────────────
 
     /** @test */
-    public function it_obscures_a_standard_email_address(): void
+    public function it_obscures_any_non_empty_email_to_fixed_placeholder(): void
     {
         $obscurer = $this->createObscurer();
 
-        $result = $obscurer->obscureEmail('john@example.com');
-        // j + 3 bullets @ e + 6 bullets . com
-        $this->assertStringStartsWith('j', $result);
-        $this->assertStringContainsString('@', $result);
-        $this->assertStringEndsWith('.com', $result);
-        $this->assertStringContainsString('•', $result);
-        // Original email should not be fully visible
-        $this->assertNotSame('john@example.com', $result);
+        $this->assertSame(
+            PersonalDataObscurer::FIXED_PLACEHOLDER,
+            $obscurer->obscureEmail('john@example.com')
+        );
     }
 
     /** @test */
-    public function it_preserves_first_char_of_local_and_domain(): void
+    public function it_leaks_no_characters_from_the_original_email(): void
     {
         $obscurer = $this->createObscurer();
 
-        $result = $obscurer->obscureEmail('alice@gmail.com');
-        $this->assertStringStartsWith('a', $result);
-        $parts = explode('@', $result);
-        $this->assertStringStartsWith('g', $parts[1]);
+        // No first letter, no TLD, no length signal — the output must be
+        // identical regardless of input content or length.
+        $short = $obscurer->obscureEmail('a@b.co');
+        $long  = $obscurer->obscureEmail('alice.wonderland@some-long-domain.example.co.uk');
+
+        $this->assertSame($short, $long);
+        $this->assertStringNotContainsString('a', $short);
+        $this->assertStringNotContainsString('@', $short);
+        $this->assertStringNotContainsString('.', $short);
+        $this->assertStringNotContainsString('co', $short);
+        $this->assertStringNotContainsString('uk', $long);
     }
 
     /** @test */
@@ -91,33 +94,45 @@ class DataObscurerTest extends TestCase
     }
 
     /** @test */
-    public function it_handles_email_without_at_sign(): void
+    public function it_still_obscures_values_that_are_not_well_formed_emails(): void
     {
         $obscurer = $this->createObscurer();
 
+        // A stored value that doesn't contain an "@" still counts as data
+        // the viewer must not see — return the same fixed placeholder rather
+        // than the raw value.
         $result = $obscurer->obscureEmail('notanemail');
+        $this->assertSame(PersonalDataObscurer::FIXED_PLACEHOLDER, $result);
         $this->assertStringNotContainsString('notanemail', $result);
     }
 
     // ─── Phone Obscuring ─────────────────────────────────────────────
 
     /** @test */
-    public function it_obscures_a_phone_number_keeping_last_three_digits(): void
+    public function it_obscures_any_non_empty_phone_to_fixed_placeholder(): void
     {
         $obscurer = $this->createObscurer();
 
-        $result = $obscurer->obscurePhone('07700 900123');
-        $this->assertStringEndsWith('123', $result);
-        $this->assertStringContainsString('•', $result);
+        $this->assertSame(
+            PersonalDataObscurer::FIXED_PLACEHOLDER,
+            $obscurer->obscurePhone('07700 900123')
+        );
     }
 
     /** @test */
-    public function it_obscures_international_format_phone(): void
+    public function it_leaks_no_digits_or_formatting_from_the_original_phone(): void
     {
         $obscurer = $this->createObscurer();
 
-        $result = $obscurer->obscurePhone('+44 7700 900456');
-        $this->assertStringEndsWith('456', $result);
+        $short = $obscurer->obscurePhone('123');
+        $long  = $obscurer->obscurePhone('+44 7700 900123');
+
+        // Output is identical regardless of length — no digit count leak.
+        $this->assertSame($short, $long);
+
+        // None of the last-N digits survive.
+        $this->assertStringNotContainsString('123', $short);
+        $this->assertStringNotContainsString('123', $long);
     }
 
     /** @test */
@@ -129,22 +144,14 @@ class DataObscurerTest extends TestCase
     }
 
     /** @test */
-    public function it_handles_short_phone_numbers(): void
+    public function it_obscures_short_phone_numbers_the_same_as_long_ones(): void
     {
         $obscurer = $this->createObscurer();
 
-        $result = $obscurer->obscurePhone('123');
-        // With only 3 digits, all should be visible
-        $this->assertSame('123', $result);
-    }
-
-    /** @test */
-    public function it_handles_very_short_phone_numbers(): void
-    {
-        $obscurer = $this->createObscurer();
-
-        $result = $obscurer->obscurePhone('12');
-        // 2 digits: last 3 requested but only 2 exist, so all visible
-        $this->assertStringEndsWith('12', $result);
+        // Previously, short numbers (≤3 digits) were returned unchanged —
+        // that leak is fixed: any non-empty input yields the fixed placeholder.
+        $this->assertSame(PersonalDataObscurer::FIXED_PLACEHOLDER, $obscurer->obscurePhone('123'));
+        $this->assertSame(PersonalDataObscurer::FIXED_PLACEHOLDER, $obscurer->obscurePhone('12'));
+        $this->assertSame(PersonalDataObscurer::FIXED_PLACEHOLDER, $obscurer->obscurePhone('1'));
     }
 }
