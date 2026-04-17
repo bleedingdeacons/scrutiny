@@ -54,52 +54,6 @@ class DataObscurerTest extends TestCase
         return $instance;
     }
 
-    // ─── Name Obscuring ──────────────────────────────────────────────
-
-    /** @test */
-    public function it_obscures_a_first_name_and_initial(): void
-    {
-        $obscurer = $this->createObscurer();
-
-        $result = $obscurer->obscureName('John S');
-        $this->assertSame('J••• S', $result);
-    }
-
-    /** @test */
-    public function it_obscures_a_single_word_name(): void
-    {
-        $obscurer = $this->createObscurer();
-
-        $result = $obscurer->obscureName('Alice');
-        $this->assertSame('A••••', $result);
-    }
-
-    /** @test */
-    public function it_preserves_single_character_parts(): void
-    {
-        $obscurer = $this->createObscurer();
-
-        $result = $obscurer->obscureName('J S');
-        $this->assertSame('J S', $result);
-    }
-
-    /** @test */
-    public function it_returns_empty_string_for_empty_name(): void
-    {
-        $obscurer = $this->createObscurer();
-
-        $this->assertSame('', $obscurer->obscureName(''));
-    }
-
-    /** @test */
-    public function it_obscures_multi_word_names(): void
-    {
-        $obscurer = $this->createObscurer();
-
-        $result = $obscurer->obscureName('Mary Jane W');
-        $this->assertSame('M••• J••• W', $result);
-    }
-
     // ─── Email Obscuring ─────────────────────────────────────────────
 
     /** @test */

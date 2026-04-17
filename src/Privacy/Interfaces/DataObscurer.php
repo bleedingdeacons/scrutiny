@@ -17,16 +17,6 @@ if (!defined('ABSPATH')) {
 interface DataObscurer
 {
     /**
-     * Obscure a personal name (first name and initial)
-     *
-     * Example: "John S" → "J*** S"
-     *
-     * @param string $name The name to obscure
-     * @return string The obscured name
-     */
-    public function obscureName(string $name): string;
-
-    /**
      * Obscure an email address
      *
      * Example: "john@example.com" → "j***@e***.com"

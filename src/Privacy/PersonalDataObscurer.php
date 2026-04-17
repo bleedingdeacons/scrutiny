@@ -24,8 +24,7 @@ use function get_field;
  * each access event to the GDPR audit trail.
  *
  * Hooks into ACF field rendering to mask personal email and mobile number
- * values on the member edit screen. The post title (private name) is
- * obscured via the WordPress `the_title` filter on admin screens.
+ * values on the member edit screen.
  *
  * Users with the `scrutiny_view_personal_data` capability see unobscured
  * values; all other users see masked placeholders.
@@ -108,29 +107,6 @@ class PersonalDataObscurer implements DataObscurer
         if ($mobileFieldKey !== '') {
             add_filter('acf/update_value/key=' . $mobileFieldKey, [$this, 'preserveMobileNumber'], 10, 3);
         }
-    }
-
-    /**
-     * @inheritDoc
-     */
-    public function obscureName(string $name): string
-    {
-        if ($name === '') {
-            return '';
-        }
-
-        $parts = explode(' ', $name);
-        $obscured = [];
-
-        foreach ($parts as $part) {
-            if (mb_strlen($part) <= 1) {
-                $obscured[] = $part;
-            } else {
-                $obscured[] = mb_substr($part, 0, 1) . str_repeat('•', mb_strlen($part) - 1);
-            }
-        }
-
-        return implode(' ', $obscured);
     }
 
     /**
