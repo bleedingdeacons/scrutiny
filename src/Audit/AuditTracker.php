@@ -10,8 +10,8 @@ if (!defined('ABSPATH')) {
 }
 
 use Scrutiny\Audit\Interfaces\AuditLogger;
-use Scrutiny\Privacy\Interfaces\DataObscurer;
 use Scrutiny\Privacy\PersonalDataFields;
+use Scrutiny\Privacy\PersonalDataPolicy;
 
 use Unity\Core\Interfaces\Configuration;
 use Unity\Groups\Interfaces\Group;
@@ -50,7 +50,7 @@ use function is_admin;
 class AuditTracker
 {
     private AuditLogger $logger;
-    private DataObscurer $obscurer;
+    private PersonalDataPolicy $policy;
 
     /**
      * Track which member fields have been logged in this request to prevent duplicates
@@ -69,10 +69,10 @@ class AuditTracker
      */
     private readonly array $acfFieldMap;
 
-    public function __construct(Configuration $configuration, AuditLogger $logger, DataObscurer $obscurer)
+    public function __construct(Configuration $configuration, AuditLogger $logger, PersonalDataPolicy $policy)
     {
         $this->logger = $logger;
-        $this->obscurer = $obscurer;
+        $this->policy = $policy;
 
         $this->member_config = $configuration->getConfig(Member::class);
 
@@ -145,7 +145,7 @@ class AuditTracker
         }
 
         // Only log views for users who can actually see the unobscured personal data
-        if (!$this->obscurer->currentUserCanViewPersonalData()) {
+        if (!$this->policy->currentUserCanView()) {
             return;
         }
 
@@ -200,7 +200,7 @@ class AuditTracker
         }
 
         // Only log views for users who can actually see the unobscured personal data
-        if (!$this->obscurer->currentUserCanViewPersonalData()) {
+        if (!$this->policy->currentUserCanView()) {
             return $value;
         }
 

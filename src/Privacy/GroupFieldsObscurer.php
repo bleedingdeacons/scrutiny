@@ -2,40 +2,59 @@
 
 declare(strict_types=1);
 
-namespace Scrutiny\Privacy\Contacts;
+namespace Scrutiny\Privacy;
 
 // Prevent direct access
 if (!defined('ABSPATH')) {
     exit;
 }
 
+use Scrutiny\Privacy\Interfaces\DataObscurer;
 use WP_Post;
 use function __;
 use function add_action;
-use function esc_html;
 use function get_post_meta;
 use function get_post_type;
+use function is_admin;
+use function wp_is_post_autosave;
+use function wp_is_post_revision;
 use function wp_json_encode;
 
 /**
- * Adjusts the nine TSML named-contact inputs on the meeting and group
- * edit screens based on the current user's tier.
+ * Group Fields Obscurer
  *
- *   EDIT → no changes, full access.
- *   VIEW → mark inputs readonly and show a "read-only" banner.
- *   NONE → replace each input's value with a masked placeholder
- *          AND mark readonly, so users see obscured previews but
- *          cannot edit them.
+ * Obscures and write-protects TSML's nine named-contact fields
+ * (contact_1_name … contact_3_phone) on the meeting and group edit
+ * screens.
  *
- * Masked values are injected from PHP at render time via the
- * admin_footer-post.php / admin_footer-post-new.php hooks, which
- * run late enough that TSML's meta box has already rendered.
+ * Unlike the member ACF fields, these are plain WordPress postmeta
+ * rendered by TSML's own meta box. The obscurer therefore works in
+ * two layers:
  *
- * Tampering defence is handled by {@see SaveGuard}, which strips the
- * protected fields from $_POST on save regardless of what the DOM
- * looks like at submission time.
+ *  1. Admin UI (admin_footer-post{,-new}.php) — adjusts each input
+ *     based on the current user's tier:
+ *
+ *       EDIT → no changes, full access.
+ *       VIEW → mark inputs readonly and show a "read-only" banner.
+ *       NONE → replace each input's value with a masked placeholder
+ *              AND mark readonly, so users see obscured previews
+ *              but cannot edit them.
+ *
+ *     Masked values are injected from PHP at render time, late enough
+ *     that TSML's meta box has already rendered.
+ *
+ *  2. Save hook (save_post_{tsml_meeting,tsml_group}) — strips the
+ *     protected fields from $_POST before TSML's own save handler
+ *     runs at priority 1, so DOM tampering (editing masked values,
+ *     re-enabling readonly inputs, forging a hidden field) cannot
+ *     commit changes.
+ *
+ * The save hook must register in every request (admin, REST, WP-CLI)
+ * because save_post_* fires wherever a post is saved. The admin UI
+ * hook only fires on admin page loads, so it's cheap to register
+ * there unconditionally.
  */
-final class FieldRenderer
+final class GroupFieldsObscurer implements DataObscurer
 {
     /**
      * Post types whose edit screen exposes the protected contact
@@ -45,18 +64,47 @@ final class FieldRenderer
     private const SUPPORTED_POST_TYPES = ['tsml_meeting', 'tsml_group'];
 
     public function __construct(
-        private readonly Access $access,
-        private readonly ProtectedFields $fields,
-        private readonly Masker $masker,
+        private readonly PersonalDataPolicy $policy,
     ) {
-        add_action('admin_footer-post.php', [$this, 'emit']);
-        add_action('admin_footer-post-new.php', [$this, 'emit']);
     }
 
-    public function emit(): void
+    public function register(): void
     {
-        $tier = $this->access->tier();
-        if ($tier === Tier::EDIT) {
+        // Save-time $_POST strip: always active.
+        foreach (self::SUPPORTED_POST_TYPES as $postType) {
+            add_action("save_post_{$postType}", [$this, 'stripProtectedFields'], 1, 2);
+        }
+
+        // Admin UI mask/lock: admin-only.
+        if (is_admin()) {
+            add_action('admin_footer-post.php', [$this, 'emitAdminUi']);
+            add_action('admin_footer-post-new.php', [$this, 'emitAdminUi']);
+        }
+    }
+
+    // ─── Save hook ────────────────────────────────────────────────────
+
+    public function stripProtectedFields(int $postId, WP_Post $post): void
+    {
+        if (wp_is_post_autosave($postId) || wp_is_post_revision($postId)) {
+            return;
+        }
+        if ($this->policy->currentUserCanEdit()) {
+            return;
+        }
+        foreach (PersonalDataFields::protectedContactFields() as $field) {
+            if (isset($_POST[$field])) {
+                unset($_POST[$field]);
+            }
+        }
+    }
+
+    // ─── Admin UI hook ────────────────────────────────────────────────
+
+    public function emitAdminUi(): void
+    {
+        // EDIT users have full access — nothing to lock, nothing to mask.
+        if ($this->policy->currentUserCanEdit()) {
             return;
         }
 
@@ -65,21 +113,22 @@ final class FieldRenderer
             return;
         }
 
-        $protectedFields = $this->fields->all();
+        $protectedFields = PersonalDataFields::protectedContactFields();
         if (empty($protectedFields)) {
             return;
         }
 
-        // For NONE tier we need the real values so we can compute mask
-        // previews server-side. For VIEW tier we only need to mark
-        // readonly — no value substitution.
+        // Users who can view but not edit see readonly inputs with their
+        // real values. Users who can do neither see readonly inputs with
+        // masked placeholders computed server-side.
         //
         // IMPORTANT: TSML stores the nine named-contact fields on the
         // linked *group* post (pointed to by the meeting's `group_id`
         // meta), not on the meeting itself. Fall back to the meeting
         // post for standalone meetings that aren't part of a group.
+        $canView = $this->policy->currentUserCanView();
         $maskedValues = [];
-        if ($tier === Tier::NONE) {
+        if (!$canView) {
             $postId = $this->resolvePostId();
             if ($postId > 0) {
                 $sourceId = $this->resolveContactSourceId($postId);
@@ -87,17 +136,17 @@ final class FieldRenderer
                     $raw = $sourceId > 0
                         ? (string) get_post_meta($sourceId, $field, true)
                         : '';
-                    $maskedValues[$field] = $this->masker->mask($raw);
+                    $maskedValues[$field] = $this->policy->maskContactField($raw);
                 }
             }
         }
 
-        $bannerText = $tier === Tier::VIEW
+        $bannerText = $canView
             ? __('Named contact fields are read-only.', 'scrutiny')
             : __('Named contact fields are hidden. Contact an administrator for access.', 'scrutiny');
 
         $this->renderCss();
-        $this->renderJs($tier, $protectedFields, $maskedValues, $bannerText);
+        $this->renderJs($protectedFields, $maskedValues, $bannerText, !$canView);
     }
 
     /**
@@ -168,19 +217,19 @@ final class FieldRenderer
      * @param string[]              $fields
      * @param array<string, string> $masked field => masked preview
      */
-    private function renderJs(Tier $tier, array $fields, array $masked, string $banner): void
+    private function renderJs(array $fields, array $masked, string $banner, bool $applyMask): void
     {
         $fieldsJson = wp_json_encode($fields);
         $maskedJson = wp_json_encode((object) $masked);
         $bannerJson = wp_json_encode($banner);
-        $applyMask  = $tier === Tier::NONE ? 'true' : 'false';
+        $applyMaskJs = $applyMask ? 'true' : 'false';
 
         echo <<<HTML
             <script id="scrutiny-tsml-script">
             (function () {
                 var FIELDS = {$fieldsJson};
                 var MASKED = {$maskedJson};
-                var APPLY_MASK = {$applyMask};
+                var APPLY_MASK = {$applyMaskJs};
                 var BANNER = {$bannerJson};
 
                 function findInput(name) {

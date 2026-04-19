@@ -9,6 +9,8 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
+use function apply_filters;
+
 /**
  * Personal Data Fields
  *
@@ -17,6 +19,22 @@ if (!defined('ABSPATH')) {
  */
 final class PersonalDataFields
 {
+    /**
+     * Default set of the nine named-contact meta keys on TSML meeting
+     * and group posts (contact_1_name … contact_3_phone).
+     *
+     * Exposed via {@see self::protectedContactFields()} which applies
+     * the filters that let site owners adjust the set without editing
+     * plugin files.
+     *
+     * @var array<string>
+     */
+    private const DEFAULT_PROTECTED_CONTACT_FIELDS = [
+        'contact_1_email', 'contact_1_phone',
+        'contact_2_email', 'contact_2_phone',
+        'contact_3_email', 'contact_3_phone',
+    ];
+
     /**
      * Logical field name: member's personal email address
      */
@@ -105,7 +123,7 @@ final class PersonalDataFields
     /**
      * Configuration keys that hold the ACF field keys for personal data fields.
      *
-     * Used by PersonalDataObscurer to register acf/update_value/key= filters which
+     * Used by MemberFieldsObscurer to register acf/update_value/key= filters which
      * are more reliable than name-based filters for group sub-fields.
      *
      * @var array<string, string>
@@ -162,6 +180,32 @@ final class PersonalDataFields
         }
 
         return $fieldName;
+    }
+
+    /**
+     * The nine named-contact meta keys on TSML meeting and group posts.
+     *
+     * The list is filterable so site owners can adjust the set without
+     * editing plugin files. Two filters are supported for back-compat:
+     *
+     *   scrutiny_tsml_protected_fields — canonical Scrutiny name
+     *   tsml_cac_protected_fields      — legacy name from the standalone
+     *                                    TSML Contact Access Control plugin
+     *
+     * Example:
+     *
+     *     add_filter('scrutiny_tsml_protected_fields', fn() => ['contact_1_email']);
+     *
+     * @return string[]
+     */
+    public static function protectedContactFields(): array
+    {
+        /** @var string[] $fields */
+        $fields = apply_filters('scrutiny_tsml_protected_fields', self::DEFAULT_PROTECTED_CONTACT_FIELDS);
+        /** @var string[] $fields */
+        $fields = apply_filters('tsml_cac_protected_fields', $fields);
+
+        return array_values(array_filter(array_map('strval', $fields)));
     }
 
     private function __construct()

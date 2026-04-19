@@ -10,51 +10,26 @@ if (!defined('ABSPATH')) {
 }
 
 /**
- * Data Obscurer Interface
+ * Data Obscurer
  *
- * Defines the contract for obscuring personal data values in the UI.
+ * A component that obscures personal data in a specific storage context
+ * (ACF member fields, TSML contact postmeta, …) by registering WordPress
+ * hooks.
+ *
+ * Implementations hold only their own context-specific configuration.
+ * Shared policy — capability checks, the fixed placeholder, the tier
+ * enum, the obscuring helpers — lives in {@see \Scrutiny\Privacy\PersonalDataPolicy}
+ * and is injected.
+ *
+ * The boot sequence in {@see \Scrutiny\Plugin} instantiates each obscurer
+ * via the container and calls {@see self::register()} to wire its hooks.
  */
 interface DataObscurer
 {
     /**
-     * Obscure an email address
+     * Register all WordPress hooks required to obscure this context.
      *
-     * Implementations should return a fixed-width placeholder that reveals
-     * nothing about the original value (no length, first character, or TLD).
-     * Empty input returns an empty string.
-     *
-     * Example: "john@example.com" → "•••••"
-     *
-     * @param string $email The email to obscure
-     * @return string The obscured email
+     * Called once, during plugin boot.
      */
-    public function obscureEmail(string $email): string;
-
-    /**
-     * Obscure a mobile phone number
-     *
-     * Implementations should return a fixed-width placeholder that reveals
-     * nothing about the original value (no digit count or last-N digits).
-     * Empty input returns an empty string.
-     *
-     * Example: "07700 900123" → "•••••"
-     *
-     * @param string $number The phone number to obscure
-     * @return string The obscured number
-     */
-    public function obscurePhone(string $number): string;
-
-    /**
-     * Check whether the current user has permission to view unobscured personal data
-     *
-     * @return bool
-     */
-    public function currentUserCanViewPersonalData(): bool;
-
-    /**
-     * Check whether the current user has permission to update personal data fields
-     *
-     * @return bool
-     */
-    public function currentUserCanEditPersonalData(): bool;
+    public function register(): void;
 }

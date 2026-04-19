@@ -17,13 +17,9 @@ use Scrutiny\Audit\GdprAuditRepository;
 use Scrutiny\Audit\AuditTracker;
 use Scrutiny\Audit\Interfaces\AuditLogger;
 use Scrutiny\Audit\Interfaces\AuditRepository;
-use Scrutiny\Privacy\PersonalDataObscurer;
-use Scrutiny\Privacy\Interfaces\DataObscurer;
-use Scrutiny\Privacy\Contacts\Access as TsmlAccess;
-use Scrutiny\Privacy\Contacts\FieldRenderer as TsmlFieldRenderer;
-use Scrutiny\Privacy\Contacts\Masker as TsmlMasker;
-use Scrutiny\Privacy\Contacts\ProtectedFields as TsmlProtectedFields;
-use Scrutiny\Privacy\Contacts\SaveGuard as TsmlSaveGuard;
+use Scrutiny\Privacy\GroupFieldsObscurer;
+use Scrutiny\Privacy\MemberFieldsObscurer;
+use Scrutiny\Privacy\PersonalDataPolicy;
 use Psr\Container\ContainerInterface;
 use Unity\Core\Interfaces\Container;
 use Unity\Core\Interfaces\Configuration;
@@ -39,14 +35,15 @@ use function is_admin;
  * Provides GDPR-compliant audit logging and personal data obscuring for Unity.
  *
  * Architecture:
- *   GdprAuditRepository  – stores audit log entries in a custom database table
- *   GdprAuditLogger      – writes log entries (who, what, when — no raw PII)
- *   AuditTracker         – hooks into Unity member and group lifecycle to capture changes
- *   PersonalDataObscurer – masks ACF personal data fields in the admin UI
- *   TSML contact guard   – masks and write-protects TSML's nine named-contact
- *                          fields (contact_1_name … contact_3_phone) on the
- *                          meeting and group edit screens
- *   AuditLogAdmin        – read-only admin page for viewing the audit trail
+ *   GdprAuditRepository   – stores audit log entries in a custom database table
+ *   GdprAuditLogger       – writes log entries (who, what, when — no raw PII)
+ *   AuditTracker          – hooks into Unity member and group lifecycle to capture changes
+ *   PersonalDataPolicy    – capability checks, tier resolution, and the obscuring helpers
+ *   MemberFieldsObscurer  – obscures the two ACF personal-data fields on member edit screens
+ *   GroupFieldsObscurer   – masks and write-protects TSML's nine named-contact fields
+ *                           (contact_1_name … contact_3_phone) on the meeting and group
+ *                           edit screens
+ *   AuditLogAdmin         – read-only admin page for viewing the audit trail
  *
  * Capabilities:
  *   scrutiny_view_personal_data – grants a user the right to see unmasked values
@@ -95,24 +92,21 @@ class Plugin
         // the activation hook did not re-run after new caps were added)
         self::ensureCapabilities();
 
-        // Always initialise the obscurer so personal data is masked
-        self::$container->get(DataObscurer::class);
-
-        // TSML save-guard: always active. save_post_* hooks fire
-        // wherever a post is saved (admin, REST, WP-CLI), so the
-        // $_POST strip must register in every request, not just
-        // admin page loads.
-        self::$container->get(TsmlSaveGuard::class);
+        // Wire up the two obscurers. Each registers its own WP hooks
+        // in register() — neither has side effects in the constructor.
+        //
+        // Both register unconditionally: MemberFieldsObscurer's
+        // acf/format_value filters fire on the frontend, and
+        // GroupFieldsObscurer's save_post_* hooks fire wherever a
+        // post is saved (admin, REST, WP-CLI). Each obscurer gates
+        // its admin-only hooks internally.
+        self::$container->get(MemberFieldsObscurer::class)->register();
+        self::$container->get(GroupFieldsObscurer::class)->register();
 
         // Initialise admin page when in the dashboard
         if (is_admin()) {
             self::$container->get(AuditLogAdmin::class);
             self::$container->get(PersonalDataMinder::class);
-
-            // TSML field renderer: admin-only, since it hooks
-            // admin_footer-post{,-new}.php to mask and lock the
-            // contact inputs on the meeting/group edit screens.
-            self::$container->get(TsmlFieldRenderer::class);
         }
 
         self::logDebug('Initialised', ['version' => defined('SCRUTINY_VERSION') ? SCRUTINY_VERSION : 'unknown']);
@@ -142,15 +136,29 @@ class Plugin
             return new AuditTracker(
                 $c->get(Configuration::class),
                 $c->get(AuditLogger::class),
-                $c->get(DataObscurer::class)
+                $c->get(PersonalDataPolicy::class)
             );
         });
 
-        // Data Obscurer
-        $container->register(DataObscurer::class, function (ContainerInterface $c) {
-            return new PersonalDataObscurer(
+        // Personal Data Policy — shared stateless helpers (capabilities,
+        // tier resolution, obscuring). Consumed by both obscurers and by
+        // AuditTracker for its capability checks.
+        $container->register(PersonalDataPolicy::class, function () {
+            return new PersonalDataPolicy();
+        });
+
+        // Member Fields Obscurer — ACF personal email and mobile number.
+        $container->register(MemberFieldsObscurer::class, function (ContainerInterface $c) {
+            return new MemberFieldsObscurer(
                 $c->get(Configuration::class),
-                $c->get(AuditLogger::class)
+                $c->get(PersonalDataPolicy::class)
+            );
+        });
+
+        // Group Fields Obscurer — TSML meeting/group contact postmeta.
+        $container->register(GroupFieldsObscurer::class, function (ContainerInterface $c) {
+            return new GroupFieldsObscurer(
+                $c->get(PersonalDataPolicy::class)
             );
         });
 
@@ -168,40 +176,6 @@ class Plugin
                 $c->get(Configuration::class)
             );
         });
-
-        // TSML contact-field guards.
-        //
-        // Access, ProtectedFields and Masker are cheap stateless
-        // helpers. Registering them in the container lets the two
-        // Hookable services — FieldRenderer (admin UI) and SaveGuard
-        // (save-time $_POST strip) — share the same instances, and
-        // lets tests substitute stub fields/access by re-registering.
-        $container->register(TsmlAccess::class, function () {
-            return new TsmlAccess();
-        });
-
-        $container->register(TsmlProtectedFields::class, function () {
-            return new TsmlProtectedFields();
-        });
-
-        $container->register(TsmlMasker::class, function () {
-            return new TsmlMasker();
-        });
-
-        $container->register(TsmlFieldRenderer::class, function (ContainerInterface $c) {
-            return new TsmlFieldRenderer(
-                $c->get(TsmlAccess::class),
-                $c->get(TsmlProtectedFields::class),
-                $c->get(TsmlMasker::class)
-            );
-        });
-
-        $container->register(TsmlSaveGuard::class, function (ContainerInterface $c) {
-            return new TsmlSaveGuard(
-                $c->get(TsmlAccess::class),
-                $c->get(TsmlProtectedFields::class)
-            );
-        });
     }
 
     /**
@@ -213,25 +187,31 @@ class Plugin
      * capabilities are introduced (e.g. scrutiny_edit_personal_data)
      * without the activation hook re-running, they will be missing.
      *
-     * This method checks once per plugin version (tracked via a
-     * wp_option) and adds any missing capabilities.
+     * We check the administrator role directly rather than relying on
+     * a stored version flag, because a cooperating-but-broken third
+     * party can revoke our caps in its own deactivation hook. For
+     * example, an earlier version of this codebase shipped the TSML
+     * contact guard as a standalone plugin whose deactivate() loop
+     * stripped scrutiny_view_personal_data and scrutiny_edit_personal_data
+     * from every role — so deactivating it wiped Scrutiny's own caps.
+     * A version-gated bailout would then refuse to re-grant them.
+     *
+     * add_cap() is a no-op when the role already has the capability
+     * (no DB write), so calling it on every load is cheap.
      */
     private static function ensureCapabilities(): void
     {
-        $optionKey = 'scrutiny_caps_version';
-        $currentVersion = defined('SCRUTINY_VERSION') ? SCRUTINY_VERSION : '0.0.0';
-
-        if (get_option($optionKey) === $currentVersion) {
+        $adminRole = get_role('administrator');
+        if (!$adminRole) {
             return;
         }
 
-        $adminRole = get_role('administrator');
-        if ($adminRole) {
-            $adminRole->add_cap(PersonalDataObscurer::VIEW_CAPABILITY);
-            $adminRole->add_cap(PersonalDataObscurer::EDIT_CAPABILITY);
+        if (!$adminRole->has_cap(PersonalDataPolicy::VIEW_CAPABILITY)) {
+            $adminRole->add_cap(PersonalDataPolicy::VIEW_CAPABILITY);
         }
-
-        update_option($optionKey, $currentVersion);
+        if (!$adminRole->has_cap(PersonalDataPolicy::EDIT_CAPABILITY)) {
+            $adminRole->add_cap(PersonalDataPolicy::EDIT_CAPABILITY);
+        }
     }
 
     /**
@@ -248,8 +228,8 @@ class Plugin
         // Grant the capabilities to administrators
         $adminRole = get_role('administrator');
         if ($adminRole) {
-            $adminRole->add_cap(PersonalDataObscurer::VIEW_CAPABILITY);
-            $adminRole->add_cap(PersonalDataObscurer::EDIT_CAPABILITY);
+            $adminRole->add_cap(PersonalDataPolicy::VIEW_CAPABILITY);
+            $adminRole->add_cap(PersonalDataPolicy::EDIT_CAPABILITY);
         }
     }
 
