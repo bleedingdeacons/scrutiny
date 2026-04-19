@@ -19,6 +19,11 @@ use Scrutiny\Audit\Interfaces\AuditLogger;
 use Scrutiny\Audit\Interfaces\AuditRepository;
 use Scrutiny\Privacy\PersonalDataObscurer;
 use Scrutiny\Privacy\Interfaces\DataObscurer;
+use Scrutiny\Privacy\Contacts\Access as TsmlAccess;
+use Scrutiny\Privacy\Contacts\FieldRenderer as TsmlFieldRenderer;
+use Scrutiny\Privacy\Contacts\Masker as TsmlMasker;
+use Scrutiny\Privacy\Contacts\ProtectedFields as TsmlProtectedFields;
+use Scrutiny\Privacy\Contacts\SaveGuard as TsmlSaveGuard;
 use Psr\Container\ContainerInterface;
 use Unity\Core\Interfaces\Container;
 use Unity\Core\Interfaces\Configuration;
@@ -36,9 +41,12 @@ use function is_admin;
  * Architecture:
  *   GdprAuditRepository  – stores audit log entries in a custom database table
  *   GdprAuditLogger      – writes log entries (who, what, when — no raw PII)
- *   AuditTracker     – hooks into Unity member and group lifecycle to capture changes
- *   PersonalDataObscurer     – masks personal data in the admin UI
- *   AuditLogAdmin    – read-only admin page for viewing the audit trail
+ *   AuditTracker         – hooks into Unity member and group lifecycle to capture changes
+ *   PersonalDataObscurer – masks ACF personal data fields in the admin UI
+ *   TSML contact guard   – masks and write-protects TSML's nine named-contact
+ *                          fields (contact_1_name … contact_3_phone) on the
+ *                          meeting and group edit screens
+ *   AuditLogAdmin        – read-only admin page for viewing the audit trail
  *
  * Capabilities:
  *   scrutiny_view_personal_data – grants a user the right to see unmasked values
@@ -90,10 +98,21 @@ class Plugin
         // Always initialise the obscurer so personal data is masked
         self::$container->get(DataObscurer::class);
 
+        // TSML save-guard: always active. save_post_* hooks fire
+        // wherever a post is saved (admin, REST, WP-CLI), so the
+        // $_POST strip must register in every request, not just
+        // admin page loads.
+        self::$container->get(TsmlSaveGuard::class);
+
         // Initialise admin page when in the dashboard
         if (is_admin()) {
             self::$container->get(AuditLogAdmin::class);
             self::$container->get(PersonalDataMinder::class);
+
+            // TSML field renderer: admin-only, since it hooks
+            // admin_footer-post{,-new}.php to mask and lock the
+            // contact inputs on the meeting/group edit screens.
+            self::$container->get(TsmlFieldRenderer::class);
         }
 
         self::logDebug('Initialised', ['version' => defined('SCRUTINY_VERSION') ? SCRUTINY_VERSION : 'unknown']);
@@ -147,6 +166,40 @@ class Plugin
         $container->register(PersonalDataMinder::class, function (ContainerInterface $c) {
             return new PersonalDataMinder(
                 $c->get(Configuration::class)
+            );
+        });
+
+        // TSML contact-field guards.
+        //
+        // Access, ProtectedFields and Masker are cheap stateless
+        // helpers. Registering them in the container lets the two
+        // Hookable services — FieldRenderer (admin UI) and SaveGuard
+        // (save-time $_POST strip) — share the same instances, and
+        // lets tests substitute stub fields/access by re-registering.
+        $container->register(TsmlAccess::class, function () {
+            return new TsmlAccess();
+        });
+
+        $container->register(TsmlProtectedFields::class, function () {
+            return new TsmlProtectedFields();
+        });
+
+        $container->register(TsmlMasker::class, function () {
+            return new TsmlMasker();
+        });
+
+        $container->register(TsmlFieldRenderer::class, function (ContainerInterface $c) {
+            return new TsmlFieldRenderer(
+                $c->get(TsmlAccess::class),
+                $c->get(TsmlProtectedFields::class),
+                $c->get(TsmlMasker::class)
+            );
+        });
+
+        $container->register(TsmlSaveGuard::class, function (ContainerInterface $c) {
+            return new TsmlSaveGuard(
+                $c->get(TsmlAccess::class),
+                $c->get(TsmlProtectedFields::class)
             );
         });
     }

@@ -20,8 +20,11 @@ use function current_user_can;
 use function esc_attr;
 use function esc_html;
 use function esc_url;
+use function get_option;
 use function get_userdata;
+use function wp_date;
 use function wp_nonce_url;
+use function wp_timezone;
 
 /**
  * Audit Log Admin Page
@@ -313,7 +316,7 @@ class AuditLogAdmin
             <table class="widefat striped">
                 <thead>
                 <tr>
-                    <th>Date / Time (UTC)</th>
+                    <th>Date / Time (<?php echo esc_html(wp_date('T')); ?>)</th>
                     <th>User</th>
                     <th>Action</th>
                     <th>Entity Type</th>
@@ -328,8 +331,24 @@ class AuditLogAdmin
                     <tr><td colspan="8" style="text-align:center;">No entries found.</td></tr>
                 <?php else: ?>
                     <?php foreach ($entries as $entry): ?>
+                        <?php
+                        // Timestamps are stored in UTC (see GdprAuditLogger::log()); convert to the
+                        // site's configured timezone for display. Falls back to the raw value if the
+                        // stored string cannot be parsed.
+                        $loggedAtDisplay = $entry->logged_at;
+                        try {
+                            $utc = new \DateTimeImmutable($entry->logged_at, new \DateTimeZone('UTC'));
+                            $local = $utc->setTimezone(wp_timezone());
+                            $loggedAtDisplay = wp_date(
+                                    get_option('date_format') . ' ' . get_option('time_format'),
+                                    $local->getTimestamp()
+                            );
+                        } catch (\Exception $e) {
+                            // Keep $entry->logged_at as-is if parsing fails.
+                        }
+                        ?>
                         <tr>
-                            <td><?php echo esc_html($entry->logged_at); ?></td>
+                            <td><?php echo esc_html($loggedAtDisplay); ?></td>
                             <td><?php echo esc_html($entry->user_login); ?> <small>(#<?php echo esc_html((string) $entry->user_id); ?>)</small></td>
                             <td>
                                     <span class="scrutiny-badge scrutiny-badge--<?php echo esc_attr($entry->action); ?>">

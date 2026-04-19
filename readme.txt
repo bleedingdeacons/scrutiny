@@ -3,7 +3,7 @@ Contributors: thebleedingdeacons
 Tags: audit, gdpr, privacy, logging, unity
 Requires at least: 6.0
 Tested up to: 6.9
-Stable tag: 1.16.0
+Stable tag: 1.17.0
 Requires PHP: 8.0
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
@@ -66,6 +66,26 @@ Obscuring is applied via:
 * `acf/prepare_field` — admin edit form rendering (value cleared, obscured value shown as placeholder).
 * `acf/update_value` — prevents an empty placeholder submission from wiping the stored value.
 
+= TSML Contact Field Guard =
+
+A separate guard protects the nine named-contact postmeta fields (`contact_1_name` … `contact_3_phone`) on the 12 Step Meeting List plugin's meeting and group edit screens. It reuses the same two Scrutiny capabilities:
+
+| Tier | Capability | Behaviour |
+|---|---|---|
+| `EDIT` | `scrutiny_edit_personal_data` | Full access — no changes to the UI. |
+| `VIEW` | `scrutiny_view_personal_data` | Real values visible, inputs marked read-only, save-guard strips any tampered POSTs. |
+| `NONE` | (neither cap) | Values replaced with `•••••` placeholders, inputs read-only, save-guard strips any tampered POSTs. |
+
+Because TSML stores the contact fields on the linked *group* post (not the meeting), the guard reads from `group_id` when rendering a meeting edit screen, falling back to the meeting itself for standalone meetings.
+
+Everything else on the meeting edit screen — group linkage, website, group-level email/phone, Venmo/PayPal, district assignments, meeting notes, types, time, etc. — remains fully editable for anyone who can already edit meetings.
+
+The protected field list is filterable:
+
+```php
+add_filter('scrutiny_tsml_protected_fields', fn() => ['contact_1_email']);
+```
+
 = Admin Audit Log UI =
 
 A read-only **Audit Log** submenu page is added under the Intergroup menu, accessible only to `manage_options` users. It supports:
@@ -115,19 +135,27 @@ Scrutiny/
 └── src/
     ├── Plugin.php            # Service registration & lifecycle
     ├── Admin/
-    │   └── AuditLogAdmin.php # Read-only admin UI for the audit trail
+    │   ├── AuditLogAdmin.php # Read-only admin UI for the audit trail
+    │   └── Members/
+    │       └── PersonalDataMinder.php  # Clear/Undo buttons on member edit screen
     ├── Audit/
-    │   ├── AuditLogger.php       # Writes log entries (no raw PII)
-    │   ├── AuditRepository.php   # Database CRUD for the audit table
-    │   ├── AuditTracker.php      # Hooks into Unity lifecycle events
+    │   ├── GdprAuditLogger.php     # Writes log entries (no raw PII)
+    │   ├── GdprAuditRepository.php # Database CRUD for the audit table
+    │   ├── AuditTracker.php        # Hooks into Unity lifecycle events
     │   └── Interfaces/
-    │       ├── AuditLoggerInterface.php
-    │       └── AuditRepositoryInterface.php
+    │       ├── AuditLogger.php
+    │       └── AuditRepository.php
     └── Privacy/
-        ├── DataObscurer.php        # Masks personal data in admin/frontend
-        ├── PersonalDataFields.php  # Field name constants & labels
-        └── Interfaces/
-            └── DataObscurerInterface.php
+        ├── PersonalDataObscurer.php  # Masks ACF personal data in admin/frontend
+        ├── PersonalDataFields.php    # Field name constants & labels
+        ├── Interfaces/
+        │   └── DataObscurer.php
+        └── Tsml/                     # TSML contact-field guard
+            ├── Access.php            # Capability-check wrapper + Tier enum
+            ├── ProtectedFields.php   # The nine contact_N_* meta keys
+            ├── Masker.php            # Fixed-width placeholder renderer
+            ├── FieldRenderer.php     # Admin-footer CSS/JS: lock + mask inputs
+            └── SaveGuard.php         # Strips protected fields from $_POST
 ```
 
 = Service graph =
@@ -139,6 +167,12 @@ Unity Container
     └── AuditTracker          (uses AuditLogger — hooks into Unity lifecycle)
     └── DataObscurer          (uses AuditLogger — hooks into ACF filters)
     └── AuditLogAdmin         (uses AuditRepository + AuditLogger — admin UI)
+    └── PersonalDataMinder    (admin UI — Clear/Undo on member edit screen)
+    └── Tsml\Access           (capability-check wrapper)
+    └── Tsml\ProtectedFields  (the nine TSML contact meta keys)
+    └── Tsml\Masker           (fixed-width placeholder renderer)
+    └── Tsml\FieldRenderer    (admin-only — locks/masks inputs on meeting edit)
+    └── Tsml\SaveGuard        (strips protected fields from $_POST on save)
 ```
 
 All services are resolved from Unity's PSR-11 container and are available after the `scrutiny_loaded` action fires.
@@ -262,3 +296,4 @@ Test suites cover:
 * `AuditLoggerTest` — log and logBatch behaviour, IP anonymisation.
 * `AuditTrackerTest` / `AuditTrackerGroupTest` — lifecycle hook integration.
 * `DataObscurerTest` — obscuring algorithms for email, phone, and name.
+* `Privacy\Tsml\MaskerTest` — placeholder rendering for TSML contact fields.
