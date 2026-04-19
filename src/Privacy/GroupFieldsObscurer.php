@@ -9,7 +9,6 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-use Scrutiny\Privacy\Interfaces\DataObscurer;
 use WP_Post;
 use function __;
 use function add_action;
@@ -54,7 +53,7 @@ use function wp_json_encode;
  * hook only fires on admin page loads, so it's cheap to register
  * there unconditionally.
  */
-final class GroupFieldsObscurer implements DataObscurer
+final class GroupFieldsObscurer
 {
     /**
      * Post types whose edit screen exposes the protected contact

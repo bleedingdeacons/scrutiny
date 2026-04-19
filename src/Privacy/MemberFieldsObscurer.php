@@ -9,7 +9,6 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-use Scrutiny\Privacy\Interfaces\DataObscurer;
 use Unity\Core\Interfaces\Configuration;
 use Unity\Members\Interfaces\Member;
 use function add_filter;
@@ -29,7 +28,7 @@ use function get_field;
  * personal data fields; all other users have their changes silently
  * rejected and the existing stored value preserved.
  */
-final class MemberFieldsObscurer implements DataObscurer
+final class MemberFieldsObscurer
 {
     private readonly array $member_config;
 
