@@ -43,6 +43,11 @@ class AuditTrackerTest extends TestCase
             'getId' => 42,
             'getPersonalEmail' => 'john@example.com',
             'getMobileNumber' => '07700 900123',
+            'isGdprAccepted' => false,
+            'getGdprAcceptedAt' => '',
+            'getGdprAcceptanceVersion' => '',
+            'getGdprAcceptanceMethod' => '',
+            'getGdprAcceptanceStatement' => '',
         ];
 
         $data = array_merge($defaults, $overrides);
@@ -151,6 +156,181 @@ class AuditTrackerTest extends TestCase
 
         $original = $this->createMember();
         $updated = $this->createMember();
+
+        $tracker->onMemberChanged($updated, $original);
+    }
+
+    /** @test */
+    public function it_logs_consent_recorded_when_gdpr_accepted_flips_to_true(): void
+    {
+        $logger = Mockery::mock(AuditLogger::class);
+        $logger->shouldReceive('log')
+            ->once()
+            ->with(
+                AuditLogger::ACTION_UPDATE,
+                AuditLogger::ENTITY_MEMBER,
+                42,
+                PersonalDataFields::GDPR_ACCEPTED,
+                'Consent recorded'
+            );
+
+        $tracker = $this->createTracker($logger);
+
+        $original = $this->createMember(['isGdprAccepted' => false]);
+        $updated  = $this->createMember(['isGdprAccepted' => true]);
+
+        $tracker->onMemberChanged($updated, $original);
+    }
+
+    /** @test */
+    public function it_logs_consent_revoked_when_gdpr_accepted_flips_to_false(): void
+    {
+        $logger = Mockery::mock(AuditLogger::class);
+        $logger->shouldReceive('log')
+            ->once()
+            ->with(
+                AuditLogger::ACTION_UPDATE,
+                AuditLogger::ENTITY_MEMBER,
+                42,
+                PersonalDataFields::GDPR_ACCEPTED,
+                'Consent revoked'
+            );
+
+        $tracker = $this->createTracker($logger);
+
+        $original = $this->createMember(['isGdprAccepted' => true]);
+        $updated  = $this->createMember(['isGdprAccepted' => false]);
+
+        $tracker->onMemberChanged($updated, $original);
+    }
+
+    /** @test */
+    public function it_logs_when_gdpr_accepted_at_changes(): void
+    {
+        $logger = Mockery::mock(AuditLogger::class);
+        $logger->shouldReceive('log')
+            ->once()
+            ->with(
+                AuditLogger::ACTION_UPDATE,
+                AuditLogger::ENTITY_MEMBER,
+                42,
+                PersonalDataFields::GDPR_ACCEPTED_AT,
+                'Value changed'
+            );
+
+        $tracker = $this->createTracker($logger);
+
+        $original = $this->createMember(['getGdprAcceptedAt' => '']);
+        $updated  = $this->createMember(['getGdprAcceptedAt' => '2026-04-27 15:45:00']);
+
+        $tracker->onMemberChanged($updated, $original);
+    }
+
+    /** @test */
+    public function it_logs_when_gdpr_acceptance_version_changes(): void
+    {
+        $logger = Mockery::mock(AuditLogger::class);
+        $logger->shouldReceive('log')
+            ->once()
+            ->with(
+                AuditLogger::ACTION_UPDATE,
+                AuditLogger::ENTITY_MEMBER,
+                42,
+                PersonalDataFields::GDPR_ACCEPTANCE_VERSION,
+                'Value changed'
+            );
+
+        $tracker = $this->createTracker($logger);
+
+        $original = $this->createMember(['getGdprAcceptanceVersion' => '1.0']);
+        $updated  = $this->createMember(['getGdprAcceptanceVersion' => '2.0']);
+
+        $tracker->onMemberChanged($updated, $original);
+    }
+
+    /** @test */
+    public function it_logs_when_gdpr_acceptance_method_changes(): void
+    {
+        $logger = Mockery::mock(AuditLogger::class);
+        $logger->shouldReceive('log')
+            ->once()
+            ->with(
+                AuditLogger::ACTION_UPDATE,
+                AuditLogger::ENTITY_MEMBER,
+                42,
+                PersonalDataFields::GDPR_ACCEPTANCE_METHOD,
+                'Value changed'
+            );
+
+        $tracker = $this->createTracker($logger);
+
+        $original = $this->createMember(['getGdprAcceptanceMethod' => 'web-form']);
+        $updated  = $this->createMember(['getGdprAcceptanceMethod' => 'api']);
+
+        $tracker->onMemberChanged($updated, $original);
+    }
+
+    /** @test */
+    public function it_logs_when_gdpr_acceptance_statement_changes(): void
+    {
+        $logger = Mockery::mock(AuditLogger::class);
+        $logger->shouldReceive('log')
+            ->once()
+            ->with(
+                AuditLogger::ACTION_UPDATE,
+                AuditLogger::ENTITY_MEMBER,
+                42,
+                PersonalDataFields::GDPR_ACCEPTANCE_STATEMENT,
+                'Value changed'
+            );
+
+        $tracker = $this->createTracker($logger);
+
+        $original = $this->createMember(['getGdprAcceptanceStatement' => 'Old wording.']);
+        $updated  = $this->createMember(['getGdprAcceptanceStatement' => 'New wording.']);
+
+        $tracker->onMemberChanged($updated, $original);
+    }
+
+    /** @test */
+    public function it_logs_all_gdpr_fields_when_a_full_acceptance_is_recorded(): void
+    {
+        $logger = Mockery::mock(AuditLogger::class);
+        // accepted (Consent recorded) + accepted_at + version + method + statement = 5
+        $logger->shouldReceive('log')->times(5);
+
+        $tracker = $this->createTracker($logger);
+
+        $original = $this->createMember();
+        $updated  = $this->createMember([
+            'isGdprAccepted'              => true,
+            'getGdprAcceptedAt'           => '2026-04-27 15:45:00',
+            'getGdprAcceptanceVersion'    => '2.1',
+            'getGdprAcceptanceMethod'     => 'api',
+            'getGdprAcceptanceStatement'  => 'I agree to the privacy policy.',
+        ]);
+
+        $tracker->onMemberChanged($updated, $original);
+    }
+
+    /** @test */
+    public function it_does_not_log_gdpr_fields_when_unchanged(): void
+    {
+        $logger = Mockery::mock(AuditLogger::class);
+        $logger->shouldNotReceive('log');
+
+        $tracker = $this->createTracker($logger);
+
+        $accepted = [
+            'isGdprAccepted'              => true,
+            'getGdprAcceptedAt'           => '2026-04-27 15:45:00',
+            'getGdprAcceptanceVersion'    => '2.1',
+            'getGdprAcceptanceMethod'     => 'api',
+            'getGdprAcceptanceStatement'  => 'I agree to the privacy policy.',
+        ];
+
+        $original = $this->createMember($accepted);
+        $updated  = $this->createMember($accepted);
 
         $tracker->onMemberChanged($updated, $original);
     }

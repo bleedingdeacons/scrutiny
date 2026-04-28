@@ -76,6 +76,33 @@ final class PersonalDataFields
     public const MEETING_CONTACT_PHONE = 'meeting-contact-phone';
 
     /**
+     * Logical field name: GDPR acceptance flag
+     *
+     * Records whether the member has accepted the privacy policy.
+     */
+    public const GDPR_ACCEPTED = 'gdpr-accepted';
+
+    /**
+     * Logical field name: timestamp at which GDPR acceptance was recorded
+     */
+    public const GDPR_ACCEPTED_AT = 'gdpr-accepted-at';
+
+    /**
+     * Logical field name: privacy policy version that was accepted
+     */
+    public const GDPR_ACCEPTANCE_VERSION = 'gdpr-acceptance-version';
+
+    /**
+     * Logical field name: how acceptance was captured (e.g. "web-form", "api", "import")
+     */
+    public const GDPR_ACCEPTANCE_METHOD = 'gdpr-acceptance-method';
+
+    /**
+     * Logical field name: the exact statement the member accepted
+     */
+    public const GDPR_ACCEPTANCE_STATEMENT = 'gdpr-acceptance-statement';
+
+    /**
      * All personal data field names for members
      *
      * @var array<string>
@@ -108,6 +135,22 @@ final class PersonalDataFields
     ];
 
     /**
+     * All GDPR compliance field names for members.
+     *
+     * Tracked alongside the personal-data fields so that audit consumers
+     * can see when consent was recorded, revoked, or amended.
+     *
+     * @var array<string>
+     */
+    public const GDPR_FIELDS = [
+        self::GDPR_ACCEPTED,
+        self::GDPR_ACCEPTED_AT,
+        self::GDPR_ACCEPTANCE_VERSION,
+        self::GDPR_ACCEPTANCE_METHOD,
+        self::GDPR_ACCEPTANCE_STATEMENT,
+    ];
+
+    /**
      * Configuration keys that map to personal data logical field names.
      *
      * Each key corresponds to a constant name in the data provider's Fields class
@@ -116,8 +159,13 @@ final class PersonalDataFields
      * @var array<string, string>
      */
     public const CONFIG_KEY_MAP = [
-        'FIELD_PERSONAL_EMAIL' => self::PERSONAL_EMAIL,
-        'FIELD_MOBILE_NUMBER'  => self::MOBILE_NUMBER,
+        'FIELD_PERSONAL_EMAIL'             => self::PERSONAL_EMAIL,
+        'FIELD_MOBILE_NUMBER'              => self::MOBILE_NUMBER,
+        'FIELD_GDPR_ACCEPTED'              => self::GDPR_ACCEPTED,
+        'FIELD_GDPR_ACCEPTED_AT'           => self::GDPR_ACCEPTED_AT,
+        'FIELD_GDPR_ACCEPTANCE_VERSION'    => self::GDPR_ACCEPTANCE_VERSION,
+        'FIELD_GDPR_ACCEPTANCE_METHOD'     => self::GDPR_ACCEPTANCE_METHOD,
+        'FIELD_GDPR_ACCEPTANCE_STATEMENT'  => self::GDPR_ACCEPTANCE_STATEMENT,
     ];
 
     /**
@@ -129,8 +177,13 @@ final class PersonalDataFields
      * @var array<string, string>
      */
     public const CONFIG_ACF_KEY_MAP = [
-        'KEY_PERSONAL_EMAIL' => self::PERSONAL_EMAIL,
-        'KEY_MOBILE_NUMBER'  => self::MOBILE_NUMBER,
+        'KEY_PERSONAL_EMAIL'             => self::PERSONAL_EMAIL,
+        'KEY_MOBILE_NUMBER'              => self::MOBILE_NUMBER,
+        'KEY_GDPR_ACCEPTED'              => self::GDPR_ACCEPTED,
+        'KEY_GDPR_ACCEPTED_AT'           => self::GDPR_ACCEPTED_AT,
+        'KEY_GDPR_ACCEPTANCE_VERSION'    => self::GDPR_ACCEPTANCE_VERSION,
+        'KEY_GDPR_ACCEPTANCE_METHOD'     => self::GDPR_ACCEPTANCE_METHOD,
+        'KEY_GDPR_ACCEPTANCE_STATEMENT'  => self::GDPR_ACCEPTANCE_STATEMENT,
     ];
 
     /**
@@ -147,6 +200,11 @@ final class PersonalDataFields
         self::MEETING_CONTACT_NAME  => 'Meeting Contact Name',
         self::MEETING_CONTACT_EMAIL => 'Meeting Contact Email',
         self::MEETING_CONTACT_PHONE => 'Meeting Contact Phone',
+        self::GDPR_ACCEPTED              => 'GDPR Accepted',
+        self::GDPR_ACCEPTED_AT           => 'GDPR Accepted At',
+        self::GDPR_ACCEPTANCE_VERSION    => 'GDPR Policy Version',
+        self::GDPR_ACCEPTANCE_METHOD     => 'GDPR Acceptance Method',
+        self::GDPR_ACCEPTANCE_STATEMENT  => 'GDPR Acceptance Statement',
     ];
 
     /**

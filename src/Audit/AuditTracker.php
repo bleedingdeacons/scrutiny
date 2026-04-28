@@ -269,6 +269,78 @@ class AuditTracker
                 'Value changed'
             );
         }
+
+        $this->logGdprChanges($memberId, $originalMember, $updatedMember);
+    }
+
+    /**
+     * Log changes to GDPR compliance fields when a member is updated.
+     *
+     * The acceptance flag transitions get a more descriptive detail string
+     * (`Consent recorded` / `Consent revoked`) than the catch-all
+     * `Value changed`, since whether consent was given or withdrawn is
+     * the single most important fact in any GDPR audit. Other GDPR
+     * fields (timestamp, version, method, statement) fall back to the
+     * generic message — they're metadata about the consent record and
+     * an auditor will already have the entity_id + logged_at to
+     * correlate them with the corresponding accept/revoke entry.
+     *
+     * @param int    $memberId       The member post ID
+     * @param Member $originalMember The member before changes
+     * @param Member $updatedMember  The member after changes
+     * @return void
+     */
+    private function logGdprChanges(int $memberId, Member $originalMember, Member $updatedMember): void
+    {
+        if ($originalMember->isGdprAccepted() !== $updatedMember->isGdprAccepted()) {
+            $this->logger->log(
+                AuditLogger::ACTION_UPDATE,
+                AuditLogger::ENTITY_MEMBER,
+                $memberId,
+                PersonalDataFields::GDPR_ACCEPTED,
+                $updatedMember->isGdprAccepted() ? 'Consent recorded' : 'Consent revoked'
+            );
+        }
+
+        if ($originalMember->getGdprAcceptedAt() !== $updatedMember->getGdprAcceptedAt()) {
+            $this->logger->log(
+                AuditLogger::ACTION_UPDATE,
+                AuditLogger::ENTITY_MEMBER,
+                $memberId,
+                PersonalDataFields::GDPR_ACCEPTED_AT,
+                'Value changed'
+            );
+        }
+
+        if ($originalMember->getGdprAcceptanceVersion() !== $updatedMember->getGdprAcceptanceVersion()) {
+            $this->logger->log(
+                AuditLogger::ACTION_UPDATE,
+                AuditLogger::ENTITY_MEMBER,
+                $memberId,
+                PersonalDataFields::GDPR_ACCEPTANCE_VERSION,
+                'Value changed'
+            );
+        }
+
+        if ($originalMember->getGdprAcceptanceMethod() !== $updatedMember->getGdprAcceptanceMethod()) {
+            $this->logger->log(
+                AuditLogger::ACTION_UPDATE,
+                AuditLogger::ENTITY_MEMBER,
+                $memberId,
+                PersonalDataFields::GDPR_ACCEPTANCE_METHOD,
+                'Value changed'
+            );
+        }
+
+        if ($originalMember->getGdprAcceptanceStatement() !== $updatedMember->getGdprAcceptanceStatement()) {
+            $this->logger->log(
+                AuditLogger::ACTION_UPDATE,
+                AuditLogger::ENTITY_MEMBER,
+                $memberId,
+                PersonalDataFields::GDPR_ACCEPTANCE_STATEMENT,
+                'Value changed'
+            );
+        }
     }
 
     /**
@@ -422,7 +494,7 @@ class AuditTracker
             AuditLogger::ACTION_DELETE,
             AuditLogger::ENTITY_MEMBER,
             $postId,
-            PersonalDataFields::ALL_FIELDS,
+            array_merge(PersonalDataFields::ALL_FIELDS, PersonalDataFields::GDPR_FIELDS),
             'Member deleted'
         );
     }
