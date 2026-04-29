@@ -254,6 +254,21 @@ final class MemberFieldsObscurer
      */
     private function preserveAcfValue(mixed $value, mixed $postId, string $fieldName): mixed
     {
+        // Step out of the way for REST API writes. Trusted server-side
+        // callers (notably Integrity) reach update_field() via their own
+        // REST endpoints with their own permission system; the WordPress
+        // capability gate below assumes a request with a current user
+        // (admin form, acf_form()) and silently drops the value otherwise.
+        //
+        // This is safe for the personal-email and mobile-number fields
+        // because the Member ACF field group is registered with
+        // show_in_rest=0, so they are not exposed via core's
+        // /wp/v2/{post_type} endpoints — Gutenberg cannot reach them.
+        // Only programmatic REST callers (Integrity) hit this path.
+        if (defined('REST_REQUEST') && REST_REQUEST) {
+            return $value;
+        }
+
         $numericPostId = is_numeric($postId) ? (int) $postId : 0;
 
         // The Clear button submits a sentinel value rather than an empty
