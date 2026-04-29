@@ -302,45 +302,48 @@ class AuditTracker
             );
         }
 
-        if ($originalMember->getGdprAcceptedAt() !== $updatedMember->getGdprAcceptedAt()) {
-            $this->logger->log(
-                AuditLogger::ACTION_UPDATE,
-                AuditLogger::ENTITY_MEMBER,
-                $memberId,
-                PersonalDataFields::GDPR_ACCEPTED_AT,
-                'Value changed'
-            );
-        }
+        // We only log the change of acceptance as all fields are recorded against the member.
+        // Logging out anymore will only just spam the audit log.
 
-        if ($originalMember->getGdprAcceptanceVersion() !== $updatedMember->getGdprAcceptanceVersion()) {
-            $this->logger->log(
-                AuditLogger::ACTION_UPDATE,
-                AuditLogger::ENTITY_MEMBER,
-                $memberId,
-                PersonalDataFields::GDPR_ACCEPTANCE_VERSION,
-                'Value changed'
-            );
-        }
-
-        if ($originalMember->getGdprAcceptanceMethod() !== $updatedMember->getGdprAcceptanceMethod()) {
-            $this->logger->log(
-                AuditLogger::ACTION_UPDATE,
-                AuditLogger::ENTITY_MEMBER,
-                $memberId,
-                PersonalDataFields::GDPR_ACCEPTANCE_METHOD,
-                'Value changed'
-            );
-        }
-
-        if ($originalMember->getGdprAcceptanceStatement() !== $updatedMember->getGdprAcceptanceStatement()) {
-            $this->logger->log(
-                AuditLogger::ACTION_UPDATE,
-                AuditLogger::ENTITY_MEMBER,
-                $memberId,
-                PersonalDataFields::GDPR_ACCEPTANCE_STATEMENT,
-                'Value changed'
-            );
-        }
+//        if ($originalMember->getGdprAcceptedAt() !== $updatedMember->getGdprAcceptedAt()) {
+//            $this->logger->log(
+//                AuditLogger::ACTION_UPDATE,
+//                AuditLogger::ENTITY_MEMBER,
+//                $memberId,
+//                PersonalDataFields::GDPR_ACCEPTED_AT,
+//                'Value changed'
+//            );
+//        }
+//
+//        if ($originalMember->getGdprAcceptanceVersion() !== $updatedMember->getGdprAcceptanceVersion()) {
+//            $this->logger->log(
+//                AuditLogger::ACTION_UPDATE,
+//                AuditLogger::ENTITY_MEMBER,
+//                $memberId,
+//                PersonalDataFields::GDPR_ACCEPTANCE_VERSION,
+//                'Value changed'
+//            );
+//        }
+//
+//        if ($originalMember->getGdprAcceptanceMethod() !== $updatedMember->getGdprAcceptanceMethod()) {
+//            $this->logger->log(
+//                AuditLogger::ACTION_UPDATE,
+//                AuditLogger::ENTITY_MEMBER,
+//                $memberId,
+//                PersonalDataFields::GDPR_ACCEPTANCE_METHOD,
+//                'Value changed'
+//            );
+//        }
+//
+//        if ($originalMember->getGdprAcceptanceStatement() !== $updatedMember->getGdprAcceptanceStatement()) {
+//            $this->logger->log(
+//                AuditLogger::ACTION_UPDATE,
+//                AuditLogger::ENTITY_MEMBER,
+//                $memberId,
+//                PersonalDataFields::GDPR_ACCEPTANCE_STATEMENT,
+//                'Value changed'
+//            );
+//        }
     }
 
     /**
