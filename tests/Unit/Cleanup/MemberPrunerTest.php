@@ -8,6 +8,7 @@ use DateTimeImmutable;
 use PHPUnit\Framework\TestCase;
 use Scrutiny\Cleanup\MemberPruner;
 use Scrutiny\Cleanup\PruneResult;
+use Scrutiny\Cleanup\PrunerSettings;
 use Unity\Members\Interfaces\Member;
 use Unity\Members\Interfaces\MemberRepository;
 
@@ -484,6 +485,115 @@ class MemberPrunerTest extends TestCase
     }
 
     // ──────────────────────────────────────────────
+    //  Disabled flag
+    //
+    //  The pruner reads PrunerSettings::isEnabled() at the start of
+    //  prune() and short-circuits if the toggle is off. The check
+    //  lives on the service so every caller (admin button, WP-CLI,
+    //  cron) automatically respects the toggle without each one
+    //  having to remember to read the flag separately.
+    // ──────────────────────────────────────────────
+
+    /** @test */
+    public function it_short_circuits_when_settings_report_disabled(): void
+    {
+        // Set up a scenario where the officer pass would normally
+        // trash member 1. With settings reporting disabled, the
+        // pruner must return immediately without trashing anything.
+        $GLOBALS['scrutiny_test_options'] = [
+            PrunerSettings::OPTION_ENABLED => 0,
+        ];
+        $settings = new PrunerSettings();
+
+        $rotated   = $this->makeMember(id: 1, position: 100, rotation: '2024-01-01');
+        $successor = $this->makeMember(id: 2, position: 100, rotation: '2025-01-01');
+
+        $pruner = $this->makePruner([$rotated, $successor], settings: $settings);
+        $result = $pruner->prune(rotationGraceMonths: 3, inactivityMonths: 12);
+
+        $this->assertSame(0, $result->getTrashedCount());
+        $this->assertSame([], $pruner->getTrashedIds());
+
+        // Skipping for "disabled" is recorded explicitly so an admin
+        // looking at the result can tell "didn't run" apart from
+        // "ran and found nothing to do".
+        $skipReasons = array_column($result->getSkipped(), 'reason');
+        $this->assertContains(PruneResult::SKIP_DISABLED, $skipReasons);
+
+        // And neither pass even ran — the candidate counters stay at
+        // zero, proving the short-circuit happened before findAll()
+        // would have been called.
+        $this->assertSame(0, $result->getOfficersConsidered());
+        $this->assertSame(0, $result->getHomeGroupConsidered());
+    }
+
+    /** @test */
+    public function it_runs_normally_when_settings_report_enabled(): void
+    {
+        // The complement of the previous test: with the same
+        // scenario but the toggle on, the officer pass trashes
+        // member 1 as expected. Proves the short-circuit is
+        // conditional on the flag, not on the presence of settings.
+        $GLOBALS['scrutiny_test_options'] = [
+            PrunerSettings::OPTION_ENABLED => 1,
+        ];
+        $settings = new PrunerSettings();
+
+        $rotated   = $this->makeMember(id: 1, position: 100, rotation: '2024-01-01');
+        $successor = $this->makeMember(id: 2, position: 100, rotation: '2025-01-01');
+
+        $pruner = $this->makePruner([$rotated, $successor], settings: $settings);
+        $pruner->prune(rotationGraceMonths: 3, inactivityMonths: 12);
+
+        $this->assertSame([1], $pruner->getTrashedIds());
+    }
+
+    /** @test */
+    public function it_runs_normally_when_no_settings_object_is_supplied(): void
+    {
+        // Settings parameter is optional for backward compatibility
+        // with callers that don't have a settings instance to hand
+        // (and for tests that exercise the pruning logic in
+        // isolation). Null means "skip the toggle check entirely",
+        // not "treat as disabled" — otherwise the test suite would
+        // need a settings stub everywhere.
+        $rotated   = $this->makeMember(id: 1, position: 100, rotation: '2024-01-01');
+        $successor = $this->makeMember(id: 2, position: 100, rotation: '2025-01-01');
+
+        $pruner = $this->makePruner([$rotated, $successor]); // no settings
+        $pruner->prune(rotationGraceMonths: 3, inactivityMonths: 12);
+
+        $this->assertSame([1], $pruner->getTrashedIds());
+    }
+
+    /** @test */
+    public function disabled_flag_blocks_the_home_group_pass_too(): void
+    {
+        // The officer pass tests above prove the short-circuit
+        // covers pass 1. This test is a belt-and-braces check that
+        // it covers pass 2 as well — a member who would otherwise
+        // be trashed under the inactivity rule must also be left
+        // alone when the pruner is disabled.
+        $GLOBALS['scrutiny_test_options'] = [
+            PrunerSettings::OPTION_ENABLED => 0,
+        ];
+        $settings = new PrunerSettings();
+
+        $stale = $this->makeMember(
+            id: 5,
+            homeGroup: 50,
+            isGSR: false,
+            updated: '2020-01-01 00:00:00'
+        );
+
+        $pruner = $this->makePruner([$stale], settings: $settings);
+        $result = $pruner->prune(rotationGraceMonths: 3, inactivityMonths: 12);
+
+        $this->assertSame([], $pruner->getTrashedIds());
+        $this->assertSame(0, $result->getHomeGroupConsidered());
+    }
+
+    // ──────────────────────────────────────────────
     //  Test helpers
     // ──────────────────────────────────────────────
 
@@ -537,14 +647,18 @@ class MemberPrunerTest extends TestCase
     /**
      * @param array<Member> $members
      */
-    private function makePruner(array $members, bool $trashSucceeds = true): MemberPrunerForTest
-    {
+    private function makePruner(
+        array $members,
+        bool $trashSucceeds = true,
+        ?PrunerSettings $settings = null
+    ): MemberPrunerForTest {
         $repository = new InMemoryMemberRepository($members);
 
         return new MemberPrunerForTest(
             $repository,
             new DateTimeImmutable(self::NOW),
-            $trashSucceeds
+            $trashSucceeds,
+            $settings
         );
     }
 
@@ -630,9 +744,10 @@ final class MemberPrunerForTest extends MemberPruner
     public function __construct(
         MemberRepository $members,
         DateTimeImmutable $now,
-        private bool $trashSucceeds
+        private bool $trashSucceeds,
+        ?PrunerSettings $settings = null
     ) {
-        parent::__construct($members, $now);
+        parent::__construct($members, $now, $settings);
     }
 
     /** @return array<int> */

@@ -58,6 +58,7 @@ class MemberPruner
 
     private MemberRepository $members;
     private DateTimeImmutable $now;
+    private ?PrunerSettings $settings;
 
     /**
      * Trashing a member fires wp_trash_post, which Unity's
@@ -68,19 +69,36 @@ class MemberPruner
      * explicit AuditLogger call is needed here, and adding one would
      * double-log every action.
      *
-     * @param MemberRepository       $members  Unity member repository
-     * @param DateTimeImmutable|null $now      Override "now" for testing.
+     * @param MemberRepository       $members   Unity member repository
+     * @param DateTimeImmutable|null $now       Override "now" for testing.
+     * @param PrunerSettings|null    $settings  When provided, prune()
+     *                                          consults isEnabled() and
+     *                                          short-circuits if the
+     *                                          pruner is disabled. Pass
+     *                                          null in tests that want
+     *                                          to exercise the pruning
+     *                                          logic without the toggle.
      */
     public function __construct(
         MemberRepository $members,
-        ?DateTimeImmutable $now = null
+        ?DateTimeImmutable $now = null,
+        ?PrunerSettings $settings = null
     ) {
-        $this->members = $members;
-        $this->now     = $now ?? new DateTimeImmutable('now');
+        $this->members  = $members;
+        $this->now      = $now ?? new DateTimeImmutable('now');
+        $this->settings = $settings;
     }
 
     /**
      * Run both pruning passes.
+     *
+     * If a PrunerSettings instance was supplied at construction and
+     * the disabled flag is set, this method returns an empty result
+     * immediately without loading any members. The result records a
+     * single SKIP_DISABLED entry so callers can distinguish "ran but
+     * found nothing to do" from "didn't run because the toggle is
+     * off" — important for an admin "Run pruner now" button that
+     * needs to surface why nothing happened.
      *
      * Both grace values are integers in months. A value of 0 is allowed
      * (anything past the threshold qualifies); negative values are
@@ -95,6 +113,20 @@ class MemberPruner
      */
     public function prune(int $rotationGraceMonths, int $inactivityMonths): PruneResult
     {
+        // Short-circuit before anything destructive: if the toggle
+        // is off, no member list is loaded, no comparisons are run,
+        // no wp_trash_post calls are made. This is the safety
+        // boundary the user opted into by leaving the pruner
+        // disabled (which is the default on a fresh install).
+        if ($this->settings !== null && !$this->settings->isEnabled()) {
+            $result = new PruneResult();
+            $result->recordSkipped(0, PruneResult::SKIP_DISABLED, 'pruner disabled in settings');
+
+            self::logInfo('Member prune skipped: pruner is disabled in settings');
+
+            return $result;
+        }
+
         $rotationGraceMonths = max(0, $rotationGraceMonths);
         $inactivityMonths    = max(0, $inactivityMonths);
 

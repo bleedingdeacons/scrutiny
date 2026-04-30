@@ -117,8 +117,15 @@ class MemberPrunerAdmin
         $rotation = $this->readMonthsField('rotation_grace_months');
         $inactivity = $this->readMonthsField('inactivity_months');
 
+        // An unchecked HTML checkbox is not posted at all, so a missing
+        // field means "disabled". This is intentional: the only way to
+        // enable the pruner is to deliberately tick the box and save.
+        // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- nonce verified above
+        $enabled = !empty($_POST['enabled']);
+
         $this->settings->setRotationGraceMonths($rotation);
         $this->settings->setInactivityMonths($inactivity);
+        $this->settings->setEnabled($enabled);
 
         // Post/redirect/get so refreshing the page doesn't re-submit.
         // Submenu pages registered via add_submenu_page are served
@@ -148,6 +155,7 @@ class MemberPrunerAdmin
 
         $rotation   = $this->settings->getRotationGraceMonths();
         $inactivity = $this->settings->getInactivityMonths();
+        $enabled    = $this->settings->isEnabled();
 
         // phpcs:ignore WordPress.Security.NonceVerification.Recommended
         $justUpdated = isset($_GET['updated']) && $_GET['updated'] === '1';
@@ -171,11 +179,61 @@ class MemberPrunerAdmin
                 </div>
             <?php endif; ?>
 
+            <?php
+            // Status banner — gives an at-a-glance answer to "is the
+            // pruner about to do something?" without the admin having
+            // to scan the checkbox state. Uses neutral info / warning
+            // styling rather than success / error because both states
+            // are legitimate; the colour just signals which one is
+            // active.
+            ?>
+            <?php if ($enabled) : ?>
+                <div class="notice notice-warning inline">
+                    <p>
+                        <strong>The pruner is currently enabled.</strong>
+                        Scheduled runs and admin "Run pruner now" actions will
+                        trash members that match the rules below.
+                    </p>
+                </div>
+            <?php else : ?>
+                <div class="notice notice-info inline">
+                    <p>
+                        <strong>The pruner is currently disabled.</strong>
+                        No members will be trashed regardless of the threshold
+                        values below. Tick the box and save to enable.
+                    </p>
+                </div>
+            <?php endif; ?>
+
             <form method="post" action="">
                 <?php wp_nonce_field(self::NONCE_ACTION, self::NONCE_FIELD); ?>
 
                 <table class="form-table" role="presentation">
                     <tbody>
+                        <tr>
+                            <th scope="row">
+                                Pruner status
+                            </th>
+                            <td>
+                                <label for="scrutiny-pruner-enabled">
+                                    <input
+                                        type="checkbox"
+                                        id="scrutiny-pruner-enabled"
+                                        name="enabled"
+                                        value="1"
+                                        <?php echo $enabled ? 'checked' : ''; ?>
+                                    >
+                                    Enable the member pruner
+                                </label>
+                                <p class="description">
+                                    When unchecked, <code>MemberPruner::prune()</code> short-circuits
+                                    immediately without loading members or trashing anything,
+                                    regardless of the thresholds below or how the pruner is invoked.
+                                    Disabled by default — tick to opt in to scheduled or on-demand
+                                    pruning.
+                                </p>
+                            </td>
+                        </tr>
                         <tr>
                             <th scope="row">
                                 <label for="scrutiny-rotation-grace-months">

@@ -45,6 +45,17 @@ final class PrunerSettings
     public const OPTION_INACTIVITY_MONTHS = 'scrutiny_prune_inactivity_months';
 
     /**
+     * Option key for the pruner enabled flag.
+     *
+     * When false (the default on a fresh install), MemberPruner::prune()
+     * short-circuits with an empty result. The check lives on the service
+     * itself so every caller — admin button, WP-CLI command, cron job —
+     * automatically respects the toggle without each one having to
+     * remember to read this flag separately.
+     */
+    public const OPTION_ENABLED = 'scrutiny_prune_enabled';
+
+    /**
      * Default rotation grace period — three months after a rotation
      * date passes is enough time for a successor to be elected and
      * recorded without leaving stale officers indefinitely.
@@ -57,6 +68,16 @@ final class PrunerSettings
      * purge cadence already in Scrutiny.
      */
     public const DEFAULT_INACTIVITY_MONTHS = 12;
+
+    /**
+     * Default state on a fresh install — disabled.
+     *
+     * The pruner trashes member records, which is destructive (even
+     * if recoverable from the WordPress trash). Requiring an explicit
+     * opt-in means an admin who installs Scrutiny without reading the
+     * docs cannot have member data removed by an accidental cron run.
+     */
+    public const DEFAULT_ENABLED = false;
 
     public function getRotationGraceMonths(): int
     {
@@ -91,5 +112,32 @@ final class PrunerSettings
     public function setInactivityMonths(int $months): void
     {
         update_option(self::OPTION_INACTIVITY_MONTHS, max(0, $months));
+    }
+
+    /**
+     * Whether the pruner is currently enabled.
+     *
+     * Stored as a boolean cast from whatever WordPress hands back —
+     * the Settings API tends to round-trip checkboxes as the strings
+     * '1' / '' or the integers 1 / 0, so an explicit (bool) cast
+     * normalises all of them.
+     */
+    public function isEnabled(): bool
+    {
+        $stored = get_option(self::OPTION_ENABLED, self::DEFAULT_ENABLED);
+
+        return (bool) $stored;
+    }
+
+    /**
+     * Persist the enabled flag.
+     *
+     * Stored as a 1/0 integer rather than a PHP bool because WordPress
+     * historically serialises booleans inconsistently across versions
+     * and option backends; an integer round-trips cleanly everywhere.
+     */
+    public function setEnabled(bool $enabled): void
+    {
+        update_option(self::OPTION_ENABLED, $enabled ? 1 : 0);
     }
 }

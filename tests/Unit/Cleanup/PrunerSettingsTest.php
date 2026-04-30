@@ -139,4 +139,83 @@ class PrunerSettingsTest extends TestCase
         $this->assertSame(0, $settings->getRotationGraceMonths());
         $this->assertSame(0, $settings->getInactivityMonths());
     }
+
+    // ──────────────────────────────────────────────
+    //  Enabled flag
+    // ──────────────────────────────────────────────
+
+    /** @test */
+    public function pruner_is_disabled_by_default(): void
+    {
+        // The pruner is destructive (even if recoverable from trash),
+        // so a fresh install must default to disabled. This test
+        // would fail loudly if anyone ever flipped DEFAULT_ENABLED
+        // to true — that change deserves to be caught at code review.
+        $settings = new PrunerSettings();
+
+        $this->assertFalse($settings->isEnabled());
+        $this->assertFalse(PrunerSettings::DEFAULT_ENABLED);
+    }
+
+    /** @test */
+    public function setEnabled_round_trips_true(): void
+    {
+        $settings = new PrunerSettings();
+
+        $settings->setEnabled(true);
+
+        $this->assertTrue($settings->isEnabled());
+    }
+
+    /** @test */
+    public function setEnabled_round_trips_false(): void
+    {
+        // Enable then disable — proves the off-state isn't just the
+        // default fallback being hit.
+        $settings = new PrunerSettings();
+
+        $settings->setEnabled(true);
+        $settings->setEnabled(false);
+
+        $this->assertFalse($settings->isEnabled());
+    }
+
+    /** @test */
+    public function isEnabled_coerces_string_truthy_values(): void
+    {
+        // The Settings API and various WP option backends serialise
+        // checkbox state inconsistently — '1', 1, true, 'on' have
+        // all been seen. Anything truthy must read back as enabled
+        // so a hand-edited wp_options row still works.
+        foreach (['1', 1, true, 'on'] as $truthy) {
+            $GLOBALS['scrutiny_test_options'] = [
+                PrunerSettings::OPTION_ENABLED => $truthy,
+            ];
+
+            $settings = new PrunerSettings();
+            $this->assertTrue(
+                $settings->isEnabled(),
+                'Expected enabled=true for stored value: ' . var_export($truthy, true)
+            );
+        }
+    }
+
+    /** @test */
+    public function isEnabled_coerces_string_falsy_values(): void
+    {
+        // The complement of the above: anything PHP treats as falsy
+        // (empty string, '0', integer 0, false) must read back as
+        // disabled.
+        foreach (['', '0', 0, false] as $falsy) {
+            $GLOBALS['scrutiny_test_options'] = [
+                PrunerSettings::OPTION_ENABLED => $falsy,
+            ];
+
+            $settings = new PrunerSettings();
+            $this->assertFalse(
+                $settings->isEnabled(),
+                'Expected enabled=false for stored value: ' . var_export($falsy, true)
+            );
+        }
+    }
 }

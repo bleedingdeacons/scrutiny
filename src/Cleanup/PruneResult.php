@@ -29,6 +29,14 @@ final class PruneResult
     public const SKIP_HOME_GROUP_INVALID_UPDATED   = 'home_group_invalid_updated';
     public const SKIP_TRASH_FAILED                 = 'trash_failed';
 
+    /**
+     * Recorded when the entire prune run is short-circuited because
+     * the pruner is disabled in settings. Distinct from per-member
+     * skip reasons so callers (admin pages, log readers) can spot
+     * the toggle was off without scanning every entry.
+     */
+    public const SKIP_DISABLED                     = 'pruner_disabled';
+
     /** @var array<int, array{member_id:int, reason:string, detail:string}> */
     private array $trashed = [];
 

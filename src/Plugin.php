@@ -204,21 +204,26 @@ class Plugin
             );
         });
 
-        // Member Pruner — trashes rotated officers and inactive
-        // home-group non-GSRs. Hook-free; invoked deliberately by an
-        // admin action, WP-CLI command, or scheduled job.
-        $container->register(MemberPruner::class, function (ContainerInterface $c) {
-            return new MemberPruner(
-                $c->get(MemberRepository::class)
-            );
-        });
-
         // Pruner Settings — single source of truth for the two
-        // thresholds the pruner reads. Stateless wrapper around
-        // get_option / update_option, so a fresh instance per
-        // resolution is fine.
+        // thresholds the pruner reads, and the enabled flag.
+        // Stateless wrapper around get_option / update_option, so
+        // a fresh instance per resolution is fine.
         $container->register(PrunerSettings::class, function () {
             return new PrunerSettings();
+        });
+
+        // Member Pruner — trashes rotated officers and inactive
+        // home-group non-GSRs. Hook-free; invoked deliberately by an
+        // admin action, WP-CLI command, or scheduled job. Receives
+        // PrunerSettings so prune() can short-circuit when the
+        // pruner is disabled in settings — the safety boundary lives
+        // on the service itself, not on individual callers.
+        $container->register(MemberPruner::class, function (ContainerInterface $c) {
+            return new MemberPruner(
+                $c->get(MemberRepository::class),
+                null,
+                $c->get(PrunerSettings::class)
+            );
         });
 
         // Pruner Settings admin page — registers its own admin_menu
