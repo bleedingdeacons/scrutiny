@@ -11,12 +11,15 @@ if (!defined('ABSPATH')) {
 
 use RuntimeException;
 use Scrutiny\Admin\AuditLogAdmin;
+use Scrutiny\Admin\MemberPrunerAdmin;
 use Scrutiny\Admin\Members\PersonalDataMinder;
 use Scrutiny\Audit\GdprAuditLogger;
 use Scrutiny\Audit\GdprAuditRepository;
 use Scrutiny\Audit\AuditTracker;
 use Scrutiny\Audit\Interfaces\AuditLogger;
 use Scrutiny\Audit\Interfaces\AuditRepository;
+use Scrutiny\Cleanup\MemberPruner;
+use Scrutiny\Cleanup\PrunerSettings;
 use Scrutiny\Privacy\GroupFieldsObscurer;
 use Scrutiny\Privacy\MemberFieldsObscurer;
 use Scrutiny\Privacy\PersonalDataPolicy;
@@ -24,6 +27,7 @@ use Psr\Container\ContainerInterface;
 use Unity\Core\Interfaces\Container;
 use Unity\Core\Interfaces\Configuration;
 use Unity\Members\Interfaces\MemberChangeTracker;
+use Unity\Members\Interfaces\MemberRepository;
 use Unity\Groups\Interfaces\GroupChangeTracker;
 use Unity\Positions\Interfaces\PositionChangeTracker;
 use function add_action;
@@ -44,6 +48,13 @@ use function is_admin;
  *                           (contact_1_name … contact_3_phone) on the meeting and group
  *                           edit screens
  *   AuditLogAdmin         – read-only admin page for viewing the audit trail
+ *   MemberPruner          – trashes rotated officers and inactive home-group
+ *                           non-GSRs; invoked deliberately, never on every load
+ *   PrunerSettings        – wraps wp_options storage of the two pruner thresholds
+ *                           (rotation grace, inactivity months); single source of
+ *                           truth for both the pruner and its admin page
+ *   MemberPrunerAdmin     – settings page for the pruner thresholds, under the
+ *                           Intergroup menu (does not run the pruner itself)
  *
  * Capabilities:
  *   scrutiny_view_personal_data – grants a user the right to see unmasked values
@@ -107,6 +118,7 @@ class Plugin
         if (is_admin()) {
             self::$container->get(AuditLogAdmin::class);
             self::$container->get(PersonalDataMinder::class);
+            self::$container->get(MemberPrunerAdmin::class);
         }
 
         self::logDebug('Initialised', ['version' => defined('SCRUTINY_VERSION') ? SCRUTINY_VERSION : 'unknown']);
@@ -174,6 +186,32 @@ class Plugin
         $container->register(PersonalDataMinder::class, function (ContainerInterface $c) {
             return new PersonalDataMinder(
                 $c->get(Configuration::class)
+            );
+        });
+
+        // Member Pruner — trashes rotated officers and inactive
+        // home-group non-GSRs. Hook-free; invoked deliberately by an
+        // admin action, WP-CLI command, or scheduled job.
+        $container->register(MemberPruner::class, function (ContainerInterface $c) {
+            return new MemberPruner(
+                $c->get(MemberRepository::class)
+            );
+        });
+
+        // Pruner Settings — single source of truth for the two
+        // thresholds the pruner reads. Stateless wrapper around
+        // get_option / update_option, so a fresh instance per
+        // resolution is fine.
+        $container->register(PrunerSettings::class, function () {
+            return new PrunerSettings();
+        });
+
+        // Pruner Settings admin page — registers its own admin_menu
+        // and admin_init hooks in the constructor, so resolving the
+        // service is what wires it up.
+        $container->register(MemberPrunerAdmin::class, function (ContainerInterface $c) {
+            return new MemberPrunerAdmin(
+                $c->get(PrunerSettings::class)
             );
         });
     }
