@@ -35,6 +35,7 @@ use function is_admin;
  * Listens to:
  *   - current_screen             (fired when admin screen loads - used for admin form view tracking)
  *   - acf/load_value             (fired when ACF loads a field value - used for frontend view tracking)
+ *   - unity/member_created       (fired by MemberRepository when a member is inserted)
  *   - unity/member_changing      (fired by MemberChangeTracker when member fields change)
  *   - unity/member_deleted       (fired by MemberChangeTracker when a member is trashed or deleted)
  *   - unity/group_changing       (fired by GroupChangeTracker when group fields change)
@@ -90,6 +91,9 @@ class AuditTracker
 
         // Log when personal data fields are accessed via ACF on frontend
         add_filter('acf/load_value', [$this, 'onPersonalDataFieldLoaded'], 10, 3);
+
+        // Log personal data creation when a member is inserted
+        add_action('unity/member_created', [$this, 'onMemberCreated'], 10, 1);
 
         // Log personal data changes when a member is updated
         add_action('unity/member_changing', [$this, 'onMemberChanged'], 10, 2);
@@ -234,6 +238,29 @@ class AuditTracker
         );
 
         return $value;
+    }
+
+    /**
+     * Log personal data creation when a member is inserted
+     *
+     * Triggered by the unity/member_created hook fired from MemberRepository
+     * when a new member is persisted. A single batch entry is recorded
+     * covering every personal-data and GDPR field, mirroring the shape of
+     * the deletion log so that an auditor can pair create/delete events
+     * for any given member.
+     *
+     * @param Member $member The freshly created member
+     * @return void
+     */
+    public function onMemberCreated(Member $member): void
+    {
+        $this->logger->logBatch(
+            AuditLogger::ACTION_CREATE,
+            AuditLogger::ENTITY_MEMBER,
+            $member->getId(),
+            array_merge(PersonalDataFields::ALL_FIELDS, PersonalDataFields::GDPR_FIELDS),
+            'Member created'
+        );
     }
 
     /**

@@ -334,4 +334,127 @@ class AuditTrackerTest extends TestCase
 
         $tracker->onMemberChanged($updated, $original);
     }
+
+    // ─── Member creation ───────────────────────────────────────────────
+
+    /** @test */
+    public function it_logs_a_batch_create_entry_when_a_member_is_created(): void
+    {
+        $logger = Mockery::mock(AuditLogger::class);
+        $logger->shouldReceive('logBatch')
+            ->once()
+            ->with(
+                AuditLogger::ACTION_CREATE,
+                AuditLogger::ENTITY_MEMBER,
+                42,
+                array_merge(PersonalDataFields::ALL_FIELDS, PersonalDataFields::GDPR_FIELDS),
+                'Member created'
+            );
+
+        $tracker = $this->createTracker($logger);
+
+        $tracker->onMemberCreated($this->createMember());
+    }
+
+    /** @test */
+    public function it_uses_the_members_own_id_when_logging_a_creation(): void
+    {
+        $logger = Mockery::mock(AuditLogger::class);
+        $logger->shouldReceive('logBatch')
+            ->once()
+            ->with(
+                AuditLogger::ACTION_CREATE,
+                AuditLogger::ENTITY_MEMBER,
+                999,
+                Mockery::type('array'),
+                'Member created'
+            );
+
+        $tracker = $this->createTracker($logger);
+
+        $tracker->onMemberCreated($this->createMember(['getId' => 999]));
+    }
+
+    /** @test */
+    public function it_does_not_emit_per_field_log_calls_when_a_member_is_created(): void
+    {
+        $logger = Mockery::mock(AuditLogger::class);
+        $logger->shouldReceive('logBatch')->once();
+        $logger->shouldNotReceive('log');
+
+        $tracker = $this->createTracker($logger);
+
+        $tracker->onMemberCreated($this->createMember());
+    }
+
+    // ─── Member deletion ───────────────────────────────────────────────
+
+    /** @test */
+    public function it_logs_a_batch_delete_entry_when_a_member_is_deleted(): void
+    {
+        $logger = Mockery::mock(AuditLogger::class);
+        $logger->shouldReceive('logBatch')
+            ->once()
+            ->with(
+                AuditLogger::ACTION_DELETE,
+                AuditLogger::ENTITY_MEMBER,
+                42,
+                array_merge(PersonalDataFields::ALL_FIELDS, PersonalDataFields::GDPR_FIELDS),
+                'Member deleted'
+            );
+
+        $tracker = $this->createTracker($logger);
+
+        $tracker->onMemberDeleted(42, $this->createMember());
+    }
+
+    /** @test */
+    public function it_logs_member_deletion_even_when_the_member_object_is_null(): void
+    {
+        $logger = Mockery::mock(AuditLogger::class);
+        $logger->shouldReceive('logBatch')
+            ->once()
+            ->with(
+                AuditLogger::ACTION_DELETE,
+                AuditLogger::ENTITY_MEMBER,
+                42,
+                array_merge(PersonalDataFields::ALL_FIELDS, PersonalDataFields::GDPR_FIELDS),
+                'Member deleted'
+            );
+
+        $tracker = $this->createTracker($logger);
+
+        $tracker->onMemberDeleted(42, null);
+    }
+
+    /** @test */
+    public function it_uses_the_supplied_post_id_when_logging_a_deletion(): void
+    {
+        $logger = Mockery::mock(AuditLogger::class);
+        $logger->shouldReceive('logBatch')
+            ->once()
+            ->with(
+                AuditLogger::ACTION_DELETE,
+                AuditLogger::ENTITY_MEMBER,
+                7777,
+                Mockery::type('array'),
+                'Member deleted'
+            );
+
+        $tracker = $this->createTracker($logger);
+
+        $tracker->onMemberDeleted(7777, null);
+    }
+
+    /** @test */
+    public function it_does_not_emit_per_field_log_calls_when_a_member_is_deleted(): void
+    {
+        $logger = Mockery::mock(AuditLogger::class);
+        $logger->shouldReceive('logBatch')->once();
+        $logger->shouldNotReceive('log');
+
+        $tracker = $this->createTracker($logger);
+
+        $tracker->onMemberDeleted(42, $this->createMember());
+    }
 }
