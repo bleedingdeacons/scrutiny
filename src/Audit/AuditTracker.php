@@ -244,21 +244,21 @@ class AuditTracker
      * Log personal data creation when a member is inserted
      *
      * Triggered by the unity/member_created hook fired from MemberRepository
-     * when a new member is persisted. A single batch entry is recorded
-     * covering every personal-data and GDPR field, mirroring the shape of
-     * the deletion log so that an auditor can pair create/delete events
-     * for any given member.
+     * when a new member is persisted. A single entry is recorded against the
+     * sentinel "all fields" field name — at creation time every personal-data
+     * field is, by definition, being written, so per-field rows would just
+     * spam the audit log with no extra information.
      *
      * @param Member $member The freshly created member
      * @return void
      */
     public function onMemberCreated(Member $member): void
     {
-        $this->logger->logBatch(
+        $this->logger->log(
             AuditLogger::ACTION_CREATE,
             AuditLogger::ENTITY_MEMBER,
             $member->getId(),
-            array_merge(PersonalDataFields::ALL_FIELDS, PersonalDataFields::GDPR_FIELDS),
+            PersonalDataFields::ALL_FIELDS_SENTINEL,
             'Member created'
         );
     }

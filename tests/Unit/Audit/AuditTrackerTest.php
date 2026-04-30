@@ -338,18 +338,19 @@ class AuditTrackerTest extends TestCase
     // ─── Member creation ───────────────────────────────────────────────
 
     /** @test */
-    public function it_logs_a_batch_create_entry_when_a_member_is_created(): void
+    public function it_logs_a_single_create_entry_when_a_member_is_created(): void
     {
         $logger = Mockery::mock(AuditLogger::class);
-        $logger->shouldReceive('logBatch')
+        $logger->shouldReceive('log')
             ->once()
             ->with(
                 AuditLogger::ACTION_CREATE,
                 AuditLogger::ENTITY_MEMBER,
                 42,
-                array_merge(PersonalDataFields::ALL_FIELDS, PersonalDataFields::GDPR_FIELDS),
+                PersonalDataFields::ALL_FIELDS_SENTINEL,
                 'Member created'
             );
+        $logger->shouldNotReceive('logBatch');
 
         $tracker = $this->createTracker($logger);
 
@@ -360,13 +361,13 @@ class AuditTrackerTest extends TestCase
     public function it_uses_the_members_own_id_when_logging_a_creation(): void
     {
         $logger = Mockery::mock(AuditLogger::class);
-        $logger->shouldReceive('logBatch')
+        $logger->shouldReceive('log')
             ->once()
             ->with(
                 AuditLogger::ACTION_CREATE,
                 AuditLogger::ENTITY_MEMBER,
                 999,
-                Mockery::type('array'),
+                PersonalDataFields::ALL_FIELDS_SENTINEL,
                 'Member created'
             );
 
@@ -379,8 +380,8 @@ class AuditTrackerTest extends TestCase
     public function it_does_not_emit_per_field_log_calls_when_a_member_is_created(): void
     {
         $logger = Mockery::mock(AuditLogger::class);
-        $logger->shouldReceive('logBatch')->once();
-        $logger->shouldNotReceive('log');
+        $logger->shouldReceive('log')->once();
+        $logger->shouldNotReceive('logBatch');
 
         $tracker = $this->createTracker($logger);
 

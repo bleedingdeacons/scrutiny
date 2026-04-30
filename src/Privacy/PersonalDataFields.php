@@ -46,6 +46,16 @@ final class PersonalDataFields
     public const MOBILE_NUMBER = 'mobile-number';
 
     /**
+     * Sentinel field name used when an audit entry refers to the entire
+     * record rather than a single field — for example, the one-shot
+     * "Member created" entry written when a new member is inserted.
+     *
+     * Stored in the `field_name` column so the admin filter and label
+     * lookup keep working without special-casing empty strings.
+     */
+    public const ALL_FIELDS_SENTINEL = 'all-fields';
+
+    /**
      * Logical field name: group contact name
      */
     public const GROUP_CONTACT_NAME = 'group-contact-name';
@@ -194,6 +204,7 @@ final class PersonalDataFields
     public const LABELS = [
         self::PERSONAL_EMAIL => 'Personal Email',
         self::MOBILE_NUMBER  => 'Mobile Number',
+        self::ALL_FIELDS_SENTINEL => 'All fields',
         self::GROUP_CONTACT_NAME   => 'Group Contact Name',
         self::GROUP_CONTACT_EMAIL  => 'Group Contact Email',
         self::GROUP_CONTACT_PHONE  => 'Group Contact Phone',
