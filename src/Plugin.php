@@ -13,6 +13,7 @@ use RuntimeException;
 use Scrutiny\Admin\AuditLogAdmin;
 use Scrutiny\Admin\MemberPrunerAdmin;
 use Scrutiny\Admin\Members\PersonalDataMinder;
+use Scrutiny\Admin\ScrutinyMenu;
 use Scrutiny\Audit\GdprAuditLogger;
 use Scrutiny\Audit\GdprAuditRepository;
 use Scrutiny\Audit\AuditTracker;
@@ -48,13 +49,16 @@ use function is_admin;
  *                           (contact_1_name … contact_3_phone) on the meeting and group
  *                           edit screens
  *   AuditLogAdmin         – read-only admin page for viewing the audit trail
+ *                           (lives under the Intergroup menu — operational tool)
+ *   ScrutinyMenu          – registers the top-level "Scrutiny" admin menu
+ *                           used as parent for all Scrutiny configuration pages
  *   MemberPruner          – trashes rotated officers and inactive home-group
  *                           non-GSRs; invoked deliberately, never on every load
  *   PrunerSettings        – wraps wp_options storage of the two pruner thresholds
  *                           (rotation grace, inactivity months); single source of
  *                           truth for both the pruner and its admin page
  *   MemberPrunerAdmin     – settings page for the pruner thresholds, under the
- *                           Intergroup menu (does not run the pruner itself)
+ *                           top-level Scrutiny menu (does not run the pruner itself)
  *
  * Capabilities:
  *   scrutiny_view_personal_data – grants a user the right to see unmasked values
@@ -116,6 +120,17 @@ class Plugin
 
         // Initialise admin page when in the dashboard
         if (is_admin()) {
+            // Register the top-level Scrutiny menu first. The menu
+            // class is hook-only and stateless, so we wire its
+            // static callbacks directly rather than going through
+            // the container. Priority 10 (default) so the parent
+            // menu exists before page classes register their
+            // submenus on priority 20; priority 999 for the
+            // remove-default-submenu cleanup so it runs after every
+            // submenu registration.
+            add_action('admin_menu', [ScrutinyMenu::class, 'registerMenu'], 10);
+            add_action('admin_menu', [ScrutinyMenu::class, 'removeDefaultSubmenu'], 999);
+
             self::$container->get(AuditLogAdmin::class);
             self::$container->get(PersonalDataMinder::class);
             self::$container->get(MemberPrunerAdmin::class);

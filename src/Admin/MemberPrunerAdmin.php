@@ -26,8 +26,8 @@ use function wp_unslash;
 /**
  * Member Pruner Settings Page
  *
- * Provides an admin page under the Intergroup menu for configuring
- * the two thresholds that drive Scrutiny\Cleanup\MemberPruner:
+ * Provides an admin page under the top-level Scrutiny menu for
+ * configuring the two thresholds that drive Scrutiny\Cleanup\MemberPruner:
  *
  *   - Rotation grace months — how long after an officer's rotation
  *     date they remain protected from the officer pass.
@@ -39,10 +39,14 @@ use function wp_unslash;
  * deliberate clicks. Sweep triggering belongs in a future "Run
  * pruner" button that reads these values via PrunerSettings.
  *
- * Mirrors the AuditLogAdmin conventions in Scrutiny: parent menu
- * 'intergroup', manage_options capability, admin_menu priority 20,
- * form handling on admin_init so a successful save can wp_safe_redirect
- * (post/redirect/get) before any output is sent.
+ * Lives under the Scrutiny top-level menu (registered by
+ * ScrutinyMenu) so all Scrutiny configuration sits in one place
+ * separate from the Intergroup operational pages. The Audit Log
+ * page deliberately stays under Intergroup because it's a working
+ * tool, not a configuration screen.
+ *
+ * Form handling runs on admin_init so a successful save can
+ * wp_safe_redirect (post/redirect/get) before any output is sent.
  */
 class MemberPrunerAdmin
 {
@@ -70,12 +74,16 @@ class MemberPrunerAdmin
     }
 
     /**
-     * Register the Pruner Settings submenu page under the Intergroup menu.
+     * Register the Pruner Settings page as a submenu of the
+     * top-level Scrutiny menu.
+     *
+     * The parent slug comes from ScrutinyMenu::MENU_SLUG so renaming
+     * the top-level menu later is a one-line change in one file.
      */
     public function registerMenu(): void
     {
         add_submenu_page(
-            'intergroup',
+            ScrutinyMenu::MENU_SLUG,
             'Pruner Settings',
             'Pruner Settings',
             self::CAPABILITY,
@@ -113,6 +121,9 @@ class MemberPrunerAdmin
         $this->settings->setInactivityMonths($inactivity);
 
         // Post/redirect/get so refreshing the page doesn't re-submit.
+        // Submenu pages registered via add_submenu_page are served
+        // through admin.php with ?page=<slug>, so that's the
+        // redirect target.
         $redirectUrl = add_query_arg(
             [
                 'page'    => self::MENU_SLUG,
