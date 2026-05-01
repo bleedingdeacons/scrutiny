@@ -21,7 +21,7 @@ use function wp_trash_post;
  * Member Pruner
  *
  * Trashes (recoverable, via wp_trash_post) intergroup members who are no
- * longer current. Two independent passes:
+ * longer current. Three independent passes:
  *
  *   1. Officer pass — members with an intergroup position whose rotation
  *      date is older than the configured grace period. If two members
@@ -34,9 +34,14 @@ use function wp_trash_post;
  *      intergroup (i.e. their underlying post hasn't been updated) for
  *      the configured inactivity period.
  *
- * A member who is prunable under the officer rule is *not* re-evaluated
- * under the home-group rule, so a single member is acted on at most once
- * per run.
+ *   3. Orphan pass — members with neither an intergroup position nor a
+ *      home group, who haven't been touched for the same inactivity
+ *      period as pass 2. Catches stale registrations that were never
+ *      tied to either an officer role or a home group.
+ *
+ * A member who is prunable under an earlier rule is *not* re-evaluated
+ * under a later one, so a single member is acted on at most once per
+ * run.
  *
  * The pruner only calls wp_trash_post (a soft delete). Permanent
  * deletion remains a manual administrator action via the WordPress UI.
@@ -141,19 +146,95 @@ class MemberPruner
         $rotationCutoff   = $this->now->modify('-' . $rotationGraceMonths . ' months');
         $inactivityCutoff = $this->now->modify('-' . $inactivityMonths . ' months');
 
+        // Trashed IDs are accumulated across passes so each later
+        // pass can skip members already acted on. Built as an
+        // associative array (id => true) for O(1) isset() lookups
+        // when the member list is large.
         $trashedIds = $this->pruneOfficers($allMembers, $rotationCutoff, $result);
-        $this->pruneHomeGroupNonGsrs($allMembers, $inactivityCutoff, $trashedIds, $result);
+        $trashedIds = $this->pruneHomeGroupNonGsrs($allMembers, $inactivityCutoff, $trashedIds, $result);
+        $this->pruneOrphans($allMembers, $inactivityCutoff, $trashedIds, $result);
 
-        self::logInfo('Member prune complete', [
-            'trashed'                => $result->getTrashedCount(),
-            'skipped'                => $result->getSkippedCount(),
-            'officers_considered'    => $result->getOfficersConsidered(),
-            'home_group_considered'  => $result->getHomeGroupConsidered(),
-            'rotation_grace_months'  => $rotationGraceMonths,
-            'inactivity_months'      => $inactivityMonths,
-        ]);
+        $this->logResult($result, $rotationGraceMonths, $inactivityMonths);
 
         return $result;
+    }
+
+    /**
+     * Write the result of a prune run to the wp_log channel.
+     *
+     * Tiered so the volume scales with how interesting each entry is:
+     *
+     *   - Each trashed member is logged at INFO with the member ID,
+     *     the reason it was trashed (officer-rotated / home-group-
+     *     inactive / orphan-inactive), and the detail string the
+     *     pruner already records on the result. Trashing is
+     *     destructive (even if recoverable), so every action gets
+     *     its own log entry that can be correlated with the
+     *     unity/member_deleted event Scrutiny's AuditTracker
+     *     records separately.
+     *
+     *   - Each SKIP_TRASH_FAILED skip is logged at WARNING — these
+     *     mean wp_trash_post returned falsy when we expected
+     *     success, which is genuinely abnormal and worth
+     *     surfacing in monitoring filters that key on log level.
+     *
+     *   - Routine "skipped because not yet due / still recent /
+     *     invalid date" entries are NOT logged individually. They
+     *     can run into the thousands on a healthy install and
+     *     would drown out the destructive entries above. They
+     *     remain available on the returned PruneResult for callers
+     *     that need them.
+     *
+     *   - A single summary entry at INFO closes the run with
+     *     counters, including how many of each skip category
+     *     occurred so an admin can spot drift (e.g. a sudden
+     *     spike in invalid-date skips) without scanning every row.
+     */
+    private function logResult(PruneResult $result, int $rotationGraceMonths, int $inactivityMonths): void
+    {
+        // Per-member INFO entries for every trashed row. Reason +
+        // detail are split into separate context keys so log readers
+        // can filter on category without parsing free text.
+        foreach ($result->getTrashed() as $entry) {
+            self::logInfo('Member trashed by pruner', [
+                'member_id' => $entry['member_id'],
+                'reason'    => $entry['reason'],
+                'detail'    => $entry['detail'],
+            ]);
+        }
+
+        // Per-member WARNING entries for the abnormal skip category.
+        // We deliberately tally other skip categories in the summary
+        // rather than logging them here — see the docblock above.
+        $skipCategoryCounts = [];
+        foreach ($result->getSkipped() as $entry) {
+            $reason = $entry['reason'];
+
+            if ($reason === PruneResult::SKIP_TRASH_FAILED) {
+                self::logWarning('Pruner failed to trash a member', [
+                    'member_id' => $entry['member_id'],
+                    'reason'    => $reason,
+                    'detail'    => $entry['detail'],
+                ]);
+                continue;
+            }
+
+            $skipCategoryCounts[$reason] = ($skipCategoryCounts[$reason] ?? 0) + 1;
+        }
+
+        self::logInfo('Member prune complete', [
+            'trashed'               => $result->getTrashedCount(),
+            'skipped'               => $result->getSkippedCount(),
+            'officers_considered'   => $result->getOfficersConsidered(),
+            'home_group_considered' => $result->getHomeGroupConsidered(),
+            'orphans_considered'    => $result->getOrphansConsidered(),
+            'rotation_grace_months' => $rotationGraceMonths,
+            'inactivity_months'     => $inactivityMonths,
+            // skip_categories breaks down the routine skips (not
+            // due, recent, invalid date, etc.) into counts so an
+            // admin can spot anomalies without per-row entries.
+            'skip_categories'       => $skipCategoryCounts,
+        ]);
     }
 
     // ──────────────────────────────────────────────
@@ -293,13 +374,14 @@ class MemberPruner
      * @param DateTimeInterface  $inactivityCutoff
      * @param array<int, true>   $alreadyTrashedIds  Members trashed by pass 1
      * @param PruneResult        $result
+     * @return array<int, true>  Updated set including IDs trashed by this pass
      */
     private function pruneHomeGroupNonGsrs(
         array $allMembers,
         DateTimeInterface $inactivityCutoff,
         array $alreadyTrashedIds,
         PruneResult $result
-    ): void {
+    ): array {
         foreach ($allMembers as $member) {
             // Only consider members whose status is "has a home group
             // but isn't the GSR" — and skip officers entirely (the
@@ -346,6 +428,86 @@ class MemberPruner
                     $member->getId(),
                     PruneResult::REASON_HOME_GROUP_INACTIVE,
                     'home_group=' . $member->getHomeGroup() . ' updated=' . $updated->format('Y-m-d H:i:s')
+                );
+                $alreadyTrashedIds[$member->getId()] = true;
+            } else {
+                $result->recordSkipped(
+                    $member->getId(),
+                    PruneResult::SKIP_TRASH_FAILED,
+                    'wp_trash_post returned falsy'
+                );
+            }
+        }
+
+        return $alreadyTrashedIds;
+    }
+
+    // ──────────────────────────────────────────────
+    //  Orphan pass
+    // ──────────────────────────────────────────────
+
+    /**
+     * @param array<Member>      $allMembers
+     * @param DateTimeInterface  $inactivityCutoff
+     * @param array<int, true>   $alreadyTrashedIds  Members trashed by passes 1–2
+     * @param PruneResult        $result
+     */
+    private function pruneOrphans(
+        array $allMembers,
+        DateTimeInterface $inactivityCutoff,
+        array $alreadyTrashedIds,
+        PruneResult $result
+    ): void {
+        foreach ($allMembers as $member) {
+            // Orphan = no intergroup position AND no home group. The
+            // earlier two passes own everyone with either of those
+            // attachments; pass 3 cleans up the residue. Officers
+            // who survived pass 1 are the current incumbents (with
+            // a position by definition), so the position check is
+            // sufficient to exclude them. Likewise the home-group
+            // check excludes everyone pass 2 considered.
+            if ($member->getIntergroupPosition() > 0) {
+                continue;
+            }
+            if ($member->getHomeGroup() > 0) {
+                continue;
+            }
+            // Defence in depth: a member trashed in an earlier pass
+            // shouldn't reach here anyway (passes 1 and 2 require
+            // position or home group, which orphans don't have),
+            // but the guard keeps a future refactor of the filters
+            // from accidentally re-trashing.
+            if (isset($alreadyTrashedIds[$member->getId()])) {
+                continue;
+            }
+
+            $result->incrementOrphansConsidered();
+
+            $updated = $this->parseUpdated($member->getUpdated());
+
+            if ($updated === null) {
+                $result->recordSkipped(
+                    $member->getId(),
+                    PruneResult::SKIP_ORPHAN_INVALID_UPDATED,
+                    'updated="' . $member->getUpdated() . '"'
+                );
+                continue;
+            }
+
+            if ($updated >= $inactivityCutoff) {
+                $result->recordSkipped(
+                    $member->getId(),
+                    PruneResult::SKIP_ORPHAN_RECENT,
+                    'updated=' . $updated->format('Y-m-d H:i:s')
+                );
+                continue;
+            }
+
+            if ($this->trashMember($member->getId())) {
+                $result->recordTrashed(
+                    $member->getId(),
+                    PruneResult::REASON_ORPHAN_INACTIVE,
+                    'updated=' . $updated->format('Y-m-d H:i:s')
                 );
             } else {
                 $result->recordSkipped(

@@ -9,6 +9,7 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
+use Scrutiny\Cleanup\PrunerCron;
 use Scrutiny\Cleanup\PrunerSettings;
 use function add_action;
 use function add_query_arg;
@@ -18,7 +19,10 @@ use function check_admin_referer;
 use function current_user_can;
 use function esc_attr;
 use function esc_html;
+use function get_option;
 use function sanitize_text_field;
+use function wp_date;
+use function wp_next_scheduled;
 use function wp_nonce_field;
 use function wp_safe_redirect;
 use function wp_unslash;
@@ -62,6 +66,14 @@ class MemberPrunerAdmin
      * still sits comfortably inside int range arithmetic.
      */
     private const MAX_MONTHS = 144;
+
+    /**
+     * Upper bound for the trash retention field in days. One year
+     * (365 days) is generous — the default is 7 days, matching the
+     * cron interval — and gives an admin headroom without allowing
+     * a typo to lock a year's worth of trashed members in place.
+     */
+    private const MAX_DAYS = 365;
 
     private PrunerSettings $settings;
 
@@ -114,8 +126,9 @@ class MemberPrunerAdmin
             wp_die(esc_html__('You do not have permission to perform this action.', 'scrutiny'));
         }
 
-        $rotation = $this->readMonthsField('rotation_grace_months');
-        $inactivity = $this->readMonthsField('inactivity_months');
+        $rotation       = $this->readBoundedIntField('rotation_grace_months', self::MAX_MONTHS);
+        $inactivity     = $this->readBoundedIntField('inactivity_months', self::MAX_MONTHS);
+        $trashRetention = $this->readBoundedIntField('trash_retention_days', self::MAX_DAYS);
 
         // An unchecked HTML checkbox is not posted at all, so a missing
         // field means "disabled". This is intentional: the only way to
@@ -125,6 +138,7 @@ class MemberPrunerAdmin
 
         $this->settings->setRotationGraceMonths($rotation);
         $this->settings->setInactivityMonths($inactivity);
+        $this->settings->setTrashRetentionDays($trashRetention);
         $this->settings->setEnabled($enabled);
 
         // Post/redirect/get so refreshing the page doesn't re-submit.
@@ -153,9 +167,10 @@ class MemberPrunerAdmin
             return;
         }
 
-        $rotation   = $this->settings->getRotationGraceMonths();
-        $inactivity = $this->settings->getInactivityMonths();
-        $enabled    = $this->settings->isEnabled();
+        $rotation       = $this->settings->getRotationGraceMonths();
+        $inactivity     = $this->settings->getInactivityMonths();
+        $trashRetention = $this->settings->getTrashRetentionDays();
+        $enabled        = $this->settings->isEnabled();
 
         // phpcs:ignore WordPress.Security.NonceVerification.Recommended
         $justUpdated = isset($_GET['updated']) && $_GET['updated'] === '1';
@@ -166,11 +181,14 @@ class MemberPrunerAdmin
 
             <p class="description">
                 Thresholds used by the Scrutiny member pruner. The pruner trashes
-                rotated officers (when a successor exists) and home-group members
+                rotated officers (when a successor exists), home-group members
                 who are not the GSR and have been inactive for the configured
-                period. Trashing is recoverable from the standard WordPress
-                Trash; this page only configures the cut-off values, it does not
-                run the pruner.
+                period, and orphan members (no position and no home group) who
+                have been inactive for the same period. After each scheduled
+                run, trashed members past the retention period are permanently
+                deleted. Trashing is recoverable from the standard WordPress
+                Trash; permanent deletion is not. This page only configures the
+                cut-off values — it does not run the pruner.
             </p>
 
             <?php if ($justUpdated) : ?>
@@ -186,6 +204,14 @@ class MemberPrunerAdmin
             // styling rather than success / error because both states
             // are legitimate; the colour just signals which one is
             // active.
+            //
+            // The "Next scheduled run" line is shown in both states
+            // because the cron schedule is independent of the
+            // enabled flag — knowing when the next event will fire
+            // is useful even when the pruner is disabled (so an
+            // admin can confirm the schedule is intact and that
+            // re-enabling will produce a run within a known window).
+            $nextRunLine = $this->describeNextScheduledRun();
             ?>
             <?php if ($enabled) : ?>
                 <div class="notice notice-warning inline">
@@ -193,6 +219,8 @@ class MemberPrunerAdmin
                         <strong>The pruner is currently enabled.</strong>
                         Scheduled runs and admin "Run pruner now" actions will
                         trash members that match the rules below.
+                        <br>
+                        <em><?php echo esc_html($nextRunLine); ?></em>
                     </p>
                 </div>
             <?php else : ?>
@@ -201,6 +229,8 @@ class MemberPrunerAdmin
                         <strong>The pruner is currently disabled.</strong>
                         No members will be trashed regardless of the threshold
                         values below. Tick the box and save to enable.
+                        <br>
+                        <em><?php echo esc_html($nextRunLine); ?></em>
                     </p>
                 </div>
             <?php endif; ?>
@@ -277,10 +307,43 @@ class MemberPrunerAdmin
                                     class="small-text"
                                 >
                                 <p class="description">
-                                    A home-group member who is not the GSR and whose record
-                                    has not been updated for this many months becomes a
-                                    candidate for trashing. Officers are excluded from this
-                                    rule — they are governed by the rotation grace above.
+                                    Applies to two kinds of member: home-group
+                                    members who are not the GSR, and orphans
+                                    (no position and no home group). When their
+                                    record has not been updated for this many
+                                    months, they become a candidate for trashing.
+                                    Officers are excluded from this rule — they
+                                    are governed by the rotation grace above.
+                                </p>
+                            </td>
+                        </tr>
+                        <tr>
+                            <th scope="row">
+                                <label for="scrutiny-trash-retention-days">
+                                    Trash retention (days)
+                                </label>
+                            </th>
+                            <td>
+                                <input
+                                    type="number"
+                                    min="0"
+                                    max="<?php echo esc_attr((string) self::MAX_DAYS); ?>"
+                                    step="1"
+                                    id="scrutiny-trash-retention-days"
+                                    name="trash_retention_days"
+                                    value="<?php echo esc_attr((string) $trashRetention); ?>"
+                                    class="small-text"
+                                >
+                                <p class="description">
+                                    After each scheduled run, members whose trash
+                                    timestamp is older than this many days are
+                                    permanently deleted (not recoverable).
+                                    Applies to any trashed member, including those
+                                    trashed manually outside the pruner. The
+                                    default of 7 days matches the cron interval —
+                                    a member trashed in one run is permanently
+                                    deleted in the next run unless restored from
+                                    trash in between.
                                 </p>
                             </td>
                         </tr>
@@ -304,15 +367,54 @@ class MemberPrunerAdmin
     }
 
     /**
-     * Pull a months value from $_POST, parse it as an integer, and
-     * clamp into the [0, MAX_MONTHS] range.
+     * Describe when the pruner will next run via WP-Cron.
+     *
+     * Returns a human-readable line for the status banner. Three
+     * cases:
+     *
+     *   - The event is scheduled and in the future → "Next scheduled
+     *     run: <formatted timestamp>".
+     *   - The event is scheduled but the timestamp is in the past
+     *     (a stuck WP-Cron, common on quiet sites where wp-cron.php
+     *     hasn't been triggered) → "Next scheduled run: overdue
+     *     (will fire on the next site visit)".
+     *   - The event is missing from the cron queue entirely (e.g.
+     *     deactivated, or the queue was cleared) → "Cron event is
+     *     not scheduled — try reactivating the plugin".
+     *
+     * Format mirrors AuditLogAdmin: WP date_format + time_format
+     * concatenated, formatted via wp_date so the site's timezone
+     * is respected.
+     */
+    private function describeNextScheduledRun(): string
+    {
+        $next = wp_next_scheduled(PrunerCron::HOOK);
+
+        if ($next === false) {
+            return 'Cron event is not scheduled — try reactivating the plugin.';
+        }
+
+        $format = get_option('date_format') . ' ' . get_option('time_format');
+        $when   = wp_date($format, $next);
+
+        if ($next < time()) {
+            return 'Next scheduled run: ' . $when . ' (overdue — will fire on the next site visit).';
+        }
+
+        return 'Next scheduled run: ' . $when . '.';
+    }
+
+    /**
+     * Pull an integer value from $_POST, parse it, and clamp into
+     * the [0, $max] range. Used for both the months fields and the
+     * trash-retention days field.
      *
      * Returns 0 if the field is missing or non-numeric. We deliberately
      * accept missing-field as zero rather than rejecting the submission:
      * a user who wipes the input and saves is expressing "no grace
      * period", which the pruner already handles correctly.
      */
-    private function readMonthsField(string $name): int
+    private function readBoundedIntField(string $name, int $max): int
     {
         // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- nonce verified by handleSave()
         if (!isset($_POST[$name])) {
@@ -326,8 +428,8 @@ class MemberPrunerAdmin
         if ($value < 0) {
             return 0;
         }
-        if ($value > self::MAX_MONTHS) {
-            return self::MAX_MONTHS;
+        if ($value > $max) {
+            return $max;
         }
 
         return $value;

@@ -260,17 +260,172 @@ class MemberPrunerTest extends TestCase
     }
 
     /** @test */
-    public function it_does_not_consider_members_without_a_home_group_in_the_inactivity_pass(): void
+    public function members_without_a_home_group_do_not_enter_the_home_group_pass(): void
     {
-        // No home group at all → nothing to clean up under either rule.
-        // The inactivity pass should not even count them as a candidate.
-        $orphan = $this->makeMember(id: 9, homeGroup: 0, updated: '2020-01-01 00:00:00');
+        // The home-group pass requires homeGroup > 0 — orphans (no
+        // home group, no position) are owned by pass 3, not pass 2.
+        // The updated timestamp here is recent so the orphan pass
+        // also doesn't trash; this test is purely about the
+        // home-group-pass filter, not about pass 3.
+        $orphan = $this->makeMember(id: 9, homeGroup: 0, updated: '2025-07-10 00:00:00');
 
         $pruner = $this->makePruner([$orphan]);
         $result = $pruner->prune(rotationGraceMonths: 3, inactivityMonths: 12);
 
         $this->assertSame([], $pruner->getTrashedIds());
         $this->assertSame(0, $result->getHomeGroupConsidered());
+    }
+
+    // ──────────────────────────────────────────────
+    //  Orphan pass
+    //
+    //  Orphans are members with no intergroup position AND no home
+    //  group — registrations that were never tied to either an
+    //  officer role or a group. Pass 3 catches them under the same
+    //  inactivity threshold the home-group pass uses, deliberately:
+    //  one knob configures both kinds of "stale" cleanup.
+    // ──────────────────────────────────────────────
+
+    /** @test */
+    public function it_trashes_an_orphan_inactive_beyond_threshold(): void
+    {
+        // No position, no home group, last updated 18 months ago
+        // against a 12-month threshold. Should be trashed under the
+        // orphan rule and recorded with REASON_ORPHAN_INACTIVE so an
+        // admin can tell the row apart from home-group inactives.
+        $orphan = $this->makeMember(
+            id: 40,
+            position: 0,
+            homeGroup: 0,
+            updated: '2024-01-15 10:00:00'
+        );
+
+        $pruner = $this->makePruner([$orphan]);
+        $result = $pruner->prune(rotationGraceMonths: 3, inactivityMonths: 12);
+
+        $this->assertSame([40], $pruner->getTrashedIds());
+        $this->assertSame(1, $result->getOrphansConsidered());
+
+        $reasons = array_column($result->getTrashed(), 'reason', 'member_id');
+        $this->assertSame(PruneResult::REASON_ORPHAN_INACTIVE, $reasons[40] ?? null);
+    }
+
+    /** @test */
+    public function it_does_not_trash_a_recent_orphan(): void
+    {
+        // Updated 6 months ago against a 12-month threshold — within
+        // the inactivity window, so kept.
+        $recent = $this->makeMember(
+            id: 41,
+            position: 0,
+            homeGroup: 0,
+            updated: '2025-01-15 10:00:00'
+        );
+
+        $pruner = $this->makePruner([$recent]);
+        $result = $pruner->prune(rotationGraceMonths: 3, inactivityMonths: 12);
+
+        $this->assertSame([], $pruner->getTrashedIds());
+
+        $skipReasons = array_column($result->getSkipped(), 'reason', 'member_id');
+        $this->assertSame(PruneResult::SKIP_ORPHAN_RECENT, $skipReasons[41] ?? null);
+    }
+
+    /** @test */
+    public function it_skips_orphans_with_no_updated_timestamp(): void
+    {
+        // Same defensive treatment as the home-group pass: an empty
+        // updated value can't be compared, so the pruner refuses to
+        // act and surfaces the situation rather than silently
+        // trashing.
+        $undated = $this->makeMember(
+            id: 42,
+            position: 0,
+            homeGroup: 0,
+            updated: ''
+        );
+
+        $pruner = $this->makePruner([$undated]);
+        $result = $pruner->prune(rotationGraceMonths: 3, inactivityMonths: 12);
+
+        $this->assertSame([], $pruner->getTrashedIds());
+
+        $skipReasons = array_column($result->getSkipped(), 'reason', 'member_id');
+        $this->assertSame(PruneResult::SKIP_ORPHAN_INVALID_UPDATED, $skipReasons[42] ?? null);
+    }
+
+    /** @test */
+    public function members_with_a_home_group_do_not_enter_the_orphan_pass(): void
+    {
+        // A home-group non-GSR is owned by pass 2 even when stale.
+        // The orphan pass must skip them so the result records the
+        // trash under REASON_HOME_GROUP_INACTIVE, not REASON_ORPHAN_INACTIVE.
+        $homeGroupMember = $this->makeMember(
+            id: 43,
+            homeGroup: 50,
+            isGSR: false,
+            updated: '2024-01-15 10:00:00'
+        );
+
+        $pruner = $this->makePruner([$homeGroupMember]);
+        $result = $pruner->prune(rotationGraceMonths: 3, inactivityMonths: 12);
+
+        $this->assertSame([43], $pruner->getTrashedIds());
+        $this->assertSame(0, $result->getOrphansConsidered());
+
+        $reasons = array_column($result->getTrashed(), 'reason', 'member_id');
+        $this->assertSame(PruneResult::REASON_HOME_GROUP_INACTIVE, $reasons[43] ?? null);
+    }
+
+    /** @test */
+    public function members_with_an_intergroup_position_do_not_enter_the_orphan_pass(): void
+    {
+        // A lone officer with a stale rotation date is kept by the
+        // officer pass (no successor → can't be replaced) and must
+        // not then fall through to the orphan pass and be trashed
+        // there for inactivity. The position guard in pass 3 stops
+        // that.
+        $loneOfficer = $this->makeMember(
+            id: 44,
+            position: 100,
+            rotation: '2020-01-01',
+            homeGroup: 0,
+            updated: '2020-01-01 00:00:00'
+        );
+
+        $pruner = $this->makePruner([$loneOfficer]);
+        $result = $pruner->prune(rotationGraceMonths: 3, inactivityMonths: 12);
+
+        $this->assertSame([], $pruner->getTrashedIds());
+        $this->assertSame(0, $result->getOrphansConsidered());
+    }
+
+    /** @test */
+    public function the_orphan_pass_uses_the_same_inactivity_threshold_as_the_home_group_pass(): void
+    {
+        // Two members with identical updated timestamps — one orphan,
+        // one home-group non-GSR — must be treated identically. This
+        // pins down the design decision that one knob controls both.
+        $orphan = $this->makeMember(
+            id: 50,
+            position: 0,
+            homeGroup: 0,
+            updated: '2024-01-15 10:00:00'
+        );
+        $homeGroup = $this->makeMember(
+            id: 51,
+            homeGroup: 50,
+            isGSR: false,
+            updated: '2024-01-15 10:00:00'
+        );
+
+        $pruner = $this->makePruner([$orphan, $homeGroup]);
+        $pruner->prune(rotationGraceMonths: 3, inactivityMonths: 12);
+
+        // Both trashed under their respective rules.
+        $trashedIds = $pruner->getTrashedIds();
+        sort($trashedIds);
+        $this->assertSame([50, 51], $trashedIds);
     }
 
     // ──────────────────────────────────────────────
@@ -674,94 +829,3 @@ class MemberPrunerTest extends TestCase
     }
 }
 
-// ──────────────────────────────────────────────
-//  Test doubles
-// ──────────────────────────────────────────────
-
-/**
- * In-memory MemberRepository: returns the array passed at construction.
- *
- * Only findAll() is used by the pruner; the other methods are
- * implemented as no-ops to satisfy the interface and would throw if
- * a future change to the pruner accidentally started using them.
- */
-final class InMemoryMemberRepository implements MemberRepository
-{
-    /** @param array<Member> $members */
-    public function __construct(private array $members) {}
-
-    public function findById(int $id): ?Member
-    {
-        foreach ($this->members as $member) {
-            if ($member->getId() === $id) {
-                return $member;
-            }
-        }
-        return null;
-    }
-
-    public function findAll(array $args = []): array
-    {
-        return $this->members;
-    }
-
-    public function count(array $args = []): int
-    {
-        return count($this->members);
-    }
-
-    public function create(string $anonymousName): int
-    {
-        throw new \LogicException('Not implemented in test double');
-    }
-
-    public function save(Member $member): bool
-    {
-        throw new \LogicException('Not implemented in test double');
-    }
-
-    public function delete(int $id): bool
-    {
-        throw new \LogicException('Not implemented in test double');
-    }
-
-    public function update(Member $member): bool
-    {
-        throw new \LogicException('Not implemented in test double');
-    }
-}
-
-/**
- * Subclass that records IDs passed to trashMember() and short-circuits
- * the wp_trash_post call. This lets the suite assert exactly which
- * members would be trashed without needing a WordPress runtime.
- */
-final class MemberPrunerForTest extends MemberPruner
-{
-    /** @var array<int> */
-    private array $trashed = [];
-
-    public function __construct(
-        MemberRepository $members,
-        DateTimeImmutable $now,
-        private bool $trashSucceeds,
-        ?PrunerSettings $settings = null
-    ) {
-        parent::__construct($members, $now, $settings);
-    }
-
-    /** @return array<int> */
-    public function getTrashedIds(): array
-    {
-        return $this->trashed;
-    }
-
-    protected function trashMember(int $memberId): bool
-    {
-        if (!$this->trashSucceeds) {
-            return false;
-        }
-        $this->trashed[] = $memberId;
-        return true;
-    }
-}

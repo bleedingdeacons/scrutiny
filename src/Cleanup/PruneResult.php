@@ -22,11 +22,37 @@ final class PruneResult
     public const REASON_OFFICER_ROTATED      = 'officer_rotated';
     public const REASON_HOME_GROUP_INACTIVE  = 'home_group_inactive';
 
+    /**
+     * Recorded when an "orphan" member is trashed — one with neither
+     * an intergroup position nor a home group — for being inactive
+     * past the configured threshold. Distinct from
+     * REASON_HOME_GROUP_INACTIVE so an admin reviewing the result
+     * can tell which category each trashed row belonged to.
+     */
+    public const REASON_ORPHAN_INACTIVE      = 'orphan_inactive';
+
     public const SKIP_OFFICER_NOT_DUE              = 'officer_not_due';
     public const SKIP_OFFICER_EARLIER_PEER_EXISTS  = 'officer_earlier_peer_exists';
     public const SKIP_OFFICER_INVALID_ROTATION     = 'officer_invalid_rotation';
     public const SKIP_HOME_GROUP_RECENT            = 'home_group_recent';
     public const SKIP_HOME_GROUP_INVALID_UPDATED   = 'home_group_invalid_updated';
+
+    /**
+     * Recorded when an orphan member's underlying post timestamp is
+     * within the inactivity window and they're therefore kept.
+     * Mirrors SKIP_HOME_GROUP_RECENT for the orphan pass so result
+     * readers don't have to disambiguate from the row's reason
+     * field which pass produced the skip.
+     */
+    public const SKIP_ORPHAN_RECENT                = 'orphan_recent';
+
+    /**
+     * Recorded when an orphan member has no parseable updated
+     * timestamp. Mirrors SKIP_HOME_GROUP_INVALID_UPDATED for the
+     * orphan pass.
+     */
+    public const SKIP_ORPHAN_INVALID_UPDATED       = 'orphan_invalid_updated';
+
     public const SKIP_TRASH_FAILED                 = 'trash_failed';
 
     /**
@@ -48,6 +74,9 @@ final class PruneResult
 
     /** @var int Number of home-group-pass candidates considered */
     private int $homeGroupConsidered = 0;
+
+    /** @var int Number of orphan-pass candidates considered */
+    private int $orphansConsidered = 0;
 
     public function recordTrashed(int $memberId, string $reason, string $detail = ''): void
     {
@@ -75,6 +104,11 @@ final class PruneResult
     public function incrementHomeGroupConsidered(): void
     {
         $this->homeGroupConsidered++;
+    }
+
+    public function incrementOrphansConsidered(): void
+    {
+        $this->orphansConsidered++;
     }
 
     /** @return array<int, array{member_id:int, reason:string, detail:string}> */
@@ -107,5 +141,10 @@ final class PruneResult
     public function getHomeGroupConsidered(): int
     {
         return $this->homeGroupConsidered;
+    }
+
+    public function getOrphansConsidered(): int
+    {
+        return $this->orphansConsidered;
     }
 }

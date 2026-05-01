@@ -56,6 +56,18 @@ final class PrunerSettings
     public const OPTION_ENABLED = 'scrutiny_prune_enabled';
 
     /**
+     * Option key for the trash-retention period (days).
+     *
+     * After each scheduled pruner run, members whose trash timestamp
+     * (_wp_trash_meta_time) is older than now minus this many days
+     * are permanently deleted. Stored in days rather than months
+     * because the natural cadence is short — typically a single
+     * cron interval — and a months-resolution input would feel
+     * coarse for the admin to tune.
+     */
+    public const OPTION_TRASH_RETENTION_DAYS = 'scrutiny_prune_trash_retention_days';
+
+    /**
      * Default rotation grace period — three months after a rotation
      * date passes is enough time for a successor to be elected and
      * recorded without leaving stale officers indefinitely.
@@ -78,6 +90,16 @@ final class PrunerSettings
      * docs cannot have member data removed by an accidental cron run.
      */
     public const DEFAULT_ENABLED = false;
+
+    /**
+     * Default trash-retention period — seven days, matching the
+     * default cron interval. A member trashed in run N is therefore
+     * eligible for permanent deletion in run N+1, unless an admin
+     * restores them from the trash in between. This gives a full
+     * cron cycle to notice and reverse an unwanted trash before it
+     * becomes irreversible.
+     */
+    public const DEFAULT_TRASH_RETENTION_DAYS = 7;
 
     public function getRotationGraceMonths(): int
     {
@@ -139,5 +161,28 @@ final class PrunerSettings
     public function setEnabled(bool $enabled): void
     {
         update_option(self::OPTION_ENABLED, $enabled ? 1 : 0);
+    }
+
+    /**
+     * Days a trashed member is retained before permanent deletion.
+     *
+     * Same clamp pattern as the months getters: a hand-edited
+     * wp_options row with a negative value must not pull the
+     * retention cutoff into the future and start permanently
+     * deleting recently-trashed members.
+     */
+    public function getTrashRetentionDays(): int
+    {
+        $stored = (int) get_option(
+            self::OPTION_TRASH_RETENTION_DAYS,
+            self::DEFAULT_TRASH_RETENTION_DAYS
+        );
+
+        return max(0, $stored);
+    }
+
+    public function setTrashRetentionDays(int $days): void
+    {
+        update_option(self::OPTION_TRASH_RETENTION_DAYS, max(0, $days));
     }
 }

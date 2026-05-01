@@ -5,7 +5,7 @@ declare(strict_types=1);
 /**
  * Plugin Name: Scrutiny
  * Description: GDPR-compliant audit logging and personal data obscuring for Unity. Required by Amber.
- * Version: 1.18.2
+ * Version: 1.18.0
  * Requires at least: 6.0
  * Requires PHP: 8.1
  * GitHub Plugin URI: https://github.com/thebleedingdeacons/scrutiny
@@ -137,5 +137,7 @@ register_activation_hook(__FILE__, function () {
 
 // Plugin deactivation hook
 register_deactivation_hook(__FILE__, function () {
-    // Cleanup code here if needed
+    if (class_exists('Scrutiny\Plugin')) {
+        \Scrutiny\Plugin::deactivate();
+    }
 });

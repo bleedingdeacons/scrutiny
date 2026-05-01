@@ -5,13 +5,20 @@ declare(strict_types=1);
 /**
  * Standalone bootstrap for the Cleanup test suite.
  *
- * The main Scrutiny suite uses WP_Mock and Composer's autoloader. The
- * Cleanup tests deliberately avoid both: the pruner is constructed
- * with a hand-rolled fake MemberRepository and overrides trashMember()
- * in a test subclass, so no WordPress functions are touched.
+ * Provides minimal stand-ins for the WordPress and Sentinel-logger
+ * functions / classes the Cleanup code touches, so tests run in a
+ * vanilla PHP environment without Composer or a full WP harness:
  *
- * That keeps these tests runnable in a vanilla PHP environment, with
- * just an autoloader for the Scrutiny and Unity namespaces.
+ *   - Autoloader for the Scrutiny and Unity namespaces.
+ *   - get_option / update_option backed by an in-memory store.
+ *   - wp_log() + Sentinel_Log_Channel test double that records
+ *     every log call into a shared global so tests can assert on
+ *     the emitted log stream.
+ *   - sanitize_key() — a minimal stand-in for the WP function the
+ *     HasLogger trait uses when deriving a default channel name.
+ *
+ * Tests that mutate the option store or read the log stream reset
+ * the relevant globals in setUp() to avoid cross-test contamination.
  */
 
 if (!defined('ABSPATH')) {
@@ -38,8 +45,15 @@ spl_autoload_register(function (string $class): void {
     $scrutinyParent = dirname(rtrim(SCRUTINY_PLUGIN_DIR, '/'));
 
     $map = [
-        'Scrutiny\\' => SCRUTINY_PLUGIN_DIR . 'src/',
-        'Unity\\'    => $scrutinyParent . '/unity/src/',
+        // The Tests namespace must be checked before the Scrutiny
+        // umbrella below — strncmp matches the longer prefix only
+        // when it appears first in the iteration order. Test
+        // doubles (InMemoryMemberRepository, MemberPrunerForTest)
+        // live alongside the test files under tests/Unit/, in their
+        // own per-class files so multiple test files can share them.
+        'Scrutiny\\Tests\\' => SCRUTINY_PLUGIN_DIR . 'tests/',
+        'Scrutiny\\'        => SCRUTINY_PLUGIN_DIR . 'src/',
+        'Unity\\'           => $scrutinyParent . '/unity/src/',
     ];
 
     foreach ($map as $prefix => $baseDir) {
@@ -76,6 +90,226 @@ if (!function_exists('update_option')) {
     function update_option(string $key, mixed $value): bool
     {
         $GLOBALS['scrutiny_test_options'][$key] = $value;
+        return true;
+    }
+}
+
+// ──────────────────────────────────────────────
+//  wp_log + Sentinel_Log_Channel test doubles
+//
+//  Scrutiny's HasLogger trait calls wp_log() lazily and stores the
+//  returned channel in a typed property of class
+//  Sentinel_Log_Channel. To exercise the logging code path in
+//  isolation, both the function and the class are stubbed here:
+//
+//   - A Sentinel_Log_Channel test double records every call into a
+//     shared global $GLOBALS['scrutiny_test_log_entries']. Tests can
+//     read that array to assert which log messages were emitted, at
+//     what level, with what context, and in what order. Tests
+//     reset the array in setUp() so cross-test contamination is
+//     avoided. A separate clear() method on the channel is provided
+//     for the same purpose.
+//
+//   - wp_log() returns a singleton instance keyed by channel name,
+//     mirroring how Sentinel itself memoises real channels and
+//     letting the trait's own $loggerChannel cache hold a stable
+//     reference across log calls within a single test.
+// ──────────────────────────────────────────────
+
+$GLOBALS['scrutiny_test_log_entries'] = [];
+
+if (!class_exists('Sentinel_Log_Channel')) {
+    /**
+     * Test double for the Sentinel logger channel.
+     *
+     * Implements only the level methods HasLogger actually invokes
+     * (info, warning, etc.) — not a full PSR-3 surface. Each call
+     * appends an associative array to the shared global so tests
+     * can do simple array assertions on the log stream.
+     */
+    class Sentinel_Log_Channel
+    {
+        public function __construct(public readonly string $channel) {}
+
+        private function record(string $level, string $message, array $context): void
+        {
+            $GLOBALS['scrutiny_test_log_entries'][] = [
+                'channel' => $this->channel,
+                'level'   => $level,
+                'message' => $message,
+                'context' => $context,
+            ];
+        }
+
+        public function emergency(string $message, array $context = []): void { $this->record('emergency', $message, $context); }
+        public function alert(string $message, array $context = []): void     { $this->record('alert', $message, $context); }
+        public function critical(string $message, array $context = []): void  { $this->record('critical', $message, $context); }
+        public function error(string $message, array $context = []): void     { $this->record('error', $message, $context); }
+        public function warning(string $message, array $context = []): void   { $this->record('warning', $message, $context); }
+        public function notice(string $message, array $context = []): void    { $this->record('notice', $message, $context); }
+        public function info(string $message, array $context = []): void      { $this->record('info', $message, $context); }
+        public function debug(string $message, array $context = []): void     { $this->record('debug', $message, $context); }
+    }
+}
+
+if (!function_exists('wp_log')) {
+    /**
+     * Returns a memoised channel per name so the trait's private
+     * static cache holds a stable reference across log calls.
+     */
+    function wp_log(string $channel): Sentinel_Log_Channel
+    {
+        static $channels = [];
+        if (!isset($channels[$channel])) {
+            $channels[$channel] = new Sentinel_Log_Channel($channel);
+        }
+        return $channels[$channel];
+    }
+}
+
+if (!function_exists('sanitize_key')) {
+    /**
+     * Matches WordPress's sanitize_key well enough for the trait's
+     * default channel-name derivation (it lowercases and strips
+     * anything other than alphanumerics, underscores, and hyphens).
+     * Scrutiny classes override logChannel() with literal strings
+     * so this stub is rarely hit, but it has to exist to keep
+     * static analysers and lazy initialisations happy.
+     */
+    function sanitize_key(string $key): string
+    {
+        $key = strtolower($key);
+        return preg_replace('/[^a-z0-9_\-]/', '', $key) ?? '';
+    }
+}
+
+// ──────────────────────────────────────────────
+//  WP-Cron + add_action stubs
+//
+//  PrunerCron interacts with WordPress's cron API. Rather than
+//  depend on a WP test harness, this bootstrap provides an in-memory
+//  cron queue and a recording add_action() so tests can:
+//
+//    - Verify wp_schedule_event was called with the right args.
+//    - Verify wp_next_scheduled returns the scheduled timestamp.
+//    - Verify wp_clear_scheduled_hook empties the queue.
+//    - Verify add_action wired up the right callbacks.
+//
+//  Keys: $GLOBALS['scrutiny_test_cron_queue']  → [hook => timestamp]
+//        $GLOBALS['scrutiny_test_actions']     → [[hook, callback, prio]]
+//
+//  Tests reset both globals in setUp() to keep cases isolated.
+// ──────────────────────────────────────────────
+
+if (!defined('HOUR_IN_SECONDS')) {
+    define('HOUR_IN_SECONDS', 3600);
+}
+
+$GLOBALS['scrutiny_test_cron_queue'] = [];
+$GLOBALS['scrutiny_test_actions']    = [];
+
+if (!function_exists('wp_schedule_event')) {
+    /**
+     * Records the scheduled event in the in-memory queue. Returns
+     * true to indicate success — the real WP function returns
+     * false on failure, but the stub never fails.
+     */
+    function wp_schedule_event(int $timestamp, string $recurrence, string $hook): bool
+    {
+        $GLOBALS['scrutiny_test_cron_queue'][$hook] = [
+            'timestamp'  => $timestamp,
+            'recurrence' => $recurrence,
+        ];
+        return true;
+    }
+}
+
+if (!function_exists('wp_next_scheduled')) {
+    /**
+     * Returns the timestamp for the named hook, or false if it
+     * isn't scheduled. Mirrors the WP signature.
+     *
+     * @return int|false
+     */
+    function wp_next_scheduled(string $hook)
+    {
+        return $GLOBALS['scrutiny_test_cron_queue'][$hook]['timestamp'] ?? false;
+    }
+}
+
+if (!function_exists('wp_clear_scheduled_hook')) {
+    function wp_clear_scheduled_hook(string $hook): void
+    {
+        unset($GLOBALS['scrutiny_test_cron_queue'][$hook]);
+    }
+}
+
+if (!function_exists('add_action')) {
+    /**
+     * Records the action registration so tests can assert which
+     * hooks PrunerCron::register() wired up. The real return value
+     * is bool true; we match that.
+     */
+    function add_action(string $hook, callable $callback, int $priority = 10, int $accepted_args = 1): bool
+    {
+        $GLOBALS['scrutiny_test_actions'][] = [
+            'hook'     => $hook,
+            'callback' => $callback,
+            'priority' => $priority,
+        ];
+        return true;
+    }
+}
+
+// ──────────────────────────────────────────────
+//  Post meta + wp_delete_post stubs
+//
+//  MemberTrashCleaner reads _wp_trash_meta_time via get_post_meta
+//  and calls wp_delete_post for permanent removal. Both are stubbed
+//  with simple in-memory state so tests can simulate trashed posts
+//  without a WP runtime.
+//
+//  Keys: $GLOBALS['scrutiny_test_post_meta']  → [post_id => [meta_key => value]]
+//        $GLOBALS['scrutiny_test_deleted_posts'] → [post_id, ...]
+// ──────────────────────────────────────────────
+
+$GLOBALS['scrutiny_test_post_meta']     = [];
+$GLOBALS['scrutiny_test_deleted_posts'] = [];
+
+if (!function_exists('get_post_meta')) {
+    /**
+     * Mirrors get_post_meta($id, $key, true) — single-value form.
+     * Returns '' when the meta is absent (matching WP behaviour).
+     *
+     * The stub ignores the array form ($single=false) because the
+     * cleaner only uses the single-value form.
+     */
+    function get_post_meta(int $postId, string $key = '', bool $single = false): mixed
+    {
+        if ($key === '') {
+            return $GLOBALS['scrutiny_test_post_meta'][$postId] ?? [];
+        }
+        return $GLOBALS['scrutiny_test_post_meta'][$postId][$key] ?? '';
+    }
+}
+
+if (!function_exists('wp_delete_post')) {
+    /**
+     * Records the deletion in the in-memory list. Returns true on
+     * success — the real WP function returns the deleted post on
+     * success or false on failure, but the cleaner only checks
+     * truthiness so true / false is enough.
+     *
+     * Tests can flip $GLOBALS['scrutiny_test_delete_returns_false']
+     * to true to simulate a failure (used by the SKIP_DELETE_FAILED
+     * test).
+     */
+    function wp_delete_post(int $postId, bool $forceDelete = false): bool
+    {
+        if (!empty($GLOBALS['scrutiny_test_delete_returns_false'])) {
+            return false;
+        }
+        $GLOBALS['scrutiny_test_deleted_posts'][] = $postId;
         return true;
     }
 }

@@ -20,6 +20,8 @@ use Scrutiny\Audit\AuditTracker;
 use Scrutiny\Audit\Interfaces\AuditLogger;
 use Scrutiny\Audit\Interfaces\AuditRepository;
 use Scrutiny\Cleanup\MemberPruner;
+use Scrutiny\Cleanup\MemberTrashCleaner;
+use Scrutiny\Cleanup\PrunerCron;
 use Scrutiny\Cleanup\PrunerSettings;
 use Scrutiny\Privacy\GroupFieldsObscurer;
 use Scrutiny\Privacy\MemberFieldsObscurer;
@@ -59,6 +61,10 @@ use function is_admin;
  *                           truth for both the pruner and its admin page
  *   MemberPrunerAdmin     – settings page for the pruner thresholds, under the
  *                           top-level Scrutiny menu (does not run the pruner itself)
+ *   PrunerCron            – schedules the weekly WP-Cron event that runs the
+ *                           pruner unattended, and clears it on deactivation
+ *   MemberTrashCleaner    – permanently deletes trashed members past the
+ *                           retention period; runs after each cron pruner pass
  *
  * Capabilities:
  *   scrutiny_view_personal_data – grants a user the right to see unmasked values
@@ -117,6 +123,13 @@ class Plugin
         // its admin-only hooks internally.
         self::$container->get(MemberFieldsObscurer::class)->register();
         self::$container->get(GroupFieldsObscurer::class)->register();
+
+        // Cron handler — wires the WP-Cron action and the defensive
+        // re-scheduling check. Runs on every page load (not just
+        // admin) because WP-Cron's wake-up cycle fires on whichever
+        // request hits first; gating this behind is_admin() would
+        // miss front-end cron triggers entirely.
+        self::$container->get(PrunerCron::class)->register();
 
         // Initialise admin page when in the dashboard
         if (is_admin()) {
@@ -234,6 +247,26 @@ class Plugin
                 $c->get(PrunerSettings::class)
             );
         });
+
+        // Member Trash Cleaner — permanently deletes trashed
+        // members past the retention threshold. Stateless, hook-free;
+        // invoked by the cron handler after a successful prune pass.
+        $container->register(MemberTrashCleaner::class, function (ContainerInterface $c) {
+            return new MemberTrashCleaner(
+                $c->get(MemberRepository::class)
+            );
+        });
+
+        // Pruner Cron — schedules the weekly cron event and handles
+        // it when WP-Cron fires. Stateless wrapper around three
+        // injected dependencies, so a fresh instance is fine.
+        $container->register(PrunerCron::class, function (ContainerInterface $c) {
+            return new PrunerCron(
+                $c->get(MemberPruner::class),
+                $c->get(PrunerSettings::class),
+                $c->get(MemberTrashCleaner::class)
+            );
+        });
     }
 
     /**
@@ -289,6 +322,26 @@ class Plugin
             $adminRole->add_cap(PersonalDataPolicy::VIEW_CAPABILITY);
             $adminRole->add_cap(PersonalDataPolicy::EDIT_CAPABILITY);
         }
+
+        // Schedule the weekly pruner cron event. Idempotent — the
+        // call is a no-op if the event is already in the queue, so
+        // reactivating the plugin doesn't create duplicates.
+        PrunerCron::schedule();
+    }
+
+    /**
+     * Deactivation handler.
+     *
+     * Clears scheduled cron events so a deactivated plugin leaves no
+     * lingering entries in the cron queue. Note that user-stored
+     * settings (PrunerSettings option keys) are deliberately left
+     * intact — deactivation isn't uninstall, and an admin who
+     * reactivates the plugin should find their thresholds
+     * unchanged.
+     */
+    public static function deactivate(): void
+    {
+        PrunerCron::unschedule();
     }
 
     /**

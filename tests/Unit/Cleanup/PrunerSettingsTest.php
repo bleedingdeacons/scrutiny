@@ -218,4 +218,58 @@ class PrunerSettingsTest extends TestCase
             );
         }
     }
+
+    // ──────────────────────────────────────────────
+    //  Trash retention
+    // ──────────────────────────────────────────────
+
+    /** @test */
+    public function trash_retention_defaults_to_seven_days(): void
+    {
+        // Default mirrors the cron interval so a member trashed in
+        // run N is permanently deleted in run N+1 unless restored.
+        // This test pins down the default.
+        $settings = new PrunerSettings();
+
+        $this->assertSame(7, PrunerSettings::DEFAULT_TRASH_RETENTION_DAYS);
+        $this->assertSame(7, $settings->getTrashRetentionDays());
+    }
+
+    /** @test */
+    public function trash_retention_round_trips(): void
+    {
+        $settings = new PrunerSettings();
+
+        $settings->setTrashRetentionDays(14);
+
+        $this->assertSame(14, $settings->getTrashRetentionDays());
+    }
+
+    /** @test */
+    public function trash_retention_clamps_negative_values_to_zero(): void
+    {
+        // Defence in depth — a hand-edited wp_options row containing
+        // a negative integer must not be returned as-is, and the
+        // setter must reject the same.
+        $settings = new PrunerSettings();
+        $settings->setTrashRetentionDays(-3);
+        $this->assertSame(0, $settings->getTrashRetentionDays());
+
+        $GLOBALS['scrutiny_test_options'][PrunerSettings::OPTION_TRASH_RETENTION_DAYS] = -10;
+        $settings = new PrunerSettings();
+        $this->assertSame(0, $settings->getTrashRetentionDays());
+    }
+
+    /** @test */
+    public function trash_retention_zero_is_a_valid_persisted_value(): void
+    {
+        // Zero means "delete everything currently in trash" — a
+        // legitimate (if aggressive) configuration. It must
+        // round-trip without being mistaken for the default.
+        $settings = new PrunerSettings();
+
+        $settings->setTrashRetentionDays(0);
+
+        $this->assertSame(0, $settings->getTrashRetentionDays());
+    }
 }
