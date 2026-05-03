@@ -313,3 +313,254 @@ if (!function_exists('wp_delete_post')) {
         return true;
     }
 }
+
+// ──────────────────────────────────────────────
+//  ACF + REST stubs
+//
+//  The PrivacyPolicyController formatter reads ACF fields via
+//  get_field() and emits its response shape from a WP_Post object
+//  plus those field values. The route callbacks themselves are
+//  exercised by passing a stub WP_REST_Request and asserting on the
+//  returned WP_REST_Response payload — there's no need for a full
+//  WP REST harness.
+//
+//  Keys: $GLOBALS['scrutiny_test_acf_fields']  → [post_id => [field_name => value]]
+//        $GLOBALS['scrutiny_test_posts']       → [post_id => WP_Post]
+// ──────────────────────────────────────────────
+
+$GLOBALS['scrutiny_test_acf_fields'] = [];
+$GLOBALS['scrutiny_test_posts']      = [];
+
+if (!function_exists('get_field')) {
+    /**
+     * Returns the stored ACF value for a (field_name, post_id)
+     * pair, or '' if the field has no test value set. Mirrors
+     * ACF's get_field() return shape closely enough for the
+     * controller's formatter, which only reads scalars.
+     */
+    function get_field(string $name, int $postId): mixed
+    {
+        return $GLOBALS['scrutiny_test_acf_fields'][$postId][$name] ?? '';
+    }
+}
+
+if (!function_exists('get_post')) {
+    /**
+     * Returns the stub WP_Post for the given ID, or null when the
+     * test hasn't registered one — matching WP's behaviour of
+     * returning null for missing posts.
+     */
+    function get_post(int $postId)
+    {
+        return $GLOBALS['scrutiny_test_posts'][$postId] ?? null;
+    }
+}
+
+if (!function_exists('get_posts')) {
+    /**
+     * Returns every post in the in-memory store, filtered by
+     * post_type and (optionally) post_status. Tests register posts
+     * via $GLOBALS['scrutiny_test_posts']; this stub respects the
+     * insertion order, which the controller's `orderby=date` /
+     * `order=DESC` then re-sorts via post_date_gmt.
+     */
+    function get_posts(array $args = []): array
+    {
+        $type   = $args['post_type']   ?? 'post';
+        $status = $args['post_status'] ?? 'publish';
+
+        $matches = [];
+        foreach ($GLOBALS['scrutiny_test_posts'] as $post) {
+            if ($post->post_type !== $type) {
+                continue;
+            }
+            if ($status !== 'any' && $post->post_status !== $status) {
+                continue;
+            }
+            $matches[] = $post;
+        }
+
+        // The controller asks for orderby=date / order=DESC; honour it
+        // so test fixtures can rely on the same ordering the real WP
+        // call would produce.
+        if (($args['orderby'] ?? '') === 'date') {
+            usort($matches, function ($a, $b) use ($args) {
+                $dir = (($args['order'] ?? 'DESC') === 'ASC') ? 1 : -1;
+                return $dir * strcmp((string) $a->post_date_gmt, (string) $b->post_date_gmt);
+            });
+        }
+
+        return $matches;
+    }
+}
+
+if (!function_exists('mysql2date')) {
+    /**
+     * Minimal stand-in for mysql2date('c', $gmt, false) — the only
+     * form the controller calls. Returns the given GMT timestamp
+     * formatted as ISO 8601 with a +00:00 offset, matching what WP
+     * produces for the 'c' format with $translate=false.
+     */
+    function mysql2date(string $format, string $date, bool $translate = true): string
+    {
+        if ($date === '') {
+            return '';
+        }
+        $ts = strtotime($date . ' UTC');
+        if ($ts === false) {
+            return '';
+        }
+        // Force UTC offset to +00:00 to mirror the GMT input.
+        return gmdate('Y-m-d\TH:i:s', $ts) . '+00:00';
+    }
+}
+
+if (!function_exists('rest_ensure_response')) {
+    /**
+     * Wraps a payload in a WP_REST_Response if it isn't one
+     * already — same contract as the WP function.
+     */
+    function rest_ensure_response(mixed $data): \WP_REST_Response
+    {
+        if ($data instanceof \WP_REST_Response) {
+            return $data;
+        }
+        return new \WP_REST_Response($data, 200);
+    }
+}
+
+if (!function_exists('rest_sanitize_boolean')) {
+    function rest_sanitize_boolean(mixed $value): bool
+    {
+        if (is_bool($value)) {
+            return $value;
+        }
+        if (is_string($value)) {
+            $lower = strtolower($value);
+            if (in_array($lower, ['true', '1', 'yes', 'on'], true)) {
+                return true;
+            }
+            if (in_array($lower, ['false', '0', 'no', 'off', ''], true)) {
+                return false;
+            }
+        }
+        return (bool) $value;
+    }
+}
+
+if (!function_exists('absint')) {
+    function absint(mixed $value): int
+    {
+        return abs((int) $value);
+    }
+}
+
+if (!function_exists('register_rest_route')) {
+    /**
+     * Records each route registration in a global so tests can
+     * assert which routes the controller wired up and with what
+     * options (methods, permission_callback, args, etc.).
+     */
+    function register_rest_route(string $namespace, string $route, array $args = [], bool $override = false): bool
+    {
+        $GLOBALS['scrutiny_test_rest_routes'][] = [
+            'namespace' => $namespace,
+            'route'     => $route,
+            'args'      => $args,
+        ];
+        return true;
+    }
+}
+
+if (!function_exists('__return_true')) {
+    function __return_true(): bool
+    {
+        return true;
+    }
+}
+
+$GLOBALS['scrutiny_test_rest_routes'] = [];
+
+if (!class_exists('WP_Post')) {
+    /**
+     * Test double for the WP_Post class. Only the properties the
+     * controller actually reads are typed; everything else is a
+     * loose public field so individual tests can attach extras
+     * without ceremony.
+     */
+    class WP_Post
+    {
+        public int    $ID = 0;
+        public string $post_title = '';
+        public string $post_type = '';
+        public string $post_status = 'publish';
+        public string $post_modified_gmt = '';
+        public string $post_date_gmt = '';
+
+        public function __construct(array $props = [])
+        {
+            foreach ($props as $key => $value) {
+                $this->{$key} = $value;
+            }
+        }
+    }
+}
+
+if (!class_exists('WP_REST_Request')) {
+    /**
+     * Test double for WP_REST_Request. Stores a route-param map
+     * passed to the constructor and exposes get_param() — the only
+     * method the controller calls.
+     */
+    class WP_REST_Request
+    {
+        public function __construct(private array $params = []) {}
+
+        public function get_param(string $key): mixed
+        {
+            return $this->params[$key] ?? null;
+        }
+
+        public function set_param(string $key, mixed $value): void
+        {
+            $this->params[$key] = $value;
+        }
+    }
+}
+
+if (!class_exists('WP_REST_Response')) {
+    /**
+     * Test double for WP_REST_Response. Records the payload and
+     * status passed in; tests assert on these fields directly.
+     */
+    class WP_REST_Response
+    {
+        public function __construct(
+            public mixed $data = null,
+            public int $status = 200
+        ) {}
+
+        public function get_status(): int
+        {
+            return $this->status;
+        }
+
+        public function get_data(): mixed
+        {
+            return $this->data;
+        }
+    }
+}
+
+if (!class_exists('WP_REST_Server')) {
+    /**
+     * Stand-in for the routing-method constants the controller uses.
+     * The real class exposes these as class constants; tests only
+     * need the literal strings.
+     */
+    class WP_REST_Server
+    {
+        public const READABLE = 'GET';
+    }
+}
+

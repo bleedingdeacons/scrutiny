@@ -26,6 +26,7 @@ use Scrutiny\Cleanup\PrunerSettings;
 use Scrutiny\Privacy\GroupFieldsObscurer;
 use Scrutiny\Privacy\MemberFieldsObscurer;
 use Scrutiny\Privacy\PersonalDataPolicy;
+use Scrutiny\Rest\PrivacyPolicyController;
 use Psr\Container\ContainerInterface;
 use Unity\Core\Interfaces\Container;
 use Unity\Core\Interfaces\Configuration;
@@ -65,6 +66,10 @@ use function is_admin;
  *                           pruner unattended, and clears it on deactivation
  *   MemberTrashCleaner    – permanently deletes trashed members past the
  *                           retention period; runs after each cron pruner pass
+ *   PrivacyPolicyController – read-only REST endpoints for the privacy-policy
+ *                           CPT (the CPT itself has show_in_rest=false), so
+ *                           frontends and other services can fetch the
+ *                           currently-active policy without admin access
  *
  * Capabilities:
  *   scrutiny_view_personal_data – grants a user the right to see unmasked values
@@ -130,6 +135,13 @@ class Plugin
         // request hits first; gating this behind is_admin() would
         // miss front-end cron triggers entirely.
         self::$container->get(PrunerCron::class)->register();
+
+        // REST controller for the privacy-policy CPT. Registers on
+        // every request (not just admin) because rest_api_init fires
+        // on REST requests, which don't go through the admin
+        // bootstrap. Read-only and public; see the controller
+        // docblock for the route surface.
+        self::$container->get(PrivacyPolicyController::class)->register();
 
         // Initialise admin page when in the dashboard
         if (is_admin()) {
@@ -266,6 +278,14 @@ class Plugin
                 $c->get(PrunerSettings::class),
                 $c->get(MemberTrashCleaner::class)
             );
+        });
+
+        // Privacy Policy REST controller — exposes the privacy-policy
+        // CPT as a read-only REST resource. Stateless; constructor
+        // takes no dependencies (it reads ACF fields directly via
+        // get_field), so a fresh instance per resolution is fine.
+        $container->register(PrivacyPolicyController::class, function () {
+            return new PrivacyPolicyController();
         });
     }
 
