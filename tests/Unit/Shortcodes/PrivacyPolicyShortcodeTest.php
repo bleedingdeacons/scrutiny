@@ -197,10 +197,10 @@ class PrivacyPolicyShortcodeTest extends TestCase
 
         $output = $this->makeShortcode()->render();
 
-        $this->assertStringContainsString('<dt>Member</dt>', $output);
+        $this->assertStringContainsString('<dt>Contact</dt>', $output);
         $this->assertStringContainsString('<dd>Data Protection Officer</dd>', $output);
 
-        $this->assertStringContainsString('<dt>Email</dt>', $output);
+        $this->assertStringContainsString('<dt>Contact Email</dt>', $output);
         $this->assertStringContainsString('<dd>dpo@example.org</dd>', $output);
 
         $this->assertStringContainsString('<dt>Version</dt>', $output);
@@ -312,6 +312,36 @@ class PrivacyPolicyShortcodeTest extends TestCase
         // The "Click" text itself stays — only the dangerous
         // attribute is stripped, not the tag containing it.
         $this->assertStringContainsString('Click', $output);
+    }
+
+    /** @test */
+    public function it_strips_style_blocks_from_the_policy_body(): void
+    {
+        // Regression guard: an early version rendered <style>
+        // blocks pasted into the WYSIWYG verbatim. Depending on
+        // where the shortcode lands in the page DOM, browsers can
+        // surface those rules as visible CSS-source text rather
+        // than applying them as a stylesheet — the author who
+        // pasted "body { font-family: … }" into their policy
+        // expected neither outcome. Stripping <style> entirely is
+        // safer than trusting either rendering path.
+        $body = '<style>body { color: red; }</style>'
+              . '<p>Section one.</p>'
+              . '<style type="text/css">.x { display: none }</style>'
+              . '<p>Section two.</p>';
+
+        $this->seedPolicy(1, '2026-01-01 00:00:00', active: true, body: $body);
+
+        $output = $this->makeShortcode()->render();
+
+        $this->assertStringNotContainsString('<style', $output);
+        $this->assertStringNotContainsString('font-family', $output);
+        $this->assertStringNotContainsString('color: red', $output);
+        $this->assertStringNotContainsString('display: none', $output);
+        // Surrounding paragraphs survive — the strip is scoped to
+        // the <style> tags, not to neighbouring content.
+        $this->assertStringContainsString('<p>Section one.</p>', $output);
+        $this->assertStringContainsString('<p>Section two.</p>', $output);
     }
 
     /** @test */

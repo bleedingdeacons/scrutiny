@@ -101,14 +101,33 @@ final class PrivacyPolicyShortcode
         // aggressively so a malformed contact name or version
         // string can never inject markup. The policy body is the
         // exception: it is the WYSIWYG output the editor authored,
-        // so it is run through wp_kses_post() to strip dangerous
-        // tags while preserving the formatting paragraphs, lists,
-        // links and inline styles the editor expects to see.
+        // so it goes through a layered pipeline — explicit removal
+        // of <style> and <script> blocks (which can leak verbatim
+        // into the rendered page from a careless paste), then
+        // wp_kses_post() to strip any remaining dangerous tags
+        // while preserving the formatting paragraphs, lists, links
+        // and inline styles the editor expects to see.
         $contact  = esc_html((string) $shape['contact']);
         $email    = esc_html((string) $shape['contact_email']);
         $version  = esc_html((string) $shape['version']);
         $modified = esc_html((string) $shape['modified']);
-        $body     = wp_kses_post((string) $shape['policy']);
+
+        // Strip any <style>…</style> blocks before the kses pass.
+        // wp_kses_post() allows <style> through (WP uses it for
+        // editor-injected inline styles), but in the privacy-policy
+        // context a leaked <style> block is almost always an
+        // accidental copy-paste from a styled source — and depending
+        // on where the rendered shortcode lands in the DOM, the
+        // browser may treat the contents as visible text rather than
+        // as a stylesheet, which is exactly what produced the "body
+        // { font-family: … }" rendering bug. We also drop <script>
+        // explicitly even though kses removes it, so that callers
+        // reading this code don't have to verify the kses behaviour
+        // to know dangerous tags are gone.
+        $rawBody = (string) $shape['policy'];
+        $rawBody = preg_replace('#<style\b[^>]*>.*?</style>#is', '', $rawBody) ?? $rawBody;
+        $rawBody = preg_replace('#<script\b[^>]*>.*?</script>#is', '', $rawBody) ?? $rawBody;
+        $body    = wp_kses_post($rawBody);
 
         // The container element carries a stable class so themes
         // can target it without depending on internal markup. The
@@ -120,8 +139,8 @@ final class PrivacyPolicyShortcode
         return ''
             . '<div class="scrutiny-privacy-policy">'
             .   '<dl class="scrutiny-privacy-policy__meta">'
-            .     '<dt>Member</dt><dd>' . $contact . '</dd>'
-            .     '<dt>Email</dt><dd>' . $email . '</dd>'
+            .     '<dt>Contact</dt><dd>' . $contact . '</dd>'
+            .     '<dt>Contact Email</dt><dd>' . $email . '</dd>'
             .     '<dt>Version</dt><dd>' . $version . '</dd>'
             .     '<dt>Updated</dt><dd>' . $modified . '</dd>'
             .   '</dl>'
