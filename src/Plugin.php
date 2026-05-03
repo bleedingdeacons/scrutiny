@@ -27,6 +27,7 @@ use Scrutiny\Privacy\GroupFieldsObscurer;
 use Scrutiny\Privacy\MemberFieldsObscurer;
 use Scrutiny\Privacy\PersonalDataPolicy;
 use Scrutiny\Rest\PrivacyPolicyController;
+use Scrutiny\Shortcodes\PrivacyPolicyShortcode;
 use Psr\Container\ContainerInterface;
 use Unity\Core\Interfaces\Container;
 use Unity\Core\Interfaces\Configuration;
@@ -70,6 +71,12 @@ use function is_admin;
  *                           CPT (the CPT itself has show_in_rest=false), so
  *                           frontends and other services can fetch the
  *                           currently-active policy without admin access
+ *   PrivacyPolicyShortcode – frontend-facing [scrutiny_privacy_policy]
+ *                           shortcode that renders the active policy's
+ *                           metadata (contact, email, version, modified)
+ *                           plus its WYSIWYG body inline. Reuses the
+ *                           controller's formatPolicy() so the shortcode
+ *                           and the REST endpoint render identical content
  *
  * Capabilities:
  *   scrutiny_view_personal_data – grants a user the right to see unmasked values
@@ -142,6 +149,15 @@ class Plugin
         // bootstrap. Read-only and public; see the controller
         // docblock for the route surface.
         self::$container->get(PrivacyPolicyController::class)->register();
+
+        // Privacy policy shortcode — registers unconditionally
+        // because shortcodes are resolved by content rendering on
+        // any request (frontend, REST, admin previews). Calling
+        // add_shortcode is idempotent and side-effect free until
+        // the tag is actually used in content, so registering
+        // alongside the REST controller costs nothing on requests
+        // where the shortcode never appears.
+        self::$container->get(PrivacyPolicyShortcode::class)->register();
 
         // Initialise admin page when in the dashboard
         if (is_admin()) {
@@ -286,6 +302,16 @@ class Plugin
         // get_field), so a fresh instance per resolution is fine.
         $container->register(PrivacyPolicyController::class, function () {
             return new PrivacyPolicyController();
+        });
+
+        // Privacy Policy shortcode — the frontend twin of the REST
+        // controller. Depends on the controller for formatPolicy(),
+        // which keeps the two surfaces in lock-step on field
+        // selection, active-flag coercion, and timestamp shape.
+        $container->register(PrivacyPolicyShortcode::class, function (ContainerInterface $c) {
+            return new PrivacyPolicyShortcode(
+                $c->get(PrivacyPolicyController::class)
+            );
         });
     }
 

@@ -481,6 +481,67 @@ if (!function_exists('__return_true')) {
 
 $GLOBALS['scrutiny_test_rest_routes'] = [];
 
+// ──────────────────────────────────────────────
+//  Shortcode + escaping stubs
+//
+//  PrivacyPolicyShortcode registers a tag via add_shortcode() and
+//  passes its rendered fields through esc_html() / wp_kses_post().
+//  Tests assert on the registered tag and on the rendered HTML, so
+//  each stub records exactly what the production function would
+//  produce — minus the WP-specific filter chain we don't have a
+//  harness for.
+//
+//  Keys: $GLOBALS['scrutiny_test_shortcodes'] → [tag => callable]
+// ──────────────────────────────────────────────
+
+$GLOBALS['scrutiny_test_shortcodes'] = [];
+
+if (!function_exists('add_shortcode')) {
+    /**
+     * Records the (tag, callback) pair so tests can assert on the
+     * registration. Mirrors WP's behaviour of overwriting an
+     * earlier registration with the same tag.
+     */
+    function add_shortcode(string $tag, callable $callback): void
+    {
+        $GLOBALS['scrutiny_test_shortcodes'][$tag] = $callback;
+    }
+}
+
+if (!function_exists('esc_html')) {
+    /**
+     * Minimal stand-in for esc_html() — escapes the four HTML
+     * specials the rendered scalar fields might contain. WP's real
+     * implementation also does encoding-aware UTF-8 sanitisation,
+     * but for the value space the shortcode emits (contact name,
+     * email, version, ISO timestamp) htmlspecialchars() is a faithful
+     * approximation.
+     */
+    function esc_html(string $text): string
+    {
+        return htmlspecialchars($text, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+    }
+}
+
+if (!function_exists('wp_kses_post')) {
+    /**
+     * Stand-in for wp_kses_post(), which strips dangerous tags
+     * while preserving the standard "post content" tag set. The
+     * real implementation runs a full whitelist; for the shortcode
+     * tests we only need to verify (a) safe markup passes through
+     * intact, and (b) clearly-dangerous markup (script/onerror) is
+     * removed. A minimal regex-based filter covers both.
+     */
+    function wp_kses_post(string $html): string
+    {
+        // Drop <script>…</script> blocks entirely.
+        $html = preg_replace('#<script\b[^>]*>.*?</script>#is', '', $html) ?? $html;
+        // Drop inline event handlers like onclick="…" / onerror='…'.
+        $html = preg_replace('#\son\w+\s*=\s*("[^"]*"|\'[^\']*\')#i', '', $html) ?? $html;
+        return $html;
+    }
+}
+
 if (!class_exists('WP_Post')) {
     /**
      * Test double for the WP_Post class. Only the properties the
