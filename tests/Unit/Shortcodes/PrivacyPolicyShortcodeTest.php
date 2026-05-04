@@ -16,8 +16,8 @@ use WP_Post;
  * locates the active privacy policy via the same query the
  * controller's `getActive()` route uses, projects it through the
  * shared `formatPolicy()` formatter, and emits an HTML block with
- * four escaped scalar fields (contact, email, version, modified)
- * plus the WYSIWYG body filtered through wp_kses_post().
+ * two escaped scalar fields (version, modified) plus the WYSIWYG
+ * body filtered through wp_kses_post().
  *
  * Coverage focuses on:
  *   - Registration of the shortcode tag.
@@ -98,12 +98,12 @@ class PrivacyPolicyShortcodeTest extends TestCase
         $output = $this->makeShortcode()->render();
 
         // Both the metadata block and the body container are
-        // present, and the contact name authored on the fixture
+        // present, and the policy body authored on the fixture
         // appears in the output. Specific class names are checked
         // separately; here we just want to know the happy path
         // produces visible content.
         $this->assertStringContainsString('scrutiny-privacy-policy', $output);
-        $this->assertStringContainsString('Contact 1', $output);
+        $this->assertStringContainsString('Policy 1 body', $output);
     }
 
     /** @test */
@@ -136,13 +136,13 @@ class PrivacyPolicyShortcodeTest extends TestCase
         // but one a busy admin can plausibly create. The shortcode
         // must mirror the REST controller's `getActive()` rule:
         // newest wins, deterministically.
-        $this->seedPolicy(1, '2026-01-01 00:00:00', active: true, contact: 'Older Officer');
-        $this->seedPolicy(2, '2026-06-01 00:00:00', active: true, contact: 'Newer Officer');
+        $this->seedPolicy(1, '2026-01-01 00:00:00', active: true, version: '1.0-old');
+        $this->seedPolicy(2, '2026-06-01 00:00:00', active: true, version: '2.0-new');
 
         $output = $this->makeShortcode()->render();
 
-        $this->assertStringContainsString('Newer Officer', $output);
-        $this->assertStringNotContainsString('Older Officer', $output);
+        $this->assertStringContainsString('2.0-new', $output);
+        $this->assertStringNotContainsString('1.0-old', $output);
     }
 
     /** @test */
@@ -163,8 +163,6 @@ class PrivacyPolicyShortcodeTest extends TestCase
         ]);
         $GLOBALS['scrutiny_test_acf_fields'][7] = [
             'gdpr-policy-active'  => true,
-            'gdpr-policy-contact' => 'Should Not Appear',
-            'gdpr-contact-email'  => 'draft@example.org',
             'gdpr-policy'         => '<p>Draft body.</p>',
             'gdpr-policy-version' => '1.0',
         ];
@@ -177,31 +175,24 @@ class PrivacyPolicyShortcodeTest extends TestCase
     // ──────────────────────────────────────────────
 
     /** @test */
-    public function it_renders_all_four_metadata_fields_with_their_labels(): void
+    public function it_renders_both_metadata_fields_with_their_labels(): void
     {
-        // The four metadata fields the user explicitly asked for —
-        // member (contact), email, version, updated (modified) —
-        // must each appear under a recognisable label so a reader
-        // can tell which value is which. The dt/dd structure is a
-        // documented contract; themes target the labels and class
-        // names directly.
+        // The two metadata fields the shortcode surfaces — version
+        // and updated (modified) — must each appear under a
+        // recognisable label so a reader can tell which value is
+        // which. The dt/dd structure is a documented contract;
+        // themes target the labels and class names directly. This
+        // test also pins the absence of the old contact/email rows
+        // so a regression that re-adds them is caught.
         $this->seedPolicy(
             1,
             '2026-04-15 09:30:00',
             active: true,
-            contact: 'Data Protection Officer',
-            email: 'dpo@example.org',
             version: '2.1',
             body: '<p>Body text.</p>',
         );
 
         $output = $this->makeShortcode()->render();
-
-        $this->assertStringContainsString('<dt>Contact</dt>', $output);
-        $this->assertStringContainsString('<dd>Data Protection Officer</dd>', $output);
-
-        $this->assertStringContainsString('<dt>Contact Email</dt>', $output);
-        $this->assertStringContainsString('<dd>dpo@example.org</dd>', $output);
 
         $this->assertStringContainsString('<dt>Version</dt>', $output);
         $this->assertStringContainsString('<dd>2.1</dd>', $output);
@@ -214,15 +205,24 @@ class PrivacyPolicyShortcodeTest extends TestCase
             '<dd>2026-04-15T09:30:00+00:00</dd>',
             $output
         );
+
+        // The contact and contact-email rows were removed from the
+        // shortcode's output; they must not reappear under either
+        // their label or their underlying ACF values.
+        $this->assertStringNotContainsString('<dt>Contact</dt>', $output);
+        $this->assertStringNotContainsString('<dt>Contact Email</dt>', $output);
     }
 
     /** @test */
-    public function it_renders_the_policy_body_inside_a_dedicated_container(): void
+    public function it_renders_the_policy_body_in_full(): void
     {
-        // The WYSIWYG body sits in its own block so theme CSS can
-        // distinguish "metadata pair" from "rendered policy text".
-        // If the wrapper class drifts, every theme overriding it
-        // breaks silently.
+        // The WYSIWYG body must reach the rendered output intact —
+        // every authored paragraph, in order, with no truncation
+        // from the metadata-injection pass. Previous renderings
+        // wrapped the body in its own container; the current
+        // shortcode flattens it into the outer wrapper instead, so
+        // the test pins the visible-content guarantee rather than
+        // the (now-removed) inner div.
         $this->seedPolicy(
             1,
             '2026-01-01 00:00:00',
@@ -233,11 +233,103 @@ class PrivacyPolicyShortcodeTest extends TestCase
         $output = $this->makeShortcode()->render();
 
         $this->assertStringContainsString(
-            '<div class="scrutiny-privacy-policy__body">',
+            '<div class="scrutiny-privacy-policy">',
             $output
         );
         $this->assertStringContainsString('<p>Section one.</p>', $output);
         $this->assertStringContainsString('<p>Section two.</p>', $output);
+    }
+
+    // ──────────────────────────────────────────────
+    //  Metadata placement
+    // ──────────────────────────────────────────────
+
+    /** @test */
+    public function it_appends_the_metadata_after_the_policy_body(): void
+    {
+        // The metadata is the small-print tail of the policy —
+        // contact, version, last-modified — so the rendered page
+        // reads "policy text first, metadata last". Every body
+        // element must appear before the <dl>; pinning the order
+        // with strpos catches any future refactor that puts the
+        // block somewhere else.
+        $body = '<h1>AA Intergroup Privacy Policy</h1>'
+              . '<h2>1. Purpose</h2>'
+              . '<p>This intergroup keeps limited contact details.</p>'
+              . '<h2>2. What we hold</h2>'
+              . '<p>Name, email, role.</p>';
+
+        $this->seedPolicy(1, '2026-01-01 00:00:00', active: true, body: $body);
+
+        $output = $this->makeShortcode()->render();
+
+        $h1Pos        = strpos($output, '<h1>AA Intergroup Privacy Policy</h1>');
+        $firstH2Pos   = strpos($output, '<h2>1. Purpose</h2>');
+        $secondH2Pos  = strpos($output, '<h2>2. What we hold</h2>');
+        $lastBodyPos  = strpos($output, '<p>Name, email, role.</p>');
+        $metaPos      = strpos($output, '<dl class="scrutiny-privacy-policy__meta">');
+
+        $this->assertNotFalse($h1Pos);
+        $this->assertNotFalse($firstH2Pos);
+        $this->assertNotFalse($secondH2Pos);
+        $this->assertNotFalse($lastBodyPos);
+        $this->assertNotFalse($metaPos);
+
+        // Document order: h1, first h2, second h2, last paragraph,
+        // then the metadata block. The metadata trails everything
+        // the editor authored.
+        $this->assertLessThan($firstH2Pos,  $h1Pos);
+        $this->assertLessThan($secondH2Pos, $firstH2Pos);
+        $this->assertLessThan($lastBodyPos, $secondH2Pos);
+        $this->assertLessThan($metaPos,     $lastBodyPos);
+    }
+
+    /** @test */
+    public function it_appends_the_metadata_when_the_body_has_no_headings(): void
+    {
+        // The degenerate case: a single block of prose with no
+        // headings at all. The metadata still trails the body —
+        // the placement rule is uniform across body shapes, so a
+        // policy authored as one flat paragraph and a policy
+        // authored with full sectioning land their metadata in
+        // the same relative position.
+        $body = '<p>One long paragraph of policy text.</p>';
+
+        $this->seedPolicy(1, '2026-01-01 00:00:00', active: true, body: $body);
+
+        $output = $this->makeShortcode()->render();
+
+        $bodyPos = strpos($output, '<p>One long paragraph');
+        $metaPos = strpos($output, '<dl class="scrutiny-privacy-policy__meta">');
+
+        $this->assertNotFalse($bodyPos);
+        $this->assertNotFalse($metaPos);
+        $this->assertLessThan($metaPos, $bodyPos);
+    }
+
+    /** @test */
+    public function the_metadata_block_appears_exactly_once(): void
+    {
+        // Defence in depth: the append is a single string
+        // concatenation, so duplication is unlikely — but a
+        // future refactor might reintroduce a regex-based
+        // placement, and the "exactly one block" guarantee is
+        // what keeps the rendered page from showing the
+        // small-print twice on a multi-section policy.
+        $body = '<h1>Title</h1>'
+              . '<h2>One</h2><p>a</p>'
+              . '<h2>Two</h2><p>b</p>'
+              . '<h2>Three</h2><p>c</p>';
+
+        $this->seedPolicy(1, '2026-01-01 00:00:00', active: true, body: $body);
+
+        $output = $this->makeShortcode()->render();
+
+        $occurrences = substr_count(
+            $output,
+            '<dl class="scrutiny-privacy-policy__meta">'
+        );
+        $this->assertSame(1, $occurrences);
     }
 
     /** @test */
@@ -247,23 +339,19 @@ class PrivacyPolicyShortcodeTest extends TestCase
         // fields, but a misconfigured input or a future field that
         // accepts free text shouldn't be able to inject markup
         // into the rendered output. Each scalar is run through
-        // esc_html(); a stray angle bracket in any of them must
-        // come back encoded.
+        // esc_html(); a stray angle bracket or ampersand in any of
+        // them must come back encoded.
         $this->seedPolicy(
             1,
             '2026-01-01 00:00:00',
             active: true,
-            contact: 'Officer <script>',
-            email: 'a@b.com" onmouseover="x',
-            version: '1.0 & 2.0',
+            version: '1.0 & 2.0 <script>',
         );
 
         $output = $this->makeShortcode()->render();
 
-        $this->assertStringNotContainsString('Officer <script>', $output);
-        $this->assertStringContainsString('Officer &lt;script&gt;', $output);
-        $this->assertStringNotContainsString('onmouseover="x', $output);
-        $this->assertStringContainsString('1.0 &amp; 2.0', $output);
+        $this->assertStringNotContainsString('1.0 & 2.0 <script>', $output);
+        $this->assertStringContainsString('1.0 &amp; 2.0 &lt;script&gt;', $output);
     }
 
     /** @test */
@@ -370,15 +458,13 @@ class PrivacyPolicyShortcodeTest extends TestCase
      * Seed a published policy fixture. Mirrors the helper in
      * PrivacyPolicyControllerTest so both suites describe the
      * fixture surface in the same vocabulary; the named-arg
-     * overrides cover the four scalar fields and the body the
+     * overrides cover the two scalar fields and the body the
      * shortcode actually surfaces in its output.
      */
     private function seedPolicy(
         int $id,
         string $gmt,
         bool $active = false,
-        string $contact = '',
-        string $email = '',
         string $version = '',
         string $body = '',
     ): void {
@@ -392,8 +478,6 @@ class PrivacyPolicyShortcodeTest extends TestCase
         ]);
 
         $GLOBALS['scrutiny_test_acf_fields'][$id] = [
-            'gdpr-policy-contact' => $contact !== '' ? $contact : "Contact {$id}",
-            'gdpr-contact-email'  => $email   !== '' ? $email   : "contact{$id}@example.org",
             'gdpr-policy'         => $body    !== '' ? $body    : "<p>Policy {$id} body.</p>",
             'gdpr-policy-version' => $version !== '' ? $version : "1.{$id}",
             'gdpr-policy-active'  => $active,

@@ -23,13 +23,14 @@ use function wp_kses_post;
  *
  *     [scrutiny_privacy_policy]
  *
- * The output contains four scalar fields rendered as plain text —
- * contact (the "member" responsible for the policy), contact email,
- * version, and the GMT-modified timestamp — followed by the policy
- * body as WordPress WYSIWYG markup. The body is the
- * already-formatted HTML produced by ACF's `wpautop` + shortcode
- * resolution pipeline, so paragraphs, lists, and inline formatting
- * authored in the editor render as the editor intended.
+ * The output renders the policy body as WordPress WYSIWYG markup
+ * — the already-formatted HTML produced by ACF's `wpautop` and
+ * shortcode resolution pipeline, so paragraphs, lists, and inline
+ * formatting authored in the editor render as the editor intended.
+ * Two scalar fields (version and GMT-modified timestamp) are
+ * rendered as a `<dl>` block and appended to the end of the body —
+ * the natural reading position for the "small print" tail of a
+ * privacy notice.
  *
  * Selection rule: the most-recent published policy with the
  * `gdpr-policy-active` flag set wins. This mirrors
@@ -97,20 +98,29 @@ final class PrivacyPolicyShortcode
             return '';
         }
 
-        // The four scalar fields render as plain text — escape them
-        // aggressively so a malformed contact name or version
-        // string can never inject markup. The policy body is the
-        // exception: it is the WYSIWYG output the editor authored,
-        // so it goes through a layered pipeline — explicit removal
-        // of <style> and <script> blocks (which can leak verbatim
-        // into the rendered page from a careless paste), then
-        // wp_kses_post() to strip any remaining dangerous tags
-        // while preserving the formatting paragraphs, lists, links
-        // and inline styles the editor expects to see.
-        $contact  = esc_html((string) $shape['contact']);
-        $email    = esc_html((string) $shape['contact_email']);
+        // The two scalar fields render as plain text — escape them
+        // aggressively so a malformed version string can never inject
+        // markup. The policy body is the exception: it is the WYSIWYG
+        // output the editor authored, so it goes through a layered
+        // pipeline — explicit removal of <style> and <script> blocks
+        // (which can leak verbatim into the rendered page from a
+        // careless paste), then wp_kses_post() to strip any remaining
+        // dangerous tags while preserving the formatting paragraphs,
+        // lists, links and inline styles the editor expects to see.
         $version  = esc_html((string) $shape['version']);
         $modified = esc_html((string) $shape['modified']);
+
+        // Build the metadata block as a <dl>. Each pair sits on
+        // its own line (a fresh <dt>/<dd> per row); the layout is
+        // dictated by CSS, not inline styles, so themes can
+        // override or restyle the block via the
+        // scrutiny-privacy-policy__meta class without having to
+        // outweigh inline declarations.
+        $meta = ''
+            . '<dl class="scrutiny-privacy-policy__meta">'
+            .   '<dt>Version</dt><dd>' . $version . '</dd>'
+            .   '<dt>Updated</dt><dd>' . $modified . '</dd>'
+            . '</dl>';
 
         // Strip any <style>…</style> blocks before the kses pass.
         // wp_kses_post() allows <style> through (WP uses it for
@@ -127,25 +137,30 @@ final class PrivacyPolicyShortcode
         $rawBody = (string) $shape['policy'];
         $rawBody = preg_replace('#<style\b[^>]*>.*?</style>#is', '', $rawBody) ?? $rawBody;
         $rawBody = preg_replace('#<script\b[^>]*>.*?</script>#is', '', $rawBody) ?? $rawBody;
-        $body    = wp_kses_post($rawBody);
+
+        // Append the metadata block to the end of the body. The
+        // metadata is the "small print" tail of a privacy notice
+        // — which version is in force, when it last changed — so
+        // the natural reading position is after the policy text
+        // rather than woven into it. Appending also sidesteps the
+        // heading-detection logic the earlier injection-based
+        // approach needed: a body without a recognisable <h1>/<h2>
+        // structure is now handled by the same code path as a
+        // fully-structured one.
+        //
+        // The metadata is concatenated before the kses pass so
+        // the <dl>/<dt>/<dd> markup runs through the same
+        // sanitiser as the authored body, which means a future
+        // tightening of the allowed-tags list applies uniformly
+        // to both.
+        $rawBody = $rawBody . $meta;
+
+        $body = wp_kses_post($rawBody);
 
         // The container element carries a stable class so themes
-        // can target it without depending on internal markup. The
-        // dt/dd pairing for the metadata block keeps the field
-        // labels semantically associated with their values without
-        // pulling in any layout opinions — sites that want a
-        // different shape can override the CSS or pre-process the
-        // shortcode output via the standard WP filter chain.
-        return ''
-            . '<div class="scrutiny-privacy-policy">'
-            .   '<dl class="scrutiny-privacy-policy__meta">'
-            .     '<dt>Contact</dt><dd>' . $contact . '</dd>'
-            .     '<dt>Contact Email</dt><dd>' . $email . '</dd>'
-            .     '<dt>Version</dt><dd>' . $version . '</dd>'
-            .     '<dt>Updated</dt><dd>' . $modified . '</dd>'
-            .   '</dl>'
-            .   '<div class="scrutiny-privacy-policy__body">' . $body . '</div>'
-            . '</div>';
+        // can target the rendered shortcode without depending on
+        // internal markup.
+        return '<div class="scrutiny-privacy-policy">' . $body . '</div>';
     }
 
     /**

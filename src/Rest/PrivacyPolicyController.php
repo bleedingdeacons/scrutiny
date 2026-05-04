@@ -55,14 +55,12 @@ use function rest_ensure_response;
  * follows REST conventions:
  *
  *   {
- *     "id":            123,
- *     "title":         "Privacy Policy",
- *     "version":       "2.1",
- *     "active":        true,
- *     "contact":       "Data Protection Officer",
- *     "contact_email": "dpo@example.org",
- *     "policy":        "<p>… formatted HTML …</p>",
- *     "modified":      "2026-05-03T10:15:00+00:00"
+ *     "id":       123,
+ *     "title":    "Privacy Policy",
+ *     "version":  "2.1",
+ *     "active":   true,
+ *     "policy":   "<p>… formatted HTML …</p>",
+ *     "modified": "2026-05-03T10:15:00+00:00"
  *   }
  *
  * The `policy` field is the WYSIWYG content already passed through
@@ -74,8 +72,6 @@ final class PrivacyPolicyController
     public const NAMESPACE = 'scrutiny/v1';
     public const POST_TYPE = 'privacy-policy';
 
-    private const FIELD_CONTACT       = 'gdpr-policy-contact';
-    private const FIELD_CONTACT_EMAIL = 'gdpr-contact-email';
     private const FIELD_POLICY        = 'gdpr-policy';
     private const FIELD_VERSION       = 'gdpr-policy-version';
     private const FIELD_ACTIVE        = 'gdpr-policy-active';
@@ -267,8 +263,6 @@ final class PrivacyPolicyController
      *     title: string,
      *     version: string,
      *     active: bool,
-     *     contact: string,
-     *     contact_email: string,
      *     policy: string,
      *     modified: string
      * }
@@ -276,14 +270,12 @@ final class PrivacyPolicyController
     public function formatPolicy(WP_Post $post): array
     {
         return [
-            'id'            => (int) $post->ID,
-            'title'         => (string) $post->post_title,
-            'version'       => (string) $this->readField(self::FIELD_VERSION, (int) $post->ID),
-            'active'        => (bool) $this->readField(self::FIELD_ACTIVE, (int) $post->ID),
-            'contact'       => (string) $this->readField(self::FIELD_CONTACT, (int) $post->ID),
-            'contact_email' => (string) $this->readField(self::FIELD_CONTACT_EMAIL, (int) $post->ID),
-            'policy'        => (string) $this->readField(self::FIELD_POLICY, (int) $post->ID),
-            'modified'      => mysql2date('c', $post->post_modified_gmt, false),
+            'id'       => (int) $post->ID,
+            'title'    => (string) $post->post_title,
+            'version'  => (string) $this->readField(self::FIELD_VERSION, (int) $post->ID),
+            'active'   => (bool) $this->readField(self::FIELD_ACTIVE, (int) $post->ID),
+            'policy'   => (string) $this->readField(self::FIELD_POLICY, (int) $post->ID),
+            'modified' => mysql2date('c', $post->post_modified_gmt, false),
         ];
     }
 

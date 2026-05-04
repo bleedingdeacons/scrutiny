@@ -117,8 +117,6 @@ class PrivacyPolicyControllerTest extends TestCase
             'post_date_gmt'     => '2026-04-15 09:30:00',
         ]);
         $GLOBALS['scrutiny_test_acf_fields'][42] = [
-            'gdpr-policy-contact' => 'Data Protection Officer',
-            'gdpr-contact-email'  => 'dpo@example.org',
             'gdpr-policy'         => '<p>The full policy text.</p>',
             'gdpr-policy-version' => '2.1',
             'gdpr-policy-active'  => true,
@@ -128,14 +126,12 @@ class PrivacyPolicyControllerTest extends TestCase
         $shape      = $controller->formatPolicy($post);
 
         $this->assertSame([
-            'id'            => 42,
-            'title'         => 'Privacy Policy',
-            'version'       => '2.1',
-            'active'        => true,
-            'contact'       => 'Data Protection Officer',
-            'contact_email' => 'dpo@example.org',
-            'policy'        => '<p>The full policy text.</p>',
-            'modified'      => '2026-04-15T09:30:00+00:00',
+            'id'       => 42,
+            'title'    => 'Privacy Policy',
+            'version'  => '2.1',
+            'active'   => true,
+            'policy'   => '<p>The full policy text.</p>',
+            'modified' => '2026-04-15T09:30:00+00:00',
         ], $shape);
     }
 
@@ -173,8 +169,6 @@ class PrivacyPolicyControllerTest extends TestCase
 
         $shape = (new PrivacyPolicyController())->formatPolicy($post);
 
-        $this->assertSame('', $shape['contact']);
-        $this->assertSame('', $shape['contact_email']);
         $this->assertSame('', $shape['policy']);
         $this->assertSame('', $shape['version']);
         $this->assertFalse($shape['active']);
@@ -392,8 +386,6 @@ class PrivacyPolicyControllerTest extends TestCase
     {
         $GLOBALS['scrutiny_test_posts'][$id] = $this->makePost($id, $gmt);
         $GLOBALS['scrutiny_test_acf_fields'][$id] = [
-            'gdpr-policy-contact' => "Contact {$id}",
-            'gdpr-contact-email'  => "contact{$id}@example.org",
             'gdpr-policy'         => "<p>Policy {$id} body.</p>",
             'gdpr-policy-version' => "1.{$id}",
             'gdpr-policy-active'  => $active,
