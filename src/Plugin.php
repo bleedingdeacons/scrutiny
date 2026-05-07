@@ -29,12 +29,16 @@ use Scrutiny\Privacy\PersonalDataPolicy;
 use Scrutiny\Rest\PrivacyPolicyController;
 use Scrutiny\Shortcodes\PrivacyPolicyShortcode;
 use Psr\Container\ContainerInterface;
+use TsmlForUnity\PrivacyPolicies\TsmlPrivacyPolicyFactory;
+use TsmlForUnity\PrivacyPolicies\TsmlPrivacyPolicyRepository;
 use Unity\Core\Interfaces\Container;
 use Unity\Core\Interfaces\Configuration;
 use Unity\Members\Interfaces\MemberChangeTracker;
 use Unity\Members\Interfaces\MemberRepository;
 use Unity\Groups\Interfaces\GroupChangeTracker;
 use Unity\Positions\Interfaces\PositionChangeTracker;
+use Unity\PrivacyPolicies\Interfaces\PrivacyPolicyFactory;
+use Unity\PrivacyPolicies\Interfaces\PrivacyPolicyRepository;
 use function add_action;
 use function is_admin;
 
@@ -71,6 +75,14 @@ use function is_admin;
  *                           CPT (the CPT itself has show_in_rest=false), so
  *                           frontends and other services can fetch the
  *                           currently-active policy without admin access
+ *   PrivacyPolicyFactory  – Unity interface bound to TsmlPrivacyPolicyFactory;
+ *                           constructs PrivacyPolicy entities from a post ID
+ *                           or from raw values
+ *   PrivacyPolicyRepository – Unity interface bound to TsmlPrivacyPolicyRepository;
+ *                           CRUD over the privacy-policy CPT plus a
+ *                           findActive() helper for the "single policy
+ *                           in force" query that controller, shortcode,
+ *                           and audit consumers all need
  *   PrivacyPolicyShortcode – frontend-facing [scrutiny_privacy_policy]
  *                           shortcode that renders the active policy's
  *                           metadata (contact, email, version, modified)
@@ -187,6 +199,31 @@ class Plugin
      */
     private static function registerServices(Container $container): void
     {
+        // Privacy Policy Factory — binds the Unity interface to the
+        // TSML concrete. Doing this here (rather than in tsml-for-unity's
+        // Plugin.php where the analogous Member binding lives) is a
+        // deliberate exception: it gives Scrutiny a hard dependency on
+        // tsml-for-unity for the privacy-policy data path. Acceptable
+        // because privacy policies are intrinsically a Scrutiny concern
+        // (the controller, shortcode, and audit logger all live here),
+        // and Scrutiny has no other implementation to swap in.
+        //
+        // Stateless; constructor takes no dependencies, so a fresh
+        // instance per resolution is fine.
+        $container->register(PrivacyPolicyFactory::class, function () {
+            return new TsmlPrivacyPolicyFactory();
+        });
+
+        // Privacy Policy Repository — pulls the factory back out of the
+        // container rather than constructing one inline so the binding
+        // above remains the single source of truth. Mirrors the pattern
+        // tsml-for-unity uses for MemberRepository → TsmlMemberRepository.
+        $container->register(PrivacyPolicyRepository::class, function (ContainerInterface $c) {
+            return new TsmlPrivacyPolicyRepository(
+                $c->get(PrivacyPolicyFactory::class)
+            );
+        });
+
         // Audit Repository
         $container->register(AuditRepository::class, function () {
             return new GdprAuditRepository();
