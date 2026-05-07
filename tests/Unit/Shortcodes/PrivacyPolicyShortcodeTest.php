@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Scrutiny\Tests\Unit\Shortcodes;
 
 use PHPUnit\Framework\TestCase;
+use Scrutiny\Privacy\PrivacyPolicyFormatter;
 use Scrutiny\Rest\PrivacyPolicyController;
 use Scrutiny\Shortcodes\PrivacyPolicyShortcode;
 use Scrutiny\Tests\Unit\Rest\GlobalsBackedPrivacyPolicyRepository;
@@ -19,9 +20,9 @@ require_once __DIR__ . '/../Rest/GlobalsBackedPrivacyPolicyRepository.php';
  * The shortcode is the frontend twin of the REST controller. It
  * locates the active privacy policy via the same query the
  * controller's `getActive()` route uses, projects it through the
- * shared `formatPolicy()` formatter, and emits an HTML block with
- * two escaped scalar fields (version, modified) plus the WYSIWYG
- * body filtered through wp_kses_post().
+ * shared {@see \Scrutiny\Privacy\PrivacyPolicyFormatter}, and
+ * emits an HTML block with two escaped scalar fields (version,
+ * modified) plus the WYSIWYG body filtered through wp_kses_post().
  *
  * Coverage focuses on:
  *   - Registration of the shortcode tag.
@@ -45,15 +46,15 @@ class PrivacyPolicyShortcodeTest extends TestCase
     private function makeShortcode(): PrivacyPolicyShortcode
     {
         // The shortcode delegates to the repository for active-policy
-        // lookup and to the controller for formatting. Wiring real
+        // lookup and to the formatter for projection. Wiring real
         // collaborators (rather than mocks) keeps this suite an
         // integration check between the three classes — if either
         // collaborator's contract drifts, the rendered output
         // changes here.
         $repository = new GlobalsBackedPrivacyPolicyRepository();
-        $controller = new PrivacyPolicyController($repository);
+        $formatter  = new PrivacyPolicyFormatter();
 
-        return new PrivacyPolicyShortcode($repository, $controller);
+        return new PrivacyPolicyShortcode($repository, $formatter);
     }
 
     // ──────────────────────────────────────────────

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Scrutiny\Tests\Unit\Rest;
 
 use PHPUnit\Framework\TestCase;
+use Scrutiny\Privacy\PrivacyPolicyFormatter;
 use Scrutiny\Rest\PrivacyPolicyController;
 use WP_Post;
 use WP_REST_Request;
@@ -50,7 +51,8 @@ class PrivacyPolicyControllerTest extends TestCase
     private function makeController(): PrivacyPolicyController
     {
         return new PrivacyPolicyController(
-            new GlobalsBackedPrivacyPolicyRepository()
+            new GlobalsBackedPrivacyPolicyRepository(),
+            new PrivacyPolicyFormatter()
         );
     }
 

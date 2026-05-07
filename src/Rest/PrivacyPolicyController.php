@@ -9,13 +9,13 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
+use Scrutiny\Privacy\PrivacyPolicyFormatter;
 use Unity\PrivacyPolicies\Interfaces\PrivacyPolicy;
 use Unity\PrivacyPolicies\Interfaces\PrivacyPolicyRepository;
 use WP_REST_Request;
 use WP_REST_Response;
 use WP_REST_Server;
 use function add_action;
-use function mysql2date;
 use function register_rest_route;
 use function rest_ensure_response;
 
@@ -84,10 +84,15 @@ final class PrivacyPolicyController
      * The repository is held as a stateful collaborator (rather than
      * resolved per-call) so the container's binding remains the
      * single source of truth for storage and tests can inject a stub
-     * without a WP harness.
+     * without a WP harness. The formatter is held the same way and
+     * for the same reason — it is shared with the shortcode so that
+     * a single binding in the container governs the projection used
+     * by both surfaces.
      */
-    public function __construct(private readonly PrivacyPolicyRepository $repository)
-    {
+    public function __construct(
+        private readonly PrivacyPolicyRepository $repository,
+        private readonly PrivacyPolicyFormatter $formatter,
+    ) {
     }
 
     /**
@@ -262,14 +267,14 @@ final class PrivacyPolicyController
      * Project a {@see PrivacyPolicy} into the response shape
      * documented on the class docblock.
      *
-     * Pulled out as its own method (and made internally testable)
-     * because all three route callbacks share it, and because the
-     * shortcode reuses it to keep the two surfaces in lock-step.
-     *
-     * The interface returns `getUpdated()` in WordPress'
-     * `Y-m-d H:i:s` GMT format (the post_modified_gmt convention);
-     * mysql2date('c', …, false) converts that to ISO-8601 with a
-     * +00:00 offset, which is the format REST consumers expect.
+     * The projection logic itself lives on
+     * {@see PrivacyPolicyFormatter::format()} — this method is a
+     * thin delegator, retained as a public surface because the
+     * controller's three route callbacks call it directly and
+     * removing it would touch four call sites for a no-op rename.
+     * Tests that exercise the projection through this method are
+     * still valid: they observe the same output, just produced by
+     * the collaborator the controller was given.
      *
      * @return array{
      *     id: int,
@@ -282,15 +287,6 @@ final class PrivacyPolicyController
      */
     public function formatPolicy(PrivacyPolicy $policy): array
     {
-        $updated = $policy->getUpdated();
-
-        return [
-            'id'       => $policy->getId(),
-            'title'    => $policy->getTitle(),
-            'version'  => $policy->getVersion(),
-            'active'   => $policy->isActive(),
-            'policy'   => $policy->getPolicy(),
-            'modified' => $updated === '' ? '' : mysql2date('c', $updated, false),
-        ];
+        return $this->formatter->format($policy);
     }
 }

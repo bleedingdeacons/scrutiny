@@ -26,6 +26,7 @@ use Scrutiny\Cleanup\PrunerSettings;
 use Scrutiny\Privacy\GroupFieldsObscurer;
 use Scrutiny\Privacy\MemberFieldsObscurer;
 use Scrutiny\Privacy\PersonalDataPolicy;
+use Scrutiny\Privacy\PrivacyPolicyFormatter;
 use Scrutiny\Rest\PrivacyPolicyController;
 use Scrutiny\Shortcodes\PrivacyPolicyShortcode;
 use Psr\Container\ContainerInterface;
@@ -86,9 +87,14 @@ use function is_admin;
  *   PrivacyPolicyShortcode – frontend-facing [scrutiny_privacy_policy]
  *                           shortcode that renders the active policy's
  *                           metadata (contact, email, version, modified)
- *                           plus its WYSIWYG body inline. Reuses the
- *                           controller's formatPolicy() so the shortcode
- *                           and the REST endpoint render identical content
+ *                           plus its WYSIWYG body inline. Shares the
+ *                           PrivacyPolicyFormatter binding with the
+ *                           controller so the shortcode and the REST
+ *                           endpoint render identical content
+ *   PrivacyPolicyFormatter – stateless projector that maps a domain
+ *                           PrivacyPolicy to the flat REST/shortcode
+ *                           shape; held by both the controller and the
+ *                           shortcode
  *
  * Capabilities:
  *   scrutiny_view_personal_data – grants a user the right to see unmasked values
@@ -333,21 +339,37 @@ class Plugin
             );
         });
 
+        // Privacy Policy formatter — projects a domain PrivacyPolicy
+        // into the flat REST/shortcode shape. Stateless and shared
+        // between the REST controller and the shortcode so both
+        // surfaces emit the same field set, ordering, and timestamp
+        // format. Registered as a single binding so a future change
+        // to the projection (e.g. a new field) only has to be made
+        // in one place.
+        $container->register(PrivacyPolicyFormatter::class, function () {
+            return new PrivacyPolicyFormatter();
+        });
+
         // Privacy Policy REST controller — exposes the privacy-policy
-        // CPT as a read-only REST resource. Stateless; constructor
-        // takes no dependencies (it reads ACF fields directly via
-        // get_field), so a fresh instance per resolution is fine.
-        $container->register(PrivacyPolicyController::class, function () {
-            return new PrivacyPolicyController();
+        // CPT as a read-only REST resource. Holds the repository for
+        // storage access and the formatter for response shaping.
+        $container->register(PrivacyPolicyController::class, function (ContainerInterface $c) {
+            return new PrivacyPolicyController(
+                $c->get(PrivacyPolicyRepository::class),
+                $c->get(PrivacyPolicyFormatter::class)
+            );
         });
 
         // Privacy Policy shortcode — the frontend twin of the REST
-        // controller. Depends on the controller for formatPolicy(),
-        // which keeps the two surfaces in lock-step on field
-        // selection, active-flag coercion, and timestamp shape.
+        // controller. Depends on the repository for findActive() and
+        // on the formatter for projection. The two share a formatter
+        // binding (registered above) so the shortcode and the REST
+        // endpoint cannot disagree about field selection, active-flag
+        // coercion, or timestamp shape on the same page load.
         $container->register(PrivacyPolicyShortcode::class, function (ContainerInterface $c) {
             return new PrivacyPolicyShortcode(
-                $c->get(PrivacyPolicyController::class)
+                $c->get(PrivacyPolicyRepository::class),
+                $c->get(PrivacyPolicyFormatter::class)
             );
         });
     }

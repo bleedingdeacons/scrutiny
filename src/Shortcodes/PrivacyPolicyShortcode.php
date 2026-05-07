@@ -9,7 +9,7 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-use Scrutiny\Rest\PrivacyPolicyController;
+use Scrutiny\Privacy\PrivacyPolicyFormatter;
 use Unity\PrivacyPolicies\Interfaces\PrivacyPolicyRepository;
 use function add_shortcode;
 use function esc_html;
@@ -46,27 +46,27 @@ use function wp_kses_post;
  * a user-facing error.
  *
  * The class is intentionally thin. Two collaborators do the work:
- * the repository finds the active policy, and the controller's
- * `formatPolicy()` method projects it into the shared shape. Reusing
- * the controller's formatter keeps the two surfaces in lock-step and
- * means a future change to the policy shape only has to be made in
- * one place.
+ * the repository finds the active policy, and the formatter
+ * projects it into the shared shape. The same formatter backs the
+ * REST controller, so a future change to the policy shape only has
+ * to be made in one place — and the shortcode no longer reaches
+ * across the layering boundary into the REST package to borrow a
+ * projection.
  */
 final class PrivacyPolicyShortcode
 {
     public const TAG = 'scrutiny_privacy_policy';
 
     /**
-     * The repository sources the active policy; the controller is
-     * reused as a stateless formatter (not as a REST router) so the
-     * shortcode and the REST endpoint emit identical data shapes.
-     * Holding both as references — rather than `new`-ing them per
-     * shortcode call — lets the container manage their lifecycles
-     * and lets tests inject stubs when they need to.
+     * The repository sources the active policy; the formatter
+     * projects it into the shared shape used by the REST endpoints
+     * too. Holding both as references — rather than `new`-ing them
+     * per shortcode call — lets the container manage their
+     * lifecycles and lets tests inject stubs when they need to.
      */
     public function __construct(
         private readonly PrivacyPolicyRepository $repository,
-        private readonly PrivacyPolicyController $controller,
+        private readonly PrivacyPolicyFormatter $formatter,
     ) {
     }
 
@@ -103,7 +103,7 @@ final class PrivacyPolicyShortcode
             return '';
         }
 
-        $shape = $this->controller->formatPolicy($policy);
+        $shape = $this->formatter->format($policy);
 
         // The two scalar fields render as plain text — escape them
         // aggressively so a malformed version string can never inject
