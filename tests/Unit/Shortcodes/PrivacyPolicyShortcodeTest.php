@@ -7,7 +7,11 @@ namespace Scrutiny\Tests\Unit\Shortcodes;
 use PHPUnit\Framework\TestCase;
 use Scrutiny\Rest\PrivacyPolicyController;
 use Scrutiny\Shortcodes\PrivacyPolicyShortcode;
+use Scrutiny\Tests\Unit\Rest\GlobalsBackedPrivacyPolicyRepository;
 use WP_Post;
+
+require_once __DIR__ . '/../Rest/StubPrivacyPolicy.php';
+require_once __DIR__ . '/../Rest/GlobalsBackedPrivacyPolicyRepository.php';
 
 /**
  * Tests for the PrivacyPolicyShortcode.
@@ -40,10 +44,16 @@ class PrivacyPolicyShortcodeTest extends TestCase
 
     private function makeShortcode(): PrivacyPolicyShortcode
     {
-        // The shortcode is just a thin wrapper over the controller's
-        // formatter, so we can resolve it directly with a real
-        // controller instance — no test double needed.
-        return new PrivacyPolicyShortcode(new PrivacyPolicyController());
+        // The shortcode delegates to the repository for active-policy
+        // lookup and to the controller for formatting. Wiring real
+        // collaborators (rather than mocks) keeps this suite an
+        // integration check between the three classes — if either
+        // collaborator's contract drifts, the rendered output
+        // changes here.
+        $repository = new GlobalsBackedPrivacyPolicyRepository();
+        $controller = new PrivacyPolicyController($repository);
+
+        return new PrivacyPolicyShortcode($repository, $controller);
     }
 
     // ──────────────────────────────────────────────

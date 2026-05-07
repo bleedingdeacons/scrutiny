@@ -9,14 +9,13 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-use WP_Post;
+use Unity\PrivacyPolicies\Interfaces\PrivacyPolicy;
+use Unity\PrivacyPolicies\Interfaces\PrivacyPolicyRepository;
 use WP_REST_Request;
 use WP_REST_Response;
 use WP_REST_Server;
 use function add_action;
-use function get_field;
-use function get_post;
-use function get_posts;
+use function mysql2date;
 use function register_rest_route;
 use function rest_ensure_response;
 
@@ -50,9 +49,17 @@ use function rest_ensure_response;
  * to be readable by anyone visiting the site. Read-only: no POST,
  * PUT, PATCH, or DELETE is registered.
  *
- * The response shape strips the redundant `gdpr-` prefix from ACF
- * field names and converts kebab-case to snake_case so the JSON
- * follows REST conventions:
+ * Storage access goes through {@see PrivacyPolicyRepository} rather
+ * than touching `get_posts()` / `get_field()` directly. The repository
+ * owns the post-type query, the published-status filter, and the
+ * single-active-policy invariant; this controller is responsible only
+ * for HTTP-shaped concerns (route registration, query-param handling,
+ * status codes) and for projecting the domain object into the REST
+ * response shape.
+ *
+ * The response shape strips the redundant `gdpr-` prefix from the
+ * domain field names and uses snake_case so the JSON follows REST
+ * conventions:
  *
  *   {
  *     "id":       123,
@@ -64,17 +71,24 @@ use function rest_ensure_response;
  *   }
  *
  * The `policy` field is the WYSIWYG content already passed through
- * ACF's default formatting (wpautop and shortcode resolution), so the
- * client can drop it straight into a rendered page.
+ * ACF's default formatting (wpautop and shortcode resolution) by the
+ * repository's factory, so the client can drop it straight into a
+ * rendered page.
  */
 final class PrivacyPolicyController
 {
     public const NAMESPACE = 'scrutiny/v1';
     public const POST_TYPE = 'privacy-policy';
 
-    private const FIELD_POLICY        = 'gdpr-policy';
-    private const FIELD_VERSION       = 'gdpr-policy-version';
-    private const FIELD_ACTIVE        = 'gdpr-policy-active';
+    /**
+     * The repository is held as a stateful collaborator (rather than
+     * resolved per-call) so the container's binding remains the
+     * single source of truth for storage and tests can inject a stub
+     * without a WP harness.
+     */
+    public function __construct(private readonly PrivacyPolicyRepository $repository)
+    {
+    }
 
     /**
      * Wire the controller into WordPress.
@@ -156,26 +170,27 @@ final class PrivacyPolicyController
      * first. The `active` query param narrows the result to the
      * currently-active subset — useful for frontends that don't want
      * to filter client-side.
+     *
+     * The repository's findAll() defaults already apply the
+     * "published only" filter; the date/order args layer the
+     * documented "newest first" contract on top, so the controller
+     * doesn't depend on the storage default for ordering.
      */
     public function getCollection(WP_REST_Request $request): WP_REST_Response
     {
         $activeOnly = (bool) $request->get_param('active');
 
-        $posts = get_posts([
-            'post_type'      => self::POST_TYPE,
-            'post_status'    => 'publish',
-            'posts_per_page' => -1,
-            'orderby'        => 'date',
-            'order'          => 'DESC',
+        $policies = $this->repository->findAll([
+            'orderby' => 'date',
+            'order'   => 'DESC',
         ]);
 
         $items = [];
-        foreach ($posts as $post) {
-            $formatted = $this->formatPolicy($post);
-            if ($activeOnly && !$formatted['active']) {
+        foreach ($policies as $policy) {
+            if ($activeOnly && !$policy->isActive()) {
                 continue;
             }
-            $items[] = $formatted;
+            $items[] = $this->formatPolicy($policy);
         }
 
         return rest_ensure_response($items);
@@ -184,57 +199,52 @@ final class PrivacyPolicyController
     /**
      * GET /scrutiny/v1/privacy-policies/active
      *
-     * Returns the single most-recent active policy. If two policies
-     * are flagged active simultaneously (a configuration error, but
-     * the schema doesn't prevent it), the newer one wins. If none
-     * are active, returns a 404 — callers should treat the absence
-     * of an active policy as a deployment problem rather than an
-     * empty-but-OK state.
+     * Returns the single most-recent active policy. The
+     * "newest-active wins" tie-breaker that used to live in this
+     * controller now sits in the repository's findActive()
+     * implementation — keeping the rule in one place means the
+     * shortcode and the REST endpoint can never disagree about
+     * which policy is "active" on the same page load.
+     *
+     * If no active policy is published, returns a 404 — callers
+     * should treat the absence of an active policy as a deployment
+     * problem rather than an empty-but-OK state.
      */
     public function getActive(): WP_REST_Response
     {
-        $posts = get_posts([
-            'post_type'      => self::POST_TYPE,
-            'post_status'    => 'publish',
-            'posts_per_page' => -1,
-            'orderby'        => 'date',
-            'order'          => 'DESC',
-        ]);
+        $policy = $this->repository->findActive();
 
-        foreach ($posts as $post) {
-            $formatted = $this->formatPolicy($post);
-            if ($formatted['active']) {
-                return rest_ensure_response($formatted);
-            }
+        if ($policy === null) {
+            return new WP_REST_Response(
+                [
+                    'code'    => 'scrutiny_no_active_policy',
+                    'message' => 'No active privacy policy is published.',
+                    'data'    => ['status' => 404],
+                ],
+                404
+            );
         }
 
-        return new WP_REST_Response(
-            [
-                'code'    => 'scrutiny_no_active_policy',
-                'message' => 'No active privacy policy is published.',
-                'data'    => ['status' => 404],
-            ],
-            404
-        );
+        return rest_ensure_response($this->formatPolicy($policy));
     }
 
     /**
      * GET /scrutiny/v1/privacy-policies/{id}
      *
-     * Fetches a single policy by ID. Returns 404 if the post does
-     * not exist, is the wrong post type, or is not published —
-     * unpublished policies must not leak through this endpoint.
+     * Fetches a single policy by ID. Returns 404 if the repository
+     * declines to return one — covering the "no such post",
+     * "wrong post type", and "not published" cases uniformly.
+     * Pushing those checks into the repository keeps unpublished
+     * policy text from leaking through this endpoint without the
+     * controller having to know which storage column governs each
+     * exclusion.
      */
     public function getItem(WP_REST_Request $request): WP_REST_Response
     {
-        $id   = (int) $request->get_param('id');
-        $post = get_post($id);
+        $id     = (int) $request->get_param('id');
+        $policy = $this->repository->findById($id);
 
-        if (
-            !$post instanceof WP_Post
-            || $post->post_type !== self::POST_TYPE
-            || $post->post_status !== 'publish'
-        ) {
+        if ($policy === null) {
             return new WP_REST_Response(
                 [
                     'code'    => 'scrutiny_policy_not_found',
@@ -245,18 +255,21 @@ final class PrivacyPolicyController
             );
         }
 
-        return rest_ensure_response($this->formatPolicy($post));
+        return rest_ensure_response($this->formatPolicy($policy));
     }
 
     /**
-     * Project a {@see WP_Post} plus its ACF fields into the
-     * response shape documented on the class docblock.
+     * Project a {@see PrivacyPolicy} into the response shape
+     * documented on the class docblock.
      *
      * Pulled out as its own method (and made internally testable)
-     * because all three route callbacks share it. Field reads go
-     * through {@see self::readField()} which is a thin shim around
-     * `get_field()` so unit tests can supply field values without a
-     * WP runtime.
+     * because all three route callbacks share it, and because the
+     * shortcode reuses it to keep the two surfaces in lock-step.
+     *
+     * The interface returns `getUpdated()` in WordPress'
+     * `Y-m-d H:i:s` GMT format (the post_modified_gmt convention);
+     * mysql2date('c', …, false) converts that to ISO-8601 with a
+     * +00:00 offset, which is the format REST consumers expect.
      *
      * @return array{
      *     id: int,
@@ -267,33 +280,17 @@ final class PrivacyPolicyController
      *     modified: string
      * }
      */
-    public function formatPolicy(WP_Post $post): array
+    public function formatPolicy(PrivacyPolicy $policy): array
     {
-        return [
-            'id'       => (int) $post->ID,
-            'title'    => (string) $post->post_title,
-            'version'  => (string) $this->readField(self::FIELD_VERSION, (int) $post->ID),
-            'active'   => (bool) $this->readField(self::FIELD_ACTIVE, (int) $post->ID),
-            'policy'   => (string) $this->readField(self::FIELD_POLICY, (int) $post->ID),
-            'modified' => mysql2date('c', $post->post_modified_gmt, false),
-        ];
-    }
+        $updated = $policy->getUpdated();
 
-    /**
-     * Read an ACF field for a post, with a function-exists guard so
-     * the controller doesn't fatal if ACF is absent (the plugin
-     * already lists ACF as a soft dependency rather than hard-failing
-     * activation when it's missing).
-     *
-     * Tests stub `get_field` directly via the bootstrap, so this
-     * indirection costs nothing at runtime and earns full coverage of
-     * {@see self::formatPolicy()} without a WP harness.
-     */
-    protected function readField(string $name, int $postId): mixed
-    {
-        if (!function_exists('get_field')) {
-            return '';
-        }
-        return get_field($name, $postId);
+        return [
+            'id'       => $policy->getId(),
+            'title'    => $policy->getTitle(),
+            'version'  => $policy->getVersion(),
+            'active'   => $policy->isActive(),
+            'policy'   => $policy->getPolicy(),
+            'modified' => $updated === '' ? '' : mysql2date('c', $updated, false),
+        ];
     }
 }

@@ -10,9 +10,9 @@ if (!defined('ABSPATH')) {
 }
 
 use Scrutiny\Rest\PrivacyPolicyController;
+use Unity\PrivacyPolicies\Interfaces\PrivacyPolicyRepository;
 use function add_shortcode;
 use function esc_html;
-use function get_posts;
 use function wp_kses_post;
 
 /**
@@ -32,11 +32,11 @@ use function wp_kses_post;
  * the natural reading position for the "small print" tail of a
  * privacy notice.
  *
- * Selection rule: the most-recent published policy with the
- * `gdpr-policy-active` flag set wins. This mirrors
- * {@see PrivacyPolicyController::getActive()} so the shortcode and
- * the REST endpoint can never disagree about which policy is
- * "active" on the same page load.
+ * Selection rule: the repository's
+ * {@see PrivacyPolicyRepository::findActive()} decides which policy
+ * is "active". The REST controller's `getActive()` route uses the
+ * same call, so the shortcode and the REST endpoint cannot disagree
+ * about which policy is in force on the same page load.
  *
  * If no active policy is published, the shortcode emits an empty
  * string. The deliberate silence avoids dropping a visible
@@ -45,24 +45,29 @@ use function wp_kses_post;
  * policy — exactly the moment when an admin is least likely to want
  * a user-facing error.
  *
- * The class is intentionally thin: the heavy lifting (post lookup,
- * field projection, active-flag coercion, ISO-8601 timestamping)
- * lives on the controller's `formatPolicy()` method. Reusing it
- * keeps the two surfaces in lock-step and means a future change to
- * the policy shape only has to be made in one place.
+ * The class is intentionally thin. Two collaborators do the work:
+ * the repository finds the active policy, and the controller's
+ * `formatPolicy()` method projects it into the shared shape. Reusing
+ * the controller's formatter keeps the two surfaces in lock-step and
+ * means a future change to the policy shape only has to be made in
+ * one place.
  */
 final class PrivacyPolicyShortcode
 {
     public const TAG = 'scrutiny_privacy_policy';
 
     /**
-     * The controller is reused as a stateless formatter, not as a
-     * REST router. Holding a reference (rather than `new`-ing one
-     * per shortcode call) lets the container manage its lifecycle
-     * and lets tests inject a stub formatter when they need to.
+     * The repository sources the active policy; the controller is
+     * reused as a stateless formatter (not as a REST router) so the
+     * shortcode and the REST endpoint emit identical data shapes.
+     * Holding both as references — rather than `new`-ing them per
+     * shortcode call — lets the container manage their lifecycles
+     * and lets tests inject stubs when they need to.
      */
-    public function __construct(private readonly PrivacyPolicyController $controller)
-    {
+    public function __construct(
+        private readonly PrivacyPolicyRepository $repository,
+        private readonly PrivacyPolicyController $controller,
+    ) {
     }
 
     /**
@@ -93,10 +98,12 @@ final class PrivacyPolicyShortcode
      */
     public function render($atts = []): string
     {
-        $shape = $this->findActivePolicyShape();
-        if ($shape === null) {
+        $policy = $this->repository->findActive();
+        if ($policy === null) {
             return '';
         }
+
+        $shape = $this->controller->formatPolicy($policy);
 
         // The two scalar fields render as plain text — escape them
         // aggressively so a malformed version string can never inject
@@ -161,49 +168,5 @@ final class PrivacyPolicyShortcode
         // can target the rendered shortcode without depending on
         // internal markup.
         return '<div class="scrutiny-privacy-policy">' . $body . '</div>';
-    }
-
-    /**
-     * Locate the most-recent published active policy and project
-     * it into the shared response shape, or return null when none
-     * exists.
-     *
-     * The query mirrors {@see PrivacyPolicyController::getActive()}
-     * exactly: same post type, same status, same ordering. We
-     * deliberately re-issue the query here rather than calling the
-     * REST callback because the REST surface returns a
-     * `WP_REST_Response` (status, headers, JSON-shaped data) and
-     * the shortcode needs the raw projection.
-     *
-     * Returns the formatter output directly (not the WP_Post)
-     * because the only consumer — render() — needs the shape, and
-     * resolving here means we read each policy's ACF fields
-     * exactly once per shortcode invocation.
-     *
-     * @return array<string, mixed>|null
-     */
-    private function findActivePolicyShape(): ?array
-    {
-        $posts = get_posts([
-            'post_type'      => PrivacyPolicyController::POST_TYPE,
-            'post_status'    => 'publish',
-            'posts_per_page' => -1,
-            'orderby'        => 'date',
-            'order'          => 'DESC',
-        ]);
-
-        foreach ($posts as $post) {
-            // The formatter does the strict boolean cast on the
-            // active flag — ACF's true_false field can return a
-            // mixture of 1, '1', true, '' depending on the storage
-            // version, and we want a consistent answer across the
-            // REST surface and the shortcode.
-            $shape = $this->controller->formatPolicy($post);
-            if ($shape['active']) {
-                return $shape;
-            }
-        }
-
-        return null;
     }
 }

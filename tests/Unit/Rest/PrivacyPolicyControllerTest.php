@@ -10,6 +10,9 @@ use WP_Post;
 use WP_REST_Request;
 use WP_REST_Response;
 
+require_once __DIR__ . '/StubPrivacyPolicy.php';
+require_once __DIR__ . '/GlobalsBackedPrivacyPolicyRepository.php';
+
 /**
  * Tests for the PrivacyPolicyController.
  *
@@ -38,13 +41,26 @@ class PrivacyPolicyControllerTest extends TestCase
     //  Route registration
     // ──────────────────────────────────────────────
 
+    /**
+     * Build a controller wired to the globals-backed repository
+     * stub. Every test resolves through this helper so the
+     * collaborator stays in one place — if the controller's
+     * dependencies change again, only this method needs to update.
+     */
+    private function makeController(): PrivacyPolicyController
+    {
+        return new PrivacyPolicyController(
+            new GlobalsBackedPrivacyPolicyRepository()
+        );
+    }
+
     /** @test */
     public function it_registers_three_read_only_routes_under_the_scrutiny_v1_namespace(): void
     {
         // Regression guard: the class docblock and the README both
         // promise three routes under scrutiny/v1. Anything that drops
         // or renames one of them deserves to be caught here.
-        $controller = new PrivacyPolicyController();
+        $controller = $this->makeController();
         $controller->registerRoutes();
 
         $routes = $GLOBALS['scrutiny_test_rest_routes'];
@@ -66,7 +82,7 @@ class PrivacyPolicyControllerTest extends TestCase
         // callback should be a permissive one on every route. If a
         // future change tightens this without removing the docblock
         // guarantee, the test will fail.
-        $controller = new PrivacyPolicyController();
+        $controller = $this->makeController();
         $controller->registerRoutes();
 
         foreach ($GLOBALS['scrutiny_test_rest_routes'] as $route) {
@@ -84,7 +100,7 @@ class PrivacyPolicyControllerTest extends TestCase
         // than failing the numeric regex first. Guarding the order
         // here prevents an accidental reshuffle from breaking the
         // route silently.
-        $controller = new PrivacyPolicyController();
+        $controller = $this->makeController();
         $controller->registerRoutes();
 
         $order = array_map(fn(array $r) => $r['route'], $GLOBALS['scrutiny_test_rest_routes']);
@@ -108,22 +124,28 @@ class PrivacyPolicyControllerTest extends TestCase
         // ACF kebab-case convention to snake_case, the redundant
         // "gdpr-" prefix is stripped, and the modified timestamp is
         // ISO 8601.
-        $post = new WP_Post([
-            'ID'                => 42,
-            'post_title'        => 'Privacy Policy',
-            'post_type'         => PrivacyPolicyController::POST_TYPE,
-            'post_status'       => 'publish',
-            'post_modified_gmt' => '2026-04-15 09:30:00',
-            'post_date_gmt'     => '2026-04-15 09:30:00',
-        ]);
-        $GLOBALS['scrutiny_test_acf_fields'][42] = [
-            'gdpr-policy'         => '<p>The full policy text.</p>',
-            'gdpr-policy-version' => '2.1',
-            'gdpr-policy-active'  => true,
-        ];
+        //
+        // The formatter now reads from a PrivacyPolicy domain object
+        // rather than a WP_Post + ACF map, but the projection it
+        // emits is identical — that's the contract the REST clients
+        // already depend on.
+        $policy = new StubPrivacyPolicy(
+            new WP_Post([
+                'ID'                => 42,
+                'post_title'        => 'Privacy Policy',
+                'post_type'         => PrivacyPolicyController::POST_TYPE,
+                'post_status'       => 'publish',
+                'post_modified_gmt' => '2026-04-15 09:30:00',
+                'post_date_gmt'     => '2026-04-15 09:30:00',
+            ]),
+            [
+                'gdpr-policy'         => '<p>The full policy text.</p>',
+                'gdpr-policy-version' => '2.1',
+                'gdpr-policy-active'  => true,
+            ],
+        );
 
-        $controller = new PrivacyPolicyController();
-        $shape      = $controller->formatPolicy($post);
+        $shape = $this->makeController()->formatPolicy($policy);
 
         $this->assertSame([
             'id'       => 42,
@@ -141,18 +163,20 @@ class PrivacyPolicyControllerTest extends TestCase
         // ACF's true_false field can return 1, 0, '1', '' depending
         // on the storage backend version. The response must always
         // be a real boolean so JSON consumers can rely on
-        // typeof === "boolean".
+        // typeof === "boolean". The coercion now lives on the
+        // PrivacyPolicy implementation rather than in the formatter,
+        // but the contract the controller exposes is unchanged.
         $post = $this->makePost(7);
 
         foreach ([1, '1', true, 'yes'] as $truthy) {
-            $GLOBALS['scrutiny_test_acf_fields'][7] = ['gdpr-policy-active' => $truthy];
-            $shape = (new PrivacyPolicyController())->formatPolicy($post);
+            $policy = new StubPrivacyPolicy($post, ['gdpr-policy-active' => $truthy]);
+            $shape  = $this->makeController()->formatPolicy($policy);
             $this->assertTrue($shape['active'], 'Expected true for ' . var_export($truthy, true));
         }
 
         foreach ([0, '0', false, ''] as $falsy) {
-            $GLOBALS['scrutiny_test_acf_fields'][7] = ['gdpr-policy-active' => $falsy];
-            $shape = (new PrivacyPolicyController())->formatPolicy($post);
+            $policy = new StubPrivacyPolicy($post, ['gdpr-policy-active' => $falsy]);
+            $shape  = $this->makeController()->formatPolicy($policy);
             $this->assertFalse($shape['active'], 'Expected false for ' . var_export($falsy, true));
         }
     }
@@ -164,10 +188,9 @@ class PrivacyPolicyControllerTest extends TestCase
         // formatter. Every absent field reads back as '' (or false
         // for the boolean), so consumers see a well-formed payload
         // they can render through.
-        $post = $this->makePost(99);
-        // Deliberately register no ACF fields for post 99.
+        $policy = new StubPrivacyPolicy($this->makePost(99), []);
 
-        $shape = (new PrivacyPolicyController())->formatPolicy($post);
+        $shape = $this->makeController()->formatPolicy($policy);
 
         $this->assertSame('', $shape['policy']);
         $this->assertSame('', $shape['version']);
@@ -185,7 +208,7 @@ class PrivacyPolicyControllerTest extends TestCase
         $this->seedPolicy(2, '2026-02-01 00:00:00', active: true);
         $this->seedPolicy(3, '2026-03-01 00:00:00', active: false);
 
-        $response = (new PrivacyPolicyController())
+        $response = $this->makeController()
             ->getCollection(new WP_REST_Request());
 
         $this->assertSame(200, $response->get_status());
@@ -204,7 +227,7 @@ class PrivacyPolicyControllerTest extends TestCase
         $this->seedPolicy(2, '2026-03-01 00:00:00');
         $this->seedPolicy(3, '2026-02-01 00:00:00');
 
-        $items = (new PrivacyPolicyController())
+        $items = $this->makeController()
             ->getCollection(new WP_REST_Request())
             ->get_data();
 
@@ -219,7 +242,7 @@ class PrivacyPolicyControllerTest extends TestCase
         $this->seedPolicy(3, '2026-03-01 00:00:00', active: false);
 
         $request = new WP_REST_Request(['active' => true]);
-        $items = (new PrivacyPolicyController())
+        $items = $this->makeController()
             ->getCollection($request)
             ->get_data();
 
@@ -233,7 +256,7 @@ class PrivacyPolicyControllerTest extends TestCase
         // No 404 here — an empty array is a perfectly valid answer
         // for "list everything"; only the /active convenience route
         // 404s on absence.
-        $response = (new PrivacyPolicyController())
+        $response = $this->makeController()
             ->getCollection(new WP_REST_Request());
 
         $this->assertSame(200, $response->get_status());
@@ -251,7 +274,7 @@ class PrivacyPolicyControllerTest extends TestCase
         $this->seedPolicy(2, '2026-02-01 00:00:00', active: true);
         $this->seedPolicy(3, '2026-03-01 00:00:00', active: false);
 
-        $response = (new PrivacyPolicyController())->getActive();
+        $response = $this->makeController()->getActive();
 
         $this->assertSame(200, $response->get_status());
         $this->assertSame(2, $response->get_data()['id']);
@@ -267,7 +290,7 @@ class PrivacyPolicyControllerTest extends TestCase
         $this->seedPolicy(2, '2026-02-01 00:00:00', active: true);
         $this->seedPolicy(3, '2026-03-01 00:00:00', active: true);
 
-        $response = (new PrivacyPolicyController())->getActive();
+        $response = $this->makeController()->getActive();
 
         $this->assertSame(3, $response->get_data()['id']);
     }
@@ -277,7 +300,7 @@ class PrivacyPolicyControllerTest extends TestCase
     {
         $this->seedPolicy(1, '2026-01-01 00:00:00', active: false);
 
-        $response = (new PrivacyPolicyController())->getActive();
+        $response = $this->makeController()->getActive();
 
         $this->assertSame(404, $response->get_status());
         $this->assertSame('scrutiny_no_active_policy', $response->get_data()['code']);
@@ -286,7 +309,7 @@ class PrivacyPolicyControllerTest extends TestCase
     /** @test */
     public function the_active_route_returns_404_when_no_policies_exist_at_all(): void
     {
-        $response = (new PrivacyPolicyController())->getActive();
+        $response = $this->makeController()->getActive();
 
         $this->assertSame(404, $response->get_status());
     }
@@ -300,7 +323,7 @@ class PrivacyPolicyControllerTest extends TestCase
     {
         $this->seedPolicy(7, '2026-02-01 00:00:00', active: true);
 
-        $response = (new PrivacyPolicyController())
+        $response = $this->makeController()
             ->getItem(new WP_REST_Request(['id' => 7]));
 
         $this->assertSame(200, $response->get_status());
@@ -310,7 +333,7 @@ class PrivacyPolicyControllerTest extends TestCase
     /** @test */
     public function the_item_route_returns_404_for_a_missing_post(): void
     {
-        $response = (new PrivacyPolicyController())
+        $response = $this->makeController()
             ->getItem(new WP_REST_Request(['id' => 999]));
 
         $this->assertSame(404, $response->get_status());
@@ -329,7 +352,7 @@ class PrivacyPolicyControllerTest extends TestCase
             'post_status' => 'publish',
         ]);
 
-        $response = (new PrivacyPolicyController())
+        $response = $this->makeController()
             ->getItem(new WP_REST_Request(['id' => 50]));
 
         $this->assertSame(404, $response->get_status());
@@ -350,7 +373,7 @@ class PrivacyPolicyControllerTest extends TestCase
                 'post_status' => $status,
             ]);
 
-            $response = (new PrivacyPolicyController())
+            $response = $this->makeController()
                 ->getItem(new WP_REST_Request(['id' => 12]));
 
             $this->assertSame(
