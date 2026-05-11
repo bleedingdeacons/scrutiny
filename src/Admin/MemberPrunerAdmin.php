@@ -184,11 +184,13 @@ class MemberPrunerAdmin
                 rotated officers (when a successor exists), home-group members
                 who are not the GSR and have been inactive for the configured
                 period, and orphan members (no position and no home group) who
-                have been inactive for the same period. After each scheduled
-                run, trashed members past the retention period are permanently
-                deleted. Trashing is recoverable from the standard WordPress
-                Trash; permanent deletion is not. This page only configures the
-                cut-off values — it does not run the pruner.
+                have been inactive for the same period. Twelfth steppers with
+                a home group are never trashed by any pass — they stay on the
+                12th-step call list. After each scheduled run, trashed members
+                past the retention period are permanently deleted. Trashing is
+                recoverable from the standard WordPress Trash; permanent
+                deletion is not. This page only configures the cut-off values
+                — it does not run the pruner.
             </p>
 
             <?php if ($justUpdated) : ?>
@@ -314,6 +316,10 @@ class MemberPrunerAdmin
                                     months, they become a candidate for trashing.
                                     Officers are excluded from this rule — they
                                     are governed by the rotation grace above.
+                                    Twelfth steppers with a home group are also
+                                    excluded — they remain on the 12th-step call
+                                    list regardless of how long ago their record
+                                    was last updated.
                                 </p>
                             </td>
                         </tr>
