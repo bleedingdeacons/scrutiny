@@ -277,6 +277,166 @@ class MemberPrunerTest extends TestCase
     }
 
     // ──────────────────────────────────────────────
+    //  Twelfth-stepper protection
+    //
+    //  Cross-cutting rule that overrides the officer-rotation and
+    //  home-group-inactivity passes: a member who has a home group
+    //  AND is flagged as a twelfth stepper is an active service
+    //  worker (they take 12th-step calls) and must never be
+    //  silently trashed. These tests pin the rule from both
+    //  directions — protected members stay, unprotected ones still
+    //  go — and confirm the orphan pass is unaffected because the
+    //  rule requires a home group.
+    // ──────────────────────────────────────────────
+
+    /** @test */
+    public function it_keeps_a_home_group_member_who_is_a_twelfth_stepper_even_when_inactive(): void
+    {
+        // Updated long enough ago that the inactivity rule would
+        // normally trash them, but the twelfth-stepper flag combined
+        // with the home group shields them from the home-group pass.
+        $stepper = $this->makeMember(
+            id:               1,
+            homeGroup:        50,
+            isGSR:            false,
+            updated:          '2023-01-01 00:00:00',
+            isTwelfthStepper: true,
+        );
+
+        $pruner = $this->makePruner([$stepper]);
+        $result = $pruner->prune(rotationGraceMonths: 3, inactivityMonths: 12);
+
+        $this->assertSame([], $pruner->getTrashedIds());
+
+        // The skip is recorded with the dedicated reason so an admin
+        // reviewing the result can tell at a glance the member was
+        // protected, not merely "recent enough".
+        $skipReasons = array_column($result->getSkipped(), 'reason', 'member_id');
+        $this->assertSame(PruneResult::SKIP_PROTECTED_TWELFTH_STEPPER, $skipReasons[1] ?? null);
+    }
+
+    /** @test */
+    public function it_still_trashes_an_inactive_home_group_member_who_is_not_a_twelfth_stepper(): void
+    {
+        // Regression guard: the new protection rule must not change
+        // the outcome for the common case. Same inactivity profile
+        // as the previous test, but with the flag off → the
+        // home-group pass should still trash them.
+        $ordinary = $this->makeMember(
+            id:               2,
+            homeGroup:        50,
+            isGSR:            false,
+            updated:          '2023-01-01 00:00:00',
+            isTwelfthStepper: false,
+        );
+
+        $pruner = $this->makePruner([$ordinary]);
+        $result = $pruner->prune(rotationGraceMonths: 3, inactivityMonths: 12);
+
+        $this->assertTrashedIds($result, [2]);
+    }
+
+    /** @test */
+    public function the_protection_requires_a_home_group_an_orphan_twelfth_stepper_is_not_protected(): void
+    {
+        // A member flagged as a twelfth stepper but with no home
+        // group is technically an orphan. The rule is "home group
+        // AND twelfth stepper" — both halves matter. Without the
+        // home group, they fall through to the orphan pass and the
+        // normal inactivity rule applies. Documents the boundary
+        // explicitly so a future refactor can't quietly broaden
+        // the shield.
+        $strayStepper = $this->makeMember(
+            id:               3,
+            homeGroup:        0,
+            updated:          '2023-01-01 00:00:00',
+            isTwelfthStepper: true,
+        );
+
+        $pruner = $this->makePruner([$strayStepper]);
+        $result = $pruner->prune(rotationGraceMonths: 3, inactivityMonths: 12);
+
+        $this->assertTrashedIds($result, [3]);
+    }
+
+    /** @test */
+    public function it_keeps_a_rotated_officer_who_has_a_home_group_and_is_a_twelfth_stepper(): void
+    {
+        // The protection is cross-cutting: it applies in the officer
+        // pass too, not only the home-group pass. A former officer
+        // (rotation past, successor present) who also has a home
+        // group and is a twelfth stepper is still doing service work
+        // and must be kept. Without this branch the officer pass
+        // would trash them before the home-group pass ever ran.
+        $formerOfficer = $this->makeMember(
+            id:               4,
+            position:         100,
+            rotation:         '2024-01-01',
+            homeGroup:        50,
+            isTwelfthStepper: true,
+        );
+        $successor = $this->makeMember(id: 5, position: 100, rotation: '2025-01-01');
+
+        $pruner = $this->makePruner([$formerOfficer, $successor]);
+        $result = $pruner->prune(rotationGraceMonths: 3, inactivityMonths: 12);
+
+        $this->assertSame([], $pruner->getTrashedIds());
+
+        $skipReasons = array_column($result->getSkipped(), 'reason', 'member_id');
+        $this->assertSame(PruneResult::SKIP_PROTECTED_TWELFTH_STEPPER, $skipReasons[4] ?? null);
+    }
+
+    /** @test */
+    public function it_still_trashes_a_rotated_officer_who_is_a_twelfth_stepper_without_a_home_group(): void
+    {
+        // Mirror of the previous test for the officer pass: the
+        // twelfth-stepper flag alone isn't enough — a home group
+        // is also required for the shield to apply. Without one,
+        // the rotated officer is trashed as normal.
+        $stray = $this->makeMember(
+            id:               6,
+            position:         100,
+            rotation:         '2024-01-01',
+            homeGroup:        0,
+            isTwelfthStepper: true,
+        );
+        $successor = $this->makeMember(id: 7, position: 100, rotation: '2025-01-01');
+
+        $pruner = $this->makePruner([$stray, $successor]);
+        $result = $pruner->prune(rotationGraceMonths: 3, inactivityMonths: 12);
+
+        $this->assertTrashedIds($result, [6]);
+    }
+
+    /** @test */
+    public function the_protection_does_not_increase_the_home_group_considered_count_beyond_the_normal_path(): void
+    {
+        // The home-group pass increments its considered counter
+        // before the protection check runs, so a protected member
+        // is still "considered" — just skipped. This keeps the
+        // counter honest: it counts every home-group member the
+        // pass examined, with the breakdown of *why* each was
+        // skipped recorded in the skip entries.
+        $stepper = $this->makeMember(
+            id:               8,
+            homeGroup:        50,
+            updated:          '2023-01-01 00:00:00',
+            isTwelfthStepper: true,
+        );
+        $ordinary = $this->makeMember(
+            id:               9,
+            homeGroup:        50,
+            updated:          '2025-07-10 00:00:00',
+            isTwelfthStepper: false,
+        );
+
+        $pruner = $this->makePruner([$stepper, $ordinary]);
+        $result = $pruner->prune(rotationGraceMonths: 3, inactivityMonths: 12);
+
+        $this->assertSame(2, $result->getHomeGroupConsidered());
+    }
+
+    // ──────────────────────────────────────────────
     //  Orphan pass
     //
     //  Orphans are members with no intergroup position AND no home
@@ -763,16 +923,18 @@ class MemberPrunerTest extends TestCase
         string $rotation = '',
         int $homeGroup = 0,
         bool $isGSR = false,
-        string $updated = ''
+        string $updated = '',
+        bool $isTwelfthStepper = false
     ): Member {
-        return new class($id, $position, $rotation, $homeGroup, $isGSR, $updated) implements Member {
+        return new class($id, $position, $rotation, $homeGroup, $isGSR, $updated, $isTwelfthStepper) implements Member {
             public function __construct(
                 private int $id,
                 private int $position,
                 private string $rotation,
                 private int $homeGroup,
                 private bool $isGSR,
-                private string $updated
+                private string $updated,
+                private bool $isTwelfthStepper
             ) {}
 
             public function getId(): int { return $this->id; }
@@ -781,6 +943,7 @@ class MemberPrunerTest extends TestCase
             public function getHomeGroup(): int { return $this->homeGroup; }
             public function isGSR(): bool { return $this->isGSR; }
             public function getUpdated(): string { return $this->updated; }
+            public function isTwelfthStepper(): bool { return $this->isTwelfthStepper; }
 
             // Unused by the pruner; provide harmless defaults so the
             // interface contract is satisfied.
@@ -796,6 +959,8 @@ class MemberPrunerTest extends TestCase
             public function getGdprAcceptanceVersion(): string { return ''; }
             public function getGdprAcceptanceMethod(): string { return ''; }
             public function getGdprAcceptanceStatement(): string { return ''; }
+            public function getArea(): string { return ''; }
+            public function getAccepts(): array { return []; }
         };
     }
 

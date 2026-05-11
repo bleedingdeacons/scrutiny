@@ -56,6 +56,19 @@ final class PruneResult
     public const SKIP_TRASH_FAILED                 = 'trash_failed';
 
     /**
+     * Recorded when a member is kept because they have a home group AND
+     * are flagged as a twelfth stepper. Twelfth-steppers with a home
+     * group are active service workers — they take 12th-step calls on
+     * behalf of the fellowship — and trashing one would silently
+     * remove them from the call-routing pool. The pruner therefore
+     * skips them in any pass that would otherwise act on them
+     * (officer rotation and home-group inactivity). The orphan pass
+     * is unreachable for this category by construction, since orphans
+     * have no home group.
+     */
+    public const SKIP_PROTECTED_TWELFTH_STEPPER     = 'protected_twelfth_stepper';
+
+    /**
      * Recorded when the entire prune run is short-circuited because
      * the pruner is disabled in settings. Distinct from per-member
      * skip reasons so callers (admin pages, log readers) can spot

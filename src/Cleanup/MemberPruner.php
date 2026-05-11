@@ -43,6 +43,14 @@ use function wp_trash_post;
  * under a later one, so a single member is acted on at most once per
  * run.
  *
+ * Cross-cutting exception: a member who has a home group AND is flagged
+ * as a twelfth stepper is never trashed by any pass. Twelfth-steppers
+ * with a home group are active service workers (they take 12th-step
+ * calls), and silently removing them would break the call-routing
+ * pool. The check applies to the officer and home-group passes; the
+ * orphan pass can't reach this category because orphans have no
+ * home group by definition.
+ *
  * The pruner only calls wp_trash_post (a soft delete). Permanent
  * deletion remains a manual administrator action via the WordPress UI.
  * The Unity MemberChangeTracker fires unity/member_deleted on trash, so
@@ -314,6 +322,20 @@ class MemberPruner
                     continue;
                 }
 
+                // Cross-cutting protection: a former officer who is
+                // also a twelfth stepper with a home group is an
+                // active service worker. Don't trash them just
+                // because someone else now holds their old role —
+                // they're still doing 12th-step calls.
+                if ($this->isProtectedTwelfthStepper($member)) {
+                    $result->recordSkipped(
+                        $member->getId(),
+                        PruneResult::SKIP_PROTECTED_TWELFTH_STEPPER,
+                        'home_group=' . $member->getHomeGroup() . ' position=' . $positionId
+                    );
+                    continue;
+                }
+
                 // Past the grace window AND a peer with a later
                 // rotation exists for the same position → trash.
                 // The trash itself fires wp_trash_post, which Unity's
@@ -402,6 +424,21 @@ class MemberPruner
             }
 
             $result->incrementHomeGroupConsidered();
+
+            // Cross-cutting protection: a home-group member who is
+            // also flagged as a twelfth stepper is an active
+            // service worker for the fellowship. They are excluded
+            // before the inactivity comparison runs, so a long-
+            // dormant post timestamp can't trash someone who is
+            // still on the 12th-step call list.
+            if ($this->isProtectedTwelfthStepper($member)) {
+                $result->recordSkipped(
+                    $member->getId(),
+                    PruneResult::SKIP_PROTECTED_TWELFTH_STEPPER,
+                    'home_group=' . $member->getHomeGroup()
+                );
+                continue;
+            }
 
             $updated = $this->parseUpdated($member->getUpdated());
 
@@ -566,6 +603,25 @@ class MemberPruner
         } catch (Throwable $e) {
             return null;
         }
+    }
+
+    /**
+     * Whether a member is shielded from pruning under the
+     * "home-group twelfth-stepper" protection rule.
+     *
+     * Both conditions must hold:
+     *   - The member has a home group (getHomeGroup() > 0).
+     *   - The member is flagged as a twelfth stepper.
+     *
+     * A twelfth stepper with no home group is NOT protected — without
+     * a home group they're an orphan, and the orphan pass's
+     * inactivity rule still applies. Likewise a home-group member
+     * who isn't a twelfth stepper falls through to the normal
+     * inactivity rule. The conjunction is deliberate.
+     */
+    private function isProtectedTwelfthStepper(Member $member): bool
+    {
+        return $member->getHomeGroup() > 0 && $member->isTwelfthStepper();
     }
 
     /**

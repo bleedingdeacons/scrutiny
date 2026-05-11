@@ -279,6 +279,9 @@ class MemberTrashCleanerTest extends TestCase
             public function getGdprAcceptanceVersion(): string { return ''; }
             public function getGdprAcceptanceMethod(): string { return ''; }
             public function getGdprAcceptanceStatement(): string { return ''; }
+            public function isTwelfthStepper(): bool { return false; }
+            public function getArea(): string { return ''; }
+            public function getAccepts(): array { return []; }
         };
     }
 
