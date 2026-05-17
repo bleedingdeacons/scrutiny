@@ -44,7 +44,7 @@ class AuditLogAdmin
     /**
      * Available action types for filtering
      */
-    private const ACTION_TYPES = ['view', 'create', 'update', 'delete', 'export', 'import', 'purge'];
+    private const ACTION_TYPES = ['view', 'create', 'update', 'delete', 'export', 'import', 'call', 'purge'];
 
     /**
      * Available entity types for filtering
@@ -366,7 +366,7 @@ class AuditLogAdmin
                                     —
                                 <?php endif; ?>
                             </td>
-                            <td><?php echo esc_html($entry->detail); ?></td>
+                            <td><?php echo self::renderDetailCell($entry); ?></td>
                             <td><code><?php echo esc_html($entry->ip_address); ?></code></td>
                         </tr>
                     <?php endforeach; ?>
@@ -426,8 +426,127 @@ class AuditLogAdmin
             .scrutiny-badge--delete { background: #fde8e8; color: #991b1b; }
             .scrutiny-badge--export { background: #f3e8fd; color: #6b21a8; }
             .scrutiny-badge--import { background: #e0f2fe; color: #0369a1; }
+            .scrutiny-badge--call   { background: #fef3c7; color: #92400e; }
             .scrutiny-badge--purge  { background: #f1f1f1; color: #555; }
         </style>
         <?php
+    }
+
+    /**
+     * Render the Detail column for a single audit row.
+     *
+     * Reach writes structured detail strings for both the view step
+     * (when contact details are exposed in a nearest-members lookup)
+     * and the call step (when the visitor logs a phone-call result):
+     *
+     *   View: `caller:<name>#<id>`          (or `caller:unknown`)
+     *   Call: `caller:<name>#<id>;result:<label>`
+     *                                       (or `caller:unknown;result:<label>`)
+     *
+     * View rows render as a linked "Requester: <name>"; call rows
+     * render as "Caller: <name>   Result: <label>". The link points
+     * to the requester/caller's *own* member edit page (the row's
+     * entity_id already points to the member who was viewed / called,
+     * and is linked separately in the Member ID column).
+     *
+     * Any other shape, or any other action, renders as escaped plain
+     * text — preserving legacy rows and audit entries from other
+     * plugins or earlier versions.
+     */
+    private static function renderDetailCell(object $entry): string
+    {
+        $detail = (string) ($entry->detail ?? '');
+        $action = (string) ($entry->action ?? '');
+
+        if ($action !== AuditLogger::ACTION_CALL
+            && $action !== AuditLogger::ACTION_VIEW
+        ) {
+            return esc_html($detail);
+        }
+
+        $parts = self::parseCallerDetail($detail);
+        if ($parts === null) {
+            return esc_html($detail);
+        }
+
+        [$callerName, $callerId, $result] = $parts;
+
+        // Caller fragment — link the name when we have a usable id.
+        if ($callerId !== null) {
+            $editUrl = get_edit_post_link($callerId);
+            $callerHtml = $editUrl
+                ? sprintf('<a href="%s">%s</a>', esc_url($editUrl), esc_html($callerName))
+                : esc_html($callerName);
+        } else {
+            $callerHtml = esc_html($callerName);
+        }
+
+        // The same structured detail format is used for both view and
+        // call rows, but the human label changes: a view exposes
+        // contact data to a "requester" running a search, while a
+        // call attempt is logged by the "caller" who placed the call.
+        $personLabel = $action === AuditLogger::ACTION_CALL ? 'Caller' : 'Requester';
+
+        if ($result === null) {
+            return sprintf('%s: %s', $personLabel, $callerHtml);
+        }
+
+        return sprintf(
+            '%s: %s &nbsp; Result: %s',
+            $personLabel,
+            $callerHtml,
+            esc_html($result),
+        );
+    }
+
+    /**
+     * Parse a Reach audit-detail string into [name, id|null, result|null].
+     *
+     * Accepts either `caller:<name>#<id>` (view rows) or
+     * `caller:<name>#<id>;result:<label>` (call rows), with the
+     * `unknown` sentinel allowed in place of `<name>#<id>` in both
+     * cases. Returns null when the string doesn't match, so the
+     * caller can fall back to plain-text rendering.
+     *
+     * @return array{0:string,1:?int,2:?string}|null
+     */
+    private static function parseCallerDetail(string $detail): ?array
+    {
+        if (!str_starts_with($detail, 'caller:')) {
+            return null;
+        }
+
+        $payload = substr($detail, strlen('caller:'));
+
+        // Optional `;result:<label>` suffix.
+        $result    = null;
+        $semicolon = strpos($payload, ';result:');
+        if ($semicolon !== false) {
+            $result = substr($payload, $semicolon + strlen(';result:'));
+            if ($result === '') {
+                return null;
+            }
+            $payload = substr($payload, 0, $semicolon);
+        }
+
+        if ($payload === 'unknown') {
+            return ['unknown', null, $result];
+        }
+
+        // Split on the *last* '#' so anonymous names containing '#'
+        // (unusual but possible) don't poison the parse.
+        $hashPos = strrpos($payload, '#');
+        if ($hashPos === false) {
+            return null;
+        }
+
+        $name   = substr($payload, 0, $hashPos);
+        $idPart = substr($payload, $hashPos + 1);
+
+        if ($name === '' || !ctype_digit($idPart) || (int) $idPart <= 0) {
+            return null;
+        }
+
+        return [$name, (int) $idPart, $result];
     }
 }

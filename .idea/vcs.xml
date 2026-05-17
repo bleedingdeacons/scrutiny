@@ -2,7 +2,6 @@
 <project version="4">
   <component name="VcsDirectoryMappings">
     <mapping directory="$PROJECT_DIR$/../amber" vcs="Git" />
-    <mapping directory="$PROJECT_DIR$/../integrity" vcs="Git" />
     <mapping directory="$PROJECT_DIR$/../reconcile" vcs="Git" />
     <mapping directory="$PROJECT_DIR$" vcs="Git" />
     <mapping directory="$PROJECT_DIR$/../tsml-for-unity" vcs="Git" />
