@@ -3,7 +3,7 @@ Contributors: thebleedingdeacons
 Tags: audit, gdpr, privacy, logging, unity
 Requires at least: 6.0
 Tested up to: 6.9
-Stable tag: 1.23.2
+Stable tag: 1.23.3
 Build date: 2026/06/04
 Requires PHP: 8.0
 License: GPL-2.0-or-later

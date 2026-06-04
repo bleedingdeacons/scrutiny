@@ -102,6 +102,38 @@ class GdprAuditRepository implements AuditRepository
                 $values[] = $id;
             }
         }
+
+        if (!empty($args['action'])) {
+            $where[] = 'action = %s';
+            $values[] = $args['action'];
+        }
+
+        if (!empty($args['user_id'])) {
+            $where[] = 'user_id = %d';
+            $values[] = $args['user_id'];
+        }
+
+        if (!empty($args['field_name'])) {
+            $where[] = 'field_name = %s';
+            $values[] = $args['field_name'];
+        }
+
+        if (!empty($args['date_from'])) {
+            $where[] = 'logged_at >= %s';
+            $values[] = $args['date_from'];
+        }
+
+        if (!empty($args['date_to'])) {
+            $where[] = 'logged_at <= %s';
+            $values[] = $args['date_to'];
+        }
+
+        $whereClause = '';
+        if (!empty($where)) {
+            $whereClause = 'WHERE ' . implode(' AND ', $where);
+        }
+
+        $perPage = min((int) ($args['per_page'] ?? 50), 200);
         $page = max((int) ($args['page'] ?? 1), 1);
         $offset = ($page - 1) * $perPage;
 
