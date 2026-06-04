@@ -37,9 +37,15 @@ interface AuditRepository
     /**
      * Find audit log entries matching the given criteria
      *
+     * Pass either `entity_id` (single exact match) or `entity_ids` (any of
+     * the listed IDs — used by the admin to resolve a name search to a
+     * set of matching member post IDs). If both are supplied, both are
+     * applied (effectively narrowing `entity_ids` by `entity_id`).
+     *
      * @param array{
      *     entity_type?: string,
      *     entity_id?: int,
+     *     entity_ids?: int[],
      *     action?: string,
      *     user_id?: int,
      *     field_name?: string,

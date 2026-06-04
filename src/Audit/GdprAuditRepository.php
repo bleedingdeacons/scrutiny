@@ -84,37 +84,24 @@ class GdprAuditRepository implements AuditRepository
             $values[] = $args['entity_id'];
         }
 
-        if (!empty($args['action'])) {
-            $where[] = 'action = %s';
-            $values[] = $args['action'];
+        if (!empty($args['entity_ids']) && is_array($args['entity_ids'])) {
+            // Coerce, drop zeros/non-positives, de-dupe. If nothing valid
+            // is left, force an impossible match so the query returns no
+            // rows (a name search with no matching posts must not silently
+            // degrade to "all entries").
+            $ids = array_values(array_unique(array_filter(
+                array_map('intval', $args['entity_ids']),
+                static fn(int $id): bool => $id > 0
+            )));
+            if (empty($ids)) {
+                $ids = [0];
+            }
+            $placeholders = implode(',', array_fill(0, count($ids), '%d'));
+            $where[] = "entity_id IN ({$placeholders})";
+            foreach ($ids as $id) {
+                $values[] = $id;
+            }
         }
-
-        if (!empty($args['user_id'])) {
-            $where[] = 'user_id = %d';
-            $values[] = $args['user_id'];
-        }
-
-        if (!empty($args['field_name'])) {
-            $where[] = 'field_name = %s';
-            $values[] = $args['field_name'];
-        }
-
-        if (!empty($args['date_from'])) {
-            $where[] = 'logged_at >= %s';
-            $values[] = $args['date_from'];
-        }
-
-        if (!empty($args['date_to'])) {
-            $where[] = 'logged_at <= %s';
-            $values[] = $args['date_to'];
-        }
-
-        $whereClause = '';
-        if (!empty($where)) {
-            $whereClause = 'WHERE ' . implode(' AND ', $where);
-        }
-
-        $perPage = min((int) ($args['per_page'] ?? 50), 200);
         $page = max((int) ($args['page'] ?? 1), 1);
         $offset = ($page - 1) * $perPage;
 
@@ -151,6 +138,23 @@ class GdprAuditRepository implements AuditRepository
         if (!empty($args['entity_id'])) {
             $where[] = 'entity_id = %d';
             $values[] = $args['entity_id'];
+        }
+
+        if (!empty($args['entity_ids']) && is_array($args['entity_ids'])) {
+            // Mirror find(): coerce/de-dupe and force [0] when empty so a
+            // "no posts matched" name search counts zero, not everything.
+            $ids = array_values(array_unique(array_filter(
+                array_map('intval', $args['entity_ids']),
+                static fn(int $id): bool => $id > 0
+            )));
+            if (empty($ids)) {
+                $ids = [0];
+            }
+            $placeholders = implode(',', array_fill(0, count($ids), '%d'));
+            $where[] = "entity_id IN ({$placeholders})";
+            foreach ($ids as $id) {
+                $values[] = $id;
+            }
         }
 
         if (!empty($args['action'])) {

@@ -21,6 +21,7 @@ use function esc_attr;
 use function esc_html;
 use function esc_url;
 use function get_option;
+use function get_the_title;
 use function get_userdata;
 use function wp_date;
 use function wp_nonce_url;
@@ -132,6 +133,49 @@ class AuditLogAdmin
     }
 
     /**
+     * Resolve a free-text Member filter to a list of matching post IDs.
+     *
+     * Performs a case-insensitive substring match against post_title
+     * across all post types — the audit log records member, group,
+     * meeting and position entities, all of which are CPTs whose post
+     * title is the entity's display (anonymous) name.
+     *
+     * Excludes revisions and auto-drafts. Capped at 200 matches to keep
+     * the resulting `IN (...)` clause bounded; the user should narrow
+     * the query if their search is genuinely that broad.
+     *
+     * Returns [0] when nothing matches, so callers passing the result
+     * straight into the repository's `entity_ids` argument get an empty
+     * result set rather than silently disabling the filter.
+     *
+     * @return int[]
+     */
+    private static function findPostIdsByTitle(string $query): array
+    {
+        global $wpdb;
+
+        if ($query === '') {
+            return [0];
+        }
+
+        $like = '%' . $wpdb->esc_like($query) . '%';
+
+        // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- prepare() used below
+        $ids = $wpdb->get_col($wpdb->prepare(
+            "SELECT ID FROM `{$wpdb->posts}`
+             WHERE post_title LIKE %s
+               AND post_type NOT IN ('revision', 'nav_menu_item')
+               AND post_status NOT IN ('auto-draft', 'trash')
+             LIMIT 200",
+            $like
+        ));
+
+        $ids = array_map('intval', $ids ?: []);
+
+        return $ids !== [] ? $ids : [0];
+    }
+
+    /**
      * Render the audit log admin page
      */
     public function renderPage(): void
@@ -143,20 +187,36 @@ class AuditLogAdmin
 
         // Collect filter parameters
         $filters = [
-                'entity_type' => sanitize_text_field($_GET['entity_type'] ?? ''),
-                'entity_id'   => (int) ($_GET['entity_id'] ?? 0),
-                'action'      => sanitize_text_field($_GET['filter_action'] ?? ''),
-                'field_name'  => sanitize_text_field($_GET['field_name'] ?? ''),
-                'user_id'     => (int) ($_GET['user_id'] ?? 0),
-                'date_from'   => sanitize_text_field($_GET['date_from'] ?? ''),
-                'date_to'     => sanitize_text_field($_GET['date_to'] ?? ''),
-                'per_page'    => 50,
-                'page'        => max((int) ($_GET['paged'] ?? 1), 1),
+                'entity_type'  => sanitize_text_field($_GET['entity_type'] ?? ''),
+                'entity_query' => trim(sanitize_text_field($_GET['entity_query'] ?? '')),
+                'action'       => sanitize_text_field($_GET['filter_action'] ?? ''),
+                'field_name'   => sanitize_text_field($_GET['field_name'] ?? ''),
+                'user_id'      => (int) ($_GET['user_id'] ?? 0),
+                'date_from'    => sanitize_text_field($_GET['date_from'] ?? ''),
+                'date_to'      => sanitize_text_field($_GET['date_to'] ?? ''),
+                'per_page'     => 50,
+                'page'         => max((int) ($_GET['paged'] ?? 1), 1),
         ];
 
+        // Resolve the Member filter. The input box accepts either a
+        // numeric ID (exact match against entity_id) or a name fragment
+        // (matched against post titles — i.e. the member's anonymous
+        // name). A name match resolves to a set of post IDs passed via
+        // `entity_ids`; if no posts match, the repository forces an
+        // empty result rather than silently returning everything.
+        $queryArgs = $filters;
+        unset($queryArgs['entity_query']);
+        if ($filters['entity_query'] !== '') {
+            if (ctype_digit($filters['entity_query'])) {
+                $queryArgs['entity_id'] = (int) $filters['entity_query'];
+            } else {
+                $queryArgs['entity_ids'] = self::findPostIdsByTitle($filters['entity_query']);
+            }
+        }
+
         // Remove empty filters
-        $queryArgs = array_filter($filters, function ($v) {
-            return $v !== '' && $v !== 0;
+        $queryArgs = array_filter($queryArgs, function ($v) {
+            return $v !== '' && $v !== 0 && $v !== [];
         });
 
         $entries = $this->repository->find($queryArgs);
@@ -247,10 +307,10 @@ class AuditLogAdmin
                 </div>
 
                 <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: end; margin-top: 10px;">
-                    <!-- Member ID Filter -->
+                    <!-- Member Filter (ID or anonymous name) -->
                     <label>
-                        <span style="display:block; font-weight:600; margin-bottom:2px;">Member ID</span>
-                        <input type="number" name="entity_id" value="<?php echo esc_attr((string) $filters['entity_id']); ?>" min="0" style="width: 100px;" placeholder="e.g., 123">
+                        <span style="display:block; font-weight:600; margin-bottom:2px;">Member</span>
+                        <input type="text" name="entity_query" value="<?php echo esc_attr($filters['entity_query']); ?>" style="width: 180px;" placeholder="ID or name (e.g. 123 or John D)">
                     </label>
 
                     <!-- Date From Filter -->
@@ -290,8 +350,10 @@ class AuditLogAdmin
                         $userData = get_userdata($filters['user_id']);
                         $activeFilters[] = 'User: ' . ($userData ? $userData->user_login : "ID #{$filters['user_id']}");
                     }
-                    if (!empty($filters['entity_id'])) {
-                        $activeFilters[] = "Member ID: #{$filters['entity_id']}";
+                    if (!empty($filters['entity_query'])) {
+                        $activeFilters[] = ctype_digit($filters['entity_query'])
+                            ? "Member ID: #{$filters['entity_query']}"
+                            : "Member: {$filters['entity_query']}";
                     }
                     if (!empty($filters['date_from'])) {
                         $activeFilters[] = 'From: ' . $filters['date_from'];
@@ -321,7 +383,7 @@ class AuditLogAdmin
                     <th>Action</th>
                     <th>Entity Type</th>
                     <th>Field</th>
-                    <th>Member ID</th>
+                    <th>Member</th>
                     <th>Detail</th>
                     <th>IP (truncated)</th>
                 </tr>
@@ -359,8 +421,19 @@ class AuditLogAdmin
                             <td><?php echo esc_html(PersonalDataFields::getLabel($entry->field_name)); ?></td>
                             <td>
                                 <?php if ((int) $entry->entity_id > 0): ?>
+                                    <?php
+                                    // The entity_id is a member (or other CPT) post ID; the post
+                                    // title is the member's anonymous name (e.g. "John D."), which
+                                    // is far more useful to administrators than a numeric ID.
+                                    // Fall back to "#<id>" when no title is available — for example,
+                                    // `user` rows where entity_id is a WP user ID, not a post ID.
+                                    $entityTitle = get_the_title((int) $entry->entity_id);
+                                    $entityLabel = $entityTitle !== ''
+                                        ? $entityTitle
+                                        : '#' . (string) $entry->entity_id;
+                                    ?>
                                     <a href="<?php echo esc_url(get_edit_post_link((int) $entry->entity_id) ?? '#'); ?>">
-                                        #<?php echo esc_html((string) $entry->entity_id); ?>
+                                        <?php echo esc_html($entityLabel); ?>
                                     </a>
                                 <?php else: ?>
                                     —
@@ -380,7 +453,7 @@ class AuditLogAdmin
                     <div class="tablenav-pages">
                         <?php
                         $baseUrl = admin_url('admin.php?page=' . self::MENU_SLUG);
-                        foreach (['entity_type' => $filters['entity_type'], 'filter_action' => $filters['action'], 'field_name' => $filters['field_name'], 'user_id' => $filters['user_id'], 'entity_id' => $filters['entity_id'], 'date_from' => $filters['date_from'], 'date_to' => $filters['date_to']] as $key => $val) {
+                        foreach (['entity_type' => $filters['entity_type'], 'filter_action' => $filters['action'], 'field_name' => $filters['field_name'], 'user_id' => $filters['user_id'], 'entity_query' => $filters['entity_query'], 'date_from' => $filters['date_from'], 'date_to' => $filters['date_to']] as $key => $val) {
                             if ($val !== '' && $val !== 0) {
                                 $baseUrl = add_query_arg($key, $val, $baseUrl);
                             }
