@@ -40,6 +40,14 @@ final class InMemoryMemberRepository implements MemberRepository
         return $this->members;
     }
 
+    public function findTelephoneResponders(): array
+    {
+        return array_values(array_filter(
+            $this->members,
+            static fn (Member $member): bool => $member->isTelephoneResponder()
+        ));
+    }
+
     public function count(array $args = []): int
     {
         return count($this->members);
