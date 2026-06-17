@@ -45,7 +45,7 @@ class AuditLogAdmin
     /**
      * Available action types for filtering
      */
-    private const ACTION_TYPES = ['view', 'create', 'update', 'delete', 'export', 'import', 'call', 'purge'];
+    private const ACTION_TYPES = ['view', 'create', 'update', 'delete', 'export', 'import', 'call', 'message', 'purge'];
 
     /**
      * Available entity types for filtering

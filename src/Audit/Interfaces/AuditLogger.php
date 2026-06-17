@@ -23,6 +23,7 @@ interface AuditLogger
     public const ACTION_EXPORT = 'export';
     public const ACTION_IMPORT = 'import';
     public const ACTION_CALL = 'call';
+    public const ACTION_MESSAGE = 'message';
 
     public const ENTITY_MEMBER = 'member';
     public const ENTITY_GROUP = 'group';
