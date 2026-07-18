@@ -1,12 +1,16 @@
 # Scrutiny
 
+[![CI](https://github.com/bleedingdeacons/scrutiny/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/bleedingdeacons/scrutiny/actions/workflows/ci.yml)
+![Version](https://img.shields.io/badge/version-1.23.11-blue)
+![PHP](https://img.shields.io/badge/php-8.1%2B-777bb4)
+![Licence](https://img.shields.io/badge/licence-MIT%20(Modified)-green)
+
 **GDPR-compliant audit logging and personal data obscuring for Unity.**
 
 Scrutiny is a WordPress plugin that hooks into the Unity plugin ecosystem to provide a tamper-evident audit trail of who accessed or changed personal data, and to mask that data in the admin UI for users who lack explicit clearance.
 
 It is a required dependency of the **Amber** plugin and must be loaded before it.
 
-**Version:** 1.23.11
 **Requires:** WordPress 6.0+ · PHP 8.0+
 **License:** MIT (Modified — see [License](#license))
 **Author:** [The Bleeding Deacons](mailto:thebleedingdeacons@gmail.com)
