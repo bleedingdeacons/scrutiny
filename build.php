@@ -87,7 +87,13 @@ class PluginBuilder
         'build.php',
 
         // Vendor (no production dependencies needed)
-        'vendor',
+        'vendor',
+
+        // Dev artefacts that must never ship
+        '.phpunit.result.cache',
+        '.phpunit.cache',
+        'phpstan-baseline.neon',
+        '.claude',
     ];
 
     // Files and directories to exclude in dev builds
