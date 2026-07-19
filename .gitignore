@@ -83,8 +83,12 @@ phpunit.xml.local
 .phpunit.result.cache
 
 # PHPStan
+# phpstan.neon (no .dist) is a local override; phpstan.neon.dist is committed
+# and is what CI uses.
 /phpstan.neon
-/phpstan-baseline.neon
+# phpstan-baseline.neon is intentionally NOT ignored: a phpstan.neon.dist that
+# includes it needs it committed, or the config fails to load in CI. Ignoring
+# it meant a baseline added here would go missing without anyone noticing.
 phpstan-baseline.php
 
 # PHP_CodeSniffer
