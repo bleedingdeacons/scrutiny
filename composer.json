@@ -35,7 +35,7 @@
         "build:dev": "php build.php build:dev",
         "build:clean": "php build.php clean",
         "test": "phpunit",
-        "phpstan": "phpstan analyse"
+        "phpstan": "phpstan analyse --memory-limit=1G"
     },
     "config": {
         "optimize-autoloader": true,
