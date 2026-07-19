@@ -1,0 +1,43 @@
+# Committed PHPStan config.
+#
+# phpstan.neon (no .dist) is gitignored and, if present, overrides this file
+# entirely — keep personal tweaks there. This .dist is what CI uses: before it
+# existed there was no committed config at all, so CI analysed nothing.
+
+includes:
+    - vendor/szepeviktor/phpstan-wordpress/extension.neon
+
+parameters:
+    level: 5
+    # PHPStan 2 proves a condition dead when PHPDoc says it cannot happen.
+    # In WordPress plugin code PHPDoc is aspirational: values arrive from
+    # get_field(), HTTP responses, scraped HTML and $_POST, none of which the
+    # annotation can guarantee. Trusting it would mean deleting defensive
+    # guards that are correct at runtime, so PHPDoc informs types but does not
+    # prove conditions. Native types are still checked normally.
+    treatPhpDocTypesAsCertain: false
+    paths:
+        - src
+    excludePaths:
+        - tests
+    scanDirectories:
+        # Scrutiny is a Unity companion and implements its interfaces; Sentinel
+        # is optional at runtime but its Sentinel_Log_Channel appears in type
+        # positions. Neither is a composer requirement, so without this PHPStan
+        # cannot see a single symbol it depends on — 234 of the 245 errors here
+        # were "class not found" for exactly that reason. Matches amber.
+        - ../unity/src
+        - ../sentinel/src
+        - ../tsml-for-unity/src
+    # An ignoreErrors pattern that stops matching is reported as an error by
+    # default, so a stale pattern would fail the gate — and whether a pattern
+    # matches depends on which siblings are checked out, which differs between
+    # a developer's machine and CI. Matches amber.
+    reportUnmatchedIgnoredErrors: false
+    ignoreErrors:
+        - '#Function get_plugin_data not found#'
+        - '#Function dbDelta not found#'
+        # PHPStan 2 phrases this as "Used function ... not found", so the
+        # 1.x pattern stopped matching. Both spellings appear: "Used function"
+        # for the import, "Function" for each call site.
+        - '#[Ff]unction get_field not found#'

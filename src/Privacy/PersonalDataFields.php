@@ -245,7 +245,8 @@ final class PersonalDataFields
 
         if (isset(self::LEGACY_FIELD_MAP[$fieldName])) {
             $canonical = self::LEGACY_FIELD_MAP[$fieldName];
-            return self::LABELS[$canonical] ?? $fieldName;
+            // Every LEGACY_FIELD_MAP value is a LABELS key, so this always hits.
+            return self::LABELS[$canonical];
         }
 
         return $fieldName;
