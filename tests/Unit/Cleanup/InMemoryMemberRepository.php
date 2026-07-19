@@ -35,6 +35,16 @@ final class InMemoryMemberRepository implements MemberRepository
         return null;
     }
 
+    public function findByEmail(string $email): ?Member
+    {
+        foreach ($this->members as $member) {
+            if ($member->getPersonalEmail() === $email) {
+                return $member;
+            }
+        }
+        return null;
+    }
+
     public function findAll(array $args = []): array
     {
         return $this->members;

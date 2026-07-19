@@ -7,6 +7,12 @@
     <testsuites>
         <testsuite name="Unit">
             <directory>tests/Unit</directory>
+            <!--
+                A test double, not a test case. Its name ends in "Test.php",
+                so PHPUnit collects it and then reports that it does not
+                extend TestCase.
+            -->
+            <exclude>tests/Unit/Cleanup/MemberPrunerForTest.php</exclude>
         </testsuite>
     </testsuites>
     <source>

@@ -944,6 +944,8 @@ class MemberPrunerTest extends TestCase
             public function isGSR(): bool { return $this->isGSR; }
             public function getUpdated(): string { return $this->updated; }
             public function isTwelfthStepper(): bool { return $this->isTwelfthStepper; }
+            public function isTelephoneResponder(): bool { return false; }
+            public function getResponderCertification(): \Unity\Members\ResponderCertification { return \Unity\Members\ResponderCertification::None; }
 
             // Unused by the pruner; provide harmless defaults so the
             // interface contract is satisfied.
