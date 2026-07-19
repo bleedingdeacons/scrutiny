@@ -182,7 +182,6 @@ class AuditLogAdmin
     {
         if (!current_user_can(self::CAPABILITY)) {
             wp_die(esc_html__('You do not have permission to access this page.', 'scrutiny'));
-            return;
         }
 
         // Collect filter parameters

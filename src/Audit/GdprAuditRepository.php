@@ -142,10 +142,10 @@ class GdprAuditRepository implements AuditRepository
         $values[] = $perPage;
         $values[] = $offset;
 
-        if (!empty($values)) {
-            // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
-            $sql = $wpdb->prepare($sql, ...$values);
-        }
+        // $values always holds at least the LIMIT and OFFSET params
+        // appended above, so there is nothing to guard against.
+        // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
+        $sql = $wpdb->prepare($sql, ...$values);
 
         // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
         return $wpdb->get_results($sql);
