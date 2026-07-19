@@ -82,6 +82,7 @@ spl_autoload_register(function (string $class): void {
 // ──────────────────────────────────────────────
 
 $GLOBALS['scrutiny_test_options'] = [];
+$GLOBALS['scrutiny_test_capabilities'] = [];
 
 if (!function_exists('get_option')) {
     function get_option(string $key, mixed $default = false): mixed
@@ -334,6 +335,20 @@ if (!function_exists('wp_delete_post')) {
 
 $GLOBALS['scrutiny_test_acf_fields'] = [];
 $GLOBALS['scrutiny_test_posts']      = [];
+
+if (!function_exists('current_user_can')) {
+    /**
+     * Capability check backed by an in-memory allowlist, matching the
+     * pattern used for options and ACF fields above. Tests grant a
+     * capability with:
+     *
+     *     $GLOBALS['scrutiny_test_capabilities']['scrutiny_edit_personal_data'] = true;
+     */
+    function current_user_can(string $capability): bool
+    {
+        return (bool) ($GLOBALS['scrutiny_test_capabilities'][$capability] ?? false);
+    }
+}
 
 if (!function_exists('get_field')) {
     /**
@@ -629,3 +644,22 @@ if (!class_exists('WP_REST_Server')) {
     }
 }
 
+// WP_Mock, bootstrapped last, on purpose.
+//
+// It defines a broad set of WordPress functions, each guarded by
+// function_exists() — as are the hand-rolled stubs above. Whichever loads
+// first therefore wins, per function:
+//
+//   - Bootstrapping WP_Mock first would shadow the recording add_action()
+//     and the globals-backed get_field() above, silently breaking the cron
+//     registration tests and the privacy-policy controller tests that read
+//     $GLOBALS['scrutiny_test_actions'] / ['scrutiny_test_acf_fields'].
+//   - Bootstrapping it last leaves those intact and lets WP_Mock own the
+//     functions this file does *not* define — wp_get_current_user() and
+//     get_current_user_id(), which GdprAuditLogger::log() calls and which
+//     AuditLoggerTest stubs per test.
+//
+// Both mechanisms coexist because their function sets do not overlap. If a
+// test ever needs WP_Mock control over a function stubbed above, remove the
+// hand-rolled version rather than reordering this call.
+WP_Mock::bootstrap();

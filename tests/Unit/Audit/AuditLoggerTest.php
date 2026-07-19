@@ -10,6 +10,7 @@ use Scrutiny\Audit\Interfaces\AuditLogger;
 use Scrutiny\Audit\Interfaces\AuditRepository;
 use Scrutiny\Privacy\PersonalDataFields;
 use Mockery;
+use WP_Mock;
 
 /**
  * Tests for GdprAuditLogger
@@ -40,29 +41,52 @@ class AuditLoggerTest extends TestCase
     /** @test */
     public function log_batch_calls_log_for_each_field(): void
     {
+        // Previously this test could not call logBatch() at all — log() reaches
+        // for wp_get_current_user() and get_current_user_id() — so it set a
+        // times(3) expectation it never met and asserted something unrelated.
+        // WP_Mock can stub those now, so it exercises the real delegation.
+        WP_Mock::userFunction('wp_get_current_user')
+            ->andReturn((object) ['user_login' => 'auditor']);
+        WP_Mock::userFunction('get_current_user_id')
+            ->andReturn(7);
+
+        $fields = [
+            PersonalDataFields::PERSONAL_EMAIL,
+            PersonalDataFields::MOBILE_NUMBER,
+        ];
+
+        $inserted = [];
         $repository = Mockery::mock(AuditRepository::class);
-        $repository->shouldReceive('insert')->times(3)->andReturn(1);
+        $repository->shouldReceive('insert')
+            ->times(count($fields))
+            ->andReturnUsing(function (array $row) use (&$inserted): int {
+                $inserted[] = $row;
+                return 1;
+            });
 
         $logger = $this->createLogger($repository);
 
-        // logBatch calls log() for each field, which calls repository->insert()
-        // But log() also calls WP functions (wp_get_current_user, get_current_user_id),
-        // so we test logBatch indirectly through the repository mock.
-        // For a pure unit test, we verify that insert is called 3 times.
+        $logger->logBatch(
+            AuditLogger::ACTION_VIEW,
+            AuditLogger::ENTITY_MEMBER,
+            42,
+            $fields,
+            'Bulk export'
+        );
 
-        // Use reflection to call logBatch which calls log internally
-        // Actually, log() calls wp_get_current_user() which isn't available.
-        // So let's test that logBatch delegates correctly.
-
-        // Test the simple contract: 2 fields = 2 inserts
-        $this->assertCount(2, PersonalDataFields::ALL_FIELDS);
+        $this->assertSame($fields, array_column($inserted, 'field_name'));
+        $this->assertSame([42, 42], array_column($inserted, 'entity_id'));
+        $this->assertSame(['auditor', 'auditor'], array_column($inserted, 'user_login'));
     }
 
     /** @test */
     public function personal_data_fields_are_correctly_defined(): void
     {
-        $this->assertSame('personal_email', PersonalDataFields::PERSONAL_EMAIL);
-        $this->assertSame('mobile_number', PersonalDataFields::MOBILE_NUMBER);
+        // Hyphens, not underscores. These values are the audit log's field_name
+        // column and the keys of PersonalDataFields::LABELS, and both have used
+        // the hyphenated form throughout.
+        $this->assertSame('personal-email', PersonalDataFields::PERSONAL_EMAIL);
+        $this->assertSame('mobile-number', PersonalDataFields::MOBILE_NUMBER);
     }
 
     /** @test */
