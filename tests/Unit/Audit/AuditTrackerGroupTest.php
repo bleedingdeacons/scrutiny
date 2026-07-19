@@ -12,12 +12,17 @@ use Unity\Contacts\Interfaces\Contact;
 use Unity\Groups\Interfaces\Group;
 use Unity\Meetings\Interfaces\Meeting;
 use Mockery;
+use Mockery\Adapter\Phpunit\MockeryPHPUnitIntegration;
 
 /**
  * Tests for AuditTracker group and meeting contact change detection
  */
 class AuditTrackerGroupTest extends TestCase
 {
+    // Verification here is entirely Mockery expectations. Without this
+    // trait PHPUnit sees no assertions and marks every test risky —
+    // and failOnRisky would then fail the suite.
+    use MockeryPHPUnitIntegration;
     protected function tearDown(): void
     {
         Mockery::close();

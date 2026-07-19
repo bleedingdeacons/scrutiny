@@ -12,9 +12,10 @@
         "php": ">=8.1"
     },
     "require-dev": {
+        "10up/wp_mock": "^1.0",
         "mockery/mockery": "^1.6",
         "phpstan/phpstan": "^2.0",
-        "phpunit/phpunit": "^10.0",
+        "phpunit/phpunit": "^9.6|^10.0",
         "psr/container": "^2.0",
         "szepeviktor/phpstan-wordpress": "^2.0"
     },
@@ -33,6 +34,7 @@
         "build:production": "php build.php build:production",
         "build:dev": "php build.php build:dev",
         "build:clean": "php build.php clean",
+        "test": "phpunit",
         "phpstan": "phpstan analyse"
     },
     "config": {

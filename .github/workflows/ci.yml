@@ -15,9 +15,44 @@ jobs:
     name: PHP 8.1
     runs-on: ubuntu-latest
 
+    defaults:
+      run:
+        # Scrutiny is checked out alongside Unity, Sentinel and
+        # tsml-for-unity, mirroring a WordPress plugins/ directory, so run
+        # everything from inside Scrutiny.
+        working-directory: scrutiny
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          path: scrutiny
+
+      - name: Checkout Unity
+        # Load-bearing for both gates: phpstan.neon.dist scans ../unity/src,
+        # and tests/bootstrap.php maps the Unity namespace to the same path at
+        # runtime. Without it the test suite cannot even load.
+        uses: actions/checkout@v4
+        with:
+          repository: bleedingdeacons/unity
+          ref: main
+          path: unity
+
+      - name: Checkout Sentinel
+        # Provides Sentinel_Log_Channel, referenced in type positions.
+        uses: actions/checkout@v4
+        with:
+          repository: bleedingdeacons/sentinel
+          ref: main
+          path: sentinel
+
+      - name: Checkout tsml-for-unity
+        # Scanned by phpstan.neon.dist so cross-plugin symbols resolve.
+        uses: actions/checkout@v4
+        with:
+          repository: bleedingdeacons/tsml-for-unity
+          ref: main
+          path: tsml-for-unity
 
       - name: Setup PHP 8.1
         uses: shivammathur/setup-php@v2
@@ -73,12 +108,20 @@ jobs:
         # The build is what /bump ships, so a broken build must fail the PR.
         run: composer build:production
 
+      - name: PHPStan
+        # A gate, promoted from advisory now the repo is green. It ran advisory
+        # against a checkout with no sibling plugins, so it could not resolve a
+        # single Unity symbol and reported hundreds of "class not found" — all
+        # swallowed by continue-on-error.
+        run: composer phpstan
+
+      - name: PHPUnit
+        # A gate. There was no test step here at all, which is how the suite
+        # came to be unrunnable without anyone noticing.
+        run: composer test
+
       # --- Advisory --------------------------------------------------------
       # Reported but not yet enforced. Promote to a gate once a repo is green.
-
-      - name: PHPStan (advisory)
-        run: composer phpstan
-        continue-on-error: true
 
       - name: composer.lock up to date (advisory)
         run: composer validate

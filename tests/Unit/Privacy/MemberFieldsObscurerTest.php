@@ -9,7 +9,6 @@ use Scrutiny\Privacy\MemberFieldsObscurer;
 use Scrutiny\Privacy\PersonalDataPolicy;
 use Unity\Core\Interfaces\Configuration;
 use Unity\Members\Interfaces\Member;
-use WP_Mock;
 
 /**
  * Tests for MemberFieldsObscurer::preserveAcfValue REST-context behaviour.
@@ -39,12 +38,16 @@ class MemberFieldsObscurerTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        WP_Mock::setUp();
+
+        // The bootstrap's in-memory stubs back current_user_can() and
+        // get_field(); reset them so capabilities and stored values do not
+        // leak between cases.
+        $GLOBALS['scrutiny_test_capabilities'] = [];
+        $GLOBALS['scrutiny_test_acf_fields'] = [];
     }
 
     protected function tearDown(): void
     {
-        WP_Mock::tearDown();
 
         // Clean up the REST_REQUEST constant between tests. PHP doesn't
         // allow undefining a constant once defined, so each test that
@@ -77,11 +80,11 @@ class MemberFieldsObscurerTest extends TestCase
     {
         define('REST_REQUEST', true);
 
-        // No expectation on get_field — it must NOT be consulted in
-        // REST context, because the new value should pass through
-        // unchanged. Any call would indicate the guard isn't taking
-        // effect early enough.
-        WP_Mock::userFunction('get_field')->never();
+        // A stored value is deliberately present, and the caller has no edit
+        // capability. If the REST guard did not take effect first, the stored
+        // value would be preserved and returned instead of the new one — so
+        // getting the new value back proves get_field() was never consulted.
+        $GLOBALS['scrutiny_test_acf_fields'][23462][self::FIELD_PERSONAL_EMAIL] = 'existing@example.com';
 
         $result = $this->makeObscurer()->preservePersonalEmail(
             'new@example.com',
@@ -101,7 +104,7 @@ class MemberFieldsObscurerTest extends TestCase
     {
         define('REST_REQUEST', true);
 
-        WP_Mock::userFunction('get_field')->never();
+        $GLOBALS['scrutiny_test_acf_fields'][23462][self::FIELD_MOBILE_NUMBER] = '07700 900123';
 
         $result = $this->makeObscurer()->preserveMobileNumber(
             '07700 900999',
@@ -122,14 +125,8 @@ class MemberFieldsObscurerTest extends TestCase
         // REST_REQUEST is intentionally not defined here — admin form
         // saves go through admin-post.php, not REST.
 
-        WP_Mock::userFunction('current_user_can')
-            ->with(PersonalDataPolicy::EDIT_CAPABILITY)
-            ->andReturn(false);
-
-        WP_Mock::userFunction('get_field')
-            ->once()
-            ->with(self::FIELD_PERSONAL_EMAIL, 23462, false)
-            ->andReturn('existing@example.com');
+        // No capabilities granted, so currentUserCanEdit() is false.
+        $GLOBALS['scrutiny_test_acf_fields'][23462][self::FIELD_PERSONAL_EMAIL] = 'existing@example.com';
 
         $result = $this->makeObscurer()->preservePersonalEmail(
             'attacker-supplied@example.com',
@@ -153,13 +150,10 @@ class MemberFieldsObscurerTest extends TestCase
     {
         // REST_REQUEST is intentionally not defined.
 
-        WP_Mock::userFunction('current_user_can')
-            ->with(PersonalDataPolicy::EDIT_CAPABILITY)
-            ->andReturn(true);
-
-        WP_Mock::userFunction('current_user_can')
-            ->with(PersonalDataPolicy::VIEW_CAPABILITY)
-            ->andReturn(true);
+        $GLOBALS['scrutiny_test_capabilities'] = [
+            PersonalDataPolicy::EDIT_CAPABILITY => true,
+            PersonalDataPolicy::VIEW_CAPABILITY => true,
+        ];
 
         $result = $this->makeObscurer()->preservePersonalEmail(
             'new@example.com',
