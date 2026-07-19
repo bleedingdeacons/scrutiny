@@ -26,7 +26,11 @@ if (!defined('ABSPATH')) {
 }
 
 if (!defined('SCRUTINY_PLUGIN_DIR')) {
-    define('SCRUTINY_PLUGIN_DIR', dirname(__DIR__, 3) . '/');
+    // One level up from tests/, i.e. the plugin root. This was dirname(..., 3),
+    // which lands on wp-content: the Scrutiny mappings below happened to be
+    // covered by composer's autoloader, so the only visible symptom was that
+    // Unity resolved to a directory that does not exist.
+    define('SCRUTINY_PLUGIN_DIR', dirname(__DIR__) . '/');
 }
 
 if (!defined('SCRUTINY_VERSION')) {
