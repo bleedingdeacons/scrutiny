@@ -258,9 +258,14 @@ composer install
 
 Test suites cover:
 
-- `AuditLoggerTest` — log and logBatch behaviour, IP anonymisation.
-- `AuditTrackerTest` / `AuditTrackerGroupTest` — lifecycle hook integration.
-- `DataObscurerTest` — obscuring algorithms for email, phone, and name.
+- `GdprAuditLoggerTest` — log and logBatch behaviour, IP anonymisation.
+- `GdprAuditRepositoryTest` — the audit-log query and write paths.
+- `AuditTrackerTest` / `AuditTrackerGroupTest` / `AuditTrackerCoverageTest` — lifecycle hook integration.
+- `MemberFieldsObscurerTest` / `GroupFieldsObscurerTest` / `PersonalDataFieldsTest` — obscuring and masking of personal data fields.
+- `MemberPrunerTest` / `MemberTrashCleanerTest` / `PrunerCronTest` — GDPR retention cleanup.
+
+Line coverage is reported to [Coveralls](https://coveralls.io/github/bleedingdeacons/scrutiny?branch=main)
+on every CI run — see the coverage badge at the top of this file.
 
 ---
 
