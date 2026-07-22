@@ -3,7 +3,7 @@
 [![CI](https://github.com/bleedingdeacons/scrutiny/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/bleedingdeacons/scrutiny/actions/workflows/ci.yml)
 [![Coverage Status](https://coveralls.io/repos/github/bleedingdeacons/scrutiny/badge.svg?branch=main)](https://coveralls.io/github/bleedingdeacons/scrutiny?branch=main)
 ![PHPStan](https://img.shields.io/badge/PHPStan-level%205-brightgreen)
-![Version](https://img.shields.io/badge/version-1.23.16-blue)
+![Version](https://img.shields.io/badge/version-1.23.17-blue)
 ![PHP](https://img.shields.io/badge/php-8.1%2B-777bb4)
 ![Licence](https://img.shields.io/badge/licence-MIT%20(Modified)-green)
 
@@ -41,6 +41,7 @@ On activation, Scrutiny will:
 - Create the `{prefix}scrutiny_audit_log` database table.
 - Grant the `scrutiny_view_personal_data` capability to the `administrator` role.
 - Grant the `scrutiny_edit_personal_data` capability to the `administrator` role.
+- Grant the `scrutiny_edit_responder_certification` capability to the `administrator` role.
 
 > **Order matters.** Scrutiny hooks into `unity/loaded` at priority `5`, before Amber (priority `10`), so that data-obscuring filters are in place before any ACF fields are rendered.
 
@@ -148,8 +149,9 @@ A read-only **Audit Log** submenu page is added under the Intergroup menu, acces
 |---|---|---|
 | `scrutiny_view_personal_data` | `administrator` | Sees unobscured personal data values in admin and on the frontend |
 | `scrutiny_edit_personal_data` | `administrator` | May update personal data fields (email, mobile number). Without this capability, changes are silently rejected and the existing value is preserved. Fields are shown as read-only in the admin UI. |
+| `scrutiny_edit_responder_certification` | `administrator` | May change a member's responder-certification stage. Without this capability, the value stays visible but the field is shown read-only, and any save is silently rejected with the existing value preserved. |
 
-Grant or revoke these capabilities via any standard WordPress role-management tool. A user may hold `scrutiny_view_personal_data` without `scrutiny_edit_personal_data` to allow viewing but not modifying personal data.
+Grant or revoke these capabilities via any standard WordPress role-management tool. A user may hold `scrutiny_view_personal_data` without `scrutiny_edit_personal_data` to allow viewing but not modifying personal data. The responder-certification value is never obscured — it is always visible — so `scrutiny_edit_responder_certification` gates editing only.
 
 ---
 

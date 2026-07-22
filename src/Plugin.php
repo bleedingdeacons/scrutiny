@@ -26,6 +26,7 @@ use Scrutiny\Cleanup\PrunerSettings;
 use Scrutiny\Privacy\GroupFieldsObscurer;
 use Scrutiny\Privacy\MemberFieldsObscurer;
 use Scrutiny\Privacy\PersonalDataPolicy;
+use Scrutiny\Privacy\ResponderCertificationGuard;
 use Scrutiny\Privacy\PrivacyPolicyFormatter;
 use Scrutiny\Rest\PrivacyPolicyController;
 use Scrutiny\Shortcodes\PrivacyPolicyShortcode;
@@ -101,6 +102,10 @@ use function is_admin;
  *                                  (assigned to administrators on activation)
  *   scrutiny_edit_personal_data – grants a user the right to update personal data
  *                                  fields (assigned to administrators on activation)
+ *   scrutiny_edit_responder_certification – grants a user the right to change a
+ *                                  member's responder-certification stage; without
+ *                                  it the value is visible but read-only (assigned
+ *                                  to administrators on activation)
  */
 class Plugin
 {
@@ -153,6 +158,13 @@ class Plugin
         // its admin-only hooks internally.
         self::$container->get(MemberFieldsObscurer::class)->register();
         self::$container->get(GroupFieldsObscurer::class)->register();
+
+        // Responder Certification Guard — registers acf/prepare_field and
+        // acf/update_value filters so the certification stage is visible but
+        // only editable by users with the scrutiny_edit_responder_certification
+        // capability. Registers unconditionally: the update_value guard must
+        // fire on every save path, and prepare_field is admin-only anyway.
+        self::$container->get(ResponderCertificationGuard::class)->register();
 
         // Cron handler — wires the WP-Cron action and the defensive
         // re-scheduling check. Runs on every page load (not just
@@ -270,6 +282,15 @@ class Plugin
         $container->register(GroupFieldsObscurer::class, function (ContainerInterface $c) {
             return new GroupFieldsObscurer(
                 $c->get(PersonalDataPolicy::class)
+            );
+        });
+
+        // Responder Certification Guard — makes the member
+        // responder-certification field read-only for users without the
+        // scrutiny_edit_responder_certification capability.
+        $container->register(ResponderCertificationGuard::class, function (ContainerInterface $c) {
+            return new ResponderCertificationGuard(
+                $c->get(Configuration::class)
             );
         });
 
@@ -408,14 +429,17 @@ class Plugin
         if (!$adminRole->has_cap(PersonalDataPolicy::EDIT_CAPABILITY)) {
             $adminRole->add_cap(PersonalDataPolicy::EDIT_CAPABILITY);
         }
+        if (!$adminRole->has_cap(ResponderCertificationGuard::EDIT_CAPABILITY)) {
+            $adminRole->add_cap(ResponderCertificationGuard::EDIT_CAPABILITY);
+        }
     }
 
     /**
      * Run on plugin activation
      *
      * Creates the audit log database table and assigns the
-     * scrutiny_view_personal_data and scrutiny_edit_personal_data
-     * capabilities to administrators.
+     * scrutiny_view_personal_data, scrutiny_edit_personal_data and
+     * scrutiny_edit_responder_certification capabilities to administrators.
      */
     public static function activate(): void
     {
@@ -426,6 +450,7 @@ class Plugin
         if ($adminRole) {
             $adminRole->add_cap(PersonalDataPolicy::VIEW_CAPABILITY);
             $adminRole->add_cap(PersonalDataPolicy::EDIT_CAPABILITY);
+            $adminRole->add_cap(ResponderCertificationGuard::EDIT_CAPABILITY);
         }
 
         // Schedule the weekly pruner cron event. Idempotent — the
