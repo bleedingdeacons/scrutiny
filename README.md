@@ -262,6 +262,7 @@ Test suites cover:
 - `GdprAuditRepositoryTest` — the audit-log query and write paths.
 - `AuditTrackerTest` / `AuditTrackerGroupTest` / `AuditTrackerCoverageTest` — lifecycle hook integration.
 - `MemberFieldsObscurerTest` / `GroupFieldsObscurerTest` / `PersonalDataFieldsTest` — obscuring and masking of personal data fields.
+- `PersonalDataMinderTest` / `HasLoggerTest` — the member-edit script enqueue and the logging trait.
 - `MemberPrunerTest` / `MemberTrashCleanerTest` / `PrunerCronTest` — GDPR retention cleanup.
 
 Line coverage is reported to [Coveralls](https://coveralls.io/github/bleedingdeacons/scrutiny?branch=main)
