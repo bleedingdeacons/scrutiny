@@ -48,16 +48,41 @@ class ResponderCertificationGuardTest extends TestCase
         return new ResponderCertificationGuard($configuration);
     }
 
-    /** @test */
-    public function it_disables_the_field_for_users_without_the_capability(): void
+    /**
+     * A minimal ACF radio field array as prepare_field receives it — a
+     * shortened choices set is enough to prove every value gets disabled.
+     *
+     * @return array<string, mixed>
+     */
+    private function radioField(): array
     {
-        $field = $this->makeGuard()->disableForReadOnlyUser([
-            'name' => self::FIELD_RESPONDER_CERTIFICATION,
-            'key'  => self::KEY_RESPONDER_CERTIFICATION,
-        ]);
+        return [
+            'name'    => self::FIELD_RESPONDER_CERTIFICATION,
+            'key'     => self::KEY_RESPONDER_CERTIFICATION,
+            'type'    => 'radio',
+            'choices' => [
+                'None'        => 'None',
+                'Applied'     => 'Applied',
+                'In Training' => 'In Training',
+                'Certified'   => 'Certified',
+            ],
+        ];
+    }
+
+    /** @test */
+    public function it_disables_every_radio_choice_for_users_without_the_capability(): void
+    {
+        // ACF radio reads $field['disabled'] as a list of choice values to
+        // disable, not a boolean — so all choices must be listed for the
+        // whole field to become read-only.
+        $field = $this->makeGuard()->disableForReadOnlyUser($this->radioField());
 
         $this->assertIsArray($field);
-        $this->assertSame(1, $field['disabled']);
+        $this->assertSame(
+            ['None', 'Applied', 'In Training', 'Certified'],
+            $field['disabled'],
+            'Every choice value must be disabled so no radio option can be changed.'
+        );
     }
 
     /** @test */
@@ -67,10 +92,7 @@ class ResponderCertificationGuardTest extends TestCase
             ResponderCertificationGuard::EDIT_CAPABILITY => true,
         ];
 
-        $field = $this->makeGuard()->disableForReadOnlyUser([
-            'name' => self::FIELD_RESPONDER_CERTIFICATION,
-            'key'  => self::KEY_RESPONDER_CERTIFICATION,
-        ]);
+        $field = $this->makeGuard()->disableForReadOnlyUser($this->radioField());
 
         $this->assertIsArray($field);
         $this->assertArrayNotHasKey('disabled', $field);
