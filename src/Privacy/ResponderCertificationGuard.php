@@ -98,7 +98,22 @@ final class ResponderCertificationGuard
             return $field;
         }
 
-        if (!$this->currentUserCanEdit()) {
+        if ($this->currentUserCanEdit()) {
+            return $field;
+        }
+
+        // ACF's radio field does NOT treat $field['disabled'] as a boolean.
+        // It reads it as a list of choice *values* to disable individually —
+        // render_field() does `acf_in_array($value, $field['disabled'])` per
+        // choice (class-acf-field-radio.php). Setting it to 1 disables
+        // nothing and leaves the field fully editable. Disable every choice so
+        // the current selection stays visible (a disabled+checked radio still
+        // renders as selected) but none can be changed. A checkbox field has
+        // the same semantics; anything else falls back to the boolean form.
+        $type = $field['type'] ?? '';
+        if ($type === 'radio' || $type === 'checkbox') {
+            $field['disabled'] = array_keys($field['choices'] ?? []);
+        } else {
             $field['disabled'] = 1;
         }
 
