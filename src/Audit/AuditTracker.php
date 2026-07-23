@@ -264,10 +264,13 @@ class AuditTracker
     }
 
     /**
-     * Log changes to personal data fields when a member is updated
+     * Log changes to tracked fields when a member is updated
      *
-     * Compares original and updated member to detect which personal
-     * data fields changed, and logs each change individually.
+     * Compares original and updated member to detect which tracked fields
+     * changed, and logs each change individually. Personal-data fields
+     * record only that the value changed; the responder-certification
+     * stage records the new value, since it is a service status rather
+     * than personal data.
      *
      * @param Member $updatedMember The member after changes
      * @param Member $originalMember The member before changes
@@ -294,6 +297,21 @@ class AuditTracker
                 $memberId,
                 PersonalDataFields::MOBILE_NUMBER,
                 'Value changed'
+            );
+        }
+
+        // The certification stage is a service status, not personal data, so
+        // the new value is recorded outright rather than the opaque
+        // "Value changed" used for the fields above. Who cleared a responder
+        // for the helpline — and to what stage — is the point of the entry.
+        $updatedCertification = $updatedMember->getResponderCertification();
+        if ($originalMember->getResponderCertification() !== $updatedCertification) {
+            $this->logger->log(
+                AuditLogger::ACTION_UPDATE,
+                AuditLogger::ENTITY_MEMBER,
+                $memberId,
+                PersonalDataFields::RESPONDER_CERTIFICATION,
+                'Changed to ' . $updatedCertification->label()
             );
         }
 

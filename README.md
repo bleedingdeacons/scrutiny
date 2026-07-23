@@ -3,7 +3,7 @@
 [![CI](https://github.com/bleedingdeacons/scrutiny/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/bleedingdeacons/scrutiny/actions/workflows/ci.yml)
 [![Coverage Status](https://coveralls.io/repos/github/bleedingdeacons/scrutiny/badge.svg?branch=main)](https://coveralls.io/github/bleedingdeacons/scrutiny?branch=main)
 ![PHPStan](https://img.shields.io/badge/PHPStan-level%205-brightgreen)
-![Version](https://img.shields.io/badge/version-1.23.22-blue)
+![Version](https://img.shields.io/badge/version-1.23.23-blue)
 ![PHP](https://img.shields.io/badge/php-8.1%2B-777bb4)
 ![Licence](https://img.shields.io/badge/licence-MIT%20(Modified)-green)
 
@@ -105,6 +105,8 @@ Every access or change to a personal data field is recorded in a dedicated datab
 
 **No raw personal data values are ever stored in the log.**
 
+The one value that *is* recorded is the responder-certification stage (e.g. `Changed to Certified`). It is a service status rather than personal data — it identifies nobody — and knowing which stage a responder was moved to is the whole point of auditing that field.
+
 #### Events tracked automatically
 
 | Event | Hook | What is logged |
@@ -112,6 +114,7 @@ Every access or change to a personal data field is recorded in a dedicated datab
 | Member edit form opened in admin | `current_screen` | Batch view of all personal data fields |
 | Personal data ACF field loaded on frontend | `acf/load_value` | Per-field view (deduplicated per request) |
 | Member fields changed | `unity/member_changing` | Individual field updates |
+| Responder certification changed | `unity/member_changing` | The new stage by name, e.g. `Changed to Certified` |
 | Group contacts changed | `unity/group_changing` | Individual contact field updates |
 | Meeting contacts changed | `unity/group_changing` | Individual contact field updates |
 | Member permanently deleted | `before_delete_post` | Batch delete of all personal data fields |

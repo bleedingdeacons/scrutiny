@@ -15,6 +15,7 @@ use Unity\Contacts\Interfaces\Contact;
 use Unity\Groups\Interfaces\Group;
 use Unity\Meetings\Interfaces\Meeting;
 use Unity\Members\Interfaces\Member;
+use Unity\Members\ResponderCertification;
 use WP_Mock;
 
 /**
@@ -276,6 +277,7 @@ class AuditTrackerCoverageTest extends TestCase
             'getId' => 42,
             'getPersonalEmail' => 'same@example.com',
             'getMobileNumber' => '07700 900000',
+            'getResponderCertification' => ResponderCertification::None,
             'isGdprAccepted' => false,
         ];
         $data = array_merge($defaults, $overrides);
