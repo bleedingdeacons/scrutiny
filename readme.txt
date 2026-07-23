@@ -105,6 +105,7 @@ On activation, Scrutiny will:
 
 * Create the `{prefix}scrutiny_audit_log` database table.
 * Grant the `scrutiny_view_personal_data` capability to the `administrator` role.
+* Grant the `scrutiny_edit_personal_data` capability to the `administrator` role.
 * Grant the `scrutiny_edit_responder_certification` capability to the `administrator` role.
 
 > **Order matters.** Scrutiny hooks into `unity/loaded` at priority `5`, before Amber (priority `10`), so that data-obscuring filters are in place before any ACF fields are rendered.
@@ -266,6 +267,7 @@ The table is created via `dbDelta`, so it is safe to run `Plugin::activate()` mu
 | Capability | Default role | Effect |
 |---|---|---|
 | `scrutiny_view_personal_data` | `administrator` | Sees unobscured personal data values in admin and on the frontend |
+| `scrutiny_edit_personal_data` | `administrator` | May update personal data fields (email, mobile number). Without this capability, changes are silently rejected and the existing value is preserved. Fields are shown as read-only in the admin UI. |
 | `scrutiny_edit_responder_certification` | `administrator` | May change a member's responder-certification stage. Without it the value stays visible but the field is read-only and any save is silently rejected. |
 
 Grant or revoke these capabilities via any standard WordPress role-management tool.
