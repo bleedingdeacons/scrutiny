@@ -119,7 +119,7 @@ class ResponderCertificationGuardTest extends TestCase
         $GLOBALS['scrutiny_test_acf_fields'][23462][self::FIELD_RESPONDER_CERTIFICATION] = 'Certified';
 
         $result = $this->makeGuard()->preserveCertification(
-            'Denied',
+            'Pending',
             23462,
             ['name' => self::FIELD_RESPONDER_CERTIFICATION, 'key' => self::KEY_RESPONDER_CERTIFICATION]
         );
@@ -140,12 +140,12 @@ class ResponderCertificationGuardTest extends TestCase
         $GLOBALS['scrutiny_test_acf_fields'][23462][self::FIELD_RESPONDER_CERTIFICATION] = 'Certified';
 
         $result = $this->makeGuard()->preserveCertification(
-            'Recertification Required',
+            'Pending',
             23462,
             ['name' => self::FIELD_RESPONDER_CERTIFICATION, 'key' => self::KEY_RESPONDER_CERTIFICATION]
         );
 
-        $this->assertSame('Recertification Required', $result);
+        $this->assertSame('Pending', $result);
     }
 
     /** @test */
@@ -177,11 +177,11 @@ class ResponderCertificationGuardTest extends TestCase
         $GLOBALS['scrutiny_test_acf_fields'][23462][self::FIELD_RESPONDER_CERTIFICATION] = 'Certified';
 
         $result = $this->makeGuard()->preserveCertification(
-            'Recertification Required',
+            'Pending',
             23462,
             ['name' => self::FIELD_RESPONDER_CERTIFICATION, 'key' => self::KEY_RESPONDER_CERTIFICATION]
         );
 
-        $this->assertSame('Recertification Required', $result);
+        $this->assertSame('Pending', $result);
     }
 }
