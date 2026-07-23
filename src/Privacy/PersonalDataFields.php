@@ -46,6 +46,19 @@ final class PersonalDataFields
     public const MOBILE_NUMBER = 'mobile-number';
 
     /**
+     * Logical field name: telephone-responder certification stage
+     *
+     * Deliberately not personal data — it is a service status, not something
+     * that identifies the member. It is therefore absent from
+     * {@see self::ALL_FIELDS}, {@see self::CONFIG_KEY_MAP} and
+     * {@see self::CONFIG_ACF_KEY_MAP}, so it is never obscured and never
+     * generates view entries. It appears here only so the audit log can
+     * label its change entries, which — unlike the personal-data fields —
+     * record the new value outright.
+     */
+    public const RESPONDER_CERTIFICATION = 'responder-certification';
+
+    /**
      * Sentinel field name used when an audit entry refers to the entire
      * record rather than a single field — for example, the one-shot
      * "Member created" entry written when a new member is inserted.
@@ -204,6 +217,7 @@ final class PersonalDataFields
     public const LABELS = [
         self::PERSONAL_EMAIL => 'Personal Email',
         self::MOBILE_NUMBER  => 'Mobile Number',
+        self::RESPONDER_CERTIFICATION => 'Responder Certification',
         self::ALL_FIELDS_SENTINEL => 'All fields',
         self::GROUP_CONTACT_NAME   => 'Group Contact Name',
         self::GROUP_CONTACT_EMAIL  => 'Group Contact Email',

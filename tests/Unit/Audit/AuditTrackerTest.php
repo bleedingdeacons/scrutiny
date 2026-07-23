@@ -9,6 +9,7 @@ use Scrutiny\Audit\AuditTracker;
 use Scrutiny\Audit\Interfaces\AuditLogger;
 use Scrutiny\Privacy\PersonalDataFields;
 use Unity\Members\Interfaces\Member;
+use Unity\Members\ResponderCertification;
 use Mockery;
 use Mockery\Adapter\Phpunit\MockeryPHPUnitIntegration;
 
@@ -48,6 +49,7 @@ class AuditTrackerTest extends TestCase
             'getId' => 42,
             'getPersonalEmail' => 'john@example.com',
             'getMobileNumber' => '07700 900123',
+            'getResponderCertification' => ResponderCertification::None,
             'isGdprAccepted' => false,
             'getGdprAcceptedAt' => '',
             'getGdprAcceptanceVersion' => '',
@@ -126,6 +128,46 @@ class AuditTrackerTest extends TestCase
         $updated = $this->createMember(['getMobileNumber' => '07700 900456']);
 
         $tracker->onMemberChanged($updated, $original);
+    }
+
+    /** @test */
+    public function it_logs_the_new_value_when_responder_certification_changes(): void
+    {
+        // Unlike the personal-data fields, the certification entry names the
+        // stage the member was moved to — it is a service status, not PII.
+        $logger = Mockery::mock(AuditLogger::class);
+        $logger->shouldReceive('log')
+            ->once()
+            ->with(
+                AuditLogger::ACTION_UPDATE,
+                AuditLogger::ENTITY_MEMBER,
+                42,
+                PersonalDataFields::RESPONDER_CERTIFICATION,
+                'Changed to Certified'
+            );
+
+        $tracker = $this->createTracker($logger);
+
+        $original = $this->createMember(['getResponderCertification' => ResponderCertification::Pending]);
+        $updated = $this->createMember(['getResponderCertification' => ResponderCertification::Certified]);
+
+        $tracker->onMemberChanged($updated, $original);
+    }
+
+    /** @test */
+    public function it_does_not_log_when_responder_certification_is_unchanged(): void
+    {
+        $logger = Mockery::mock(AuditLogger::class);
+        $logger->shouldNotReceive('log');
+
+        $tracker = $this->createTracker($logger);
+
+        $original = $this->createMember(['getResponderCertification' => ResponderCertification::Certified]);
+        $updated = $this->createMember(['getResponderCertification' => ResponderCertification::Certified]);
+
+        $tracker->onMemberChanged($updated, $original);
+
+        self::assertTrue(true, 'onMemberChanged completed without logging');
     }
 
     /** @test */

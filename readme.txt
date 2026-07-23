@@ -3,8 +3,8 @@ Contributors: thebleedingdeacons
 Tags: audit, gdpr, privacy, logging, unity
 Requires at least: 6.0
 Tested up to: 6.9
-Stable tag: 1.23.22
-Build date: 2026/07/23 17:00:56
+Stable tag: 1.23.23
+Build date: 2026/07/23 22:11:21
 Requires PHP: 8.0
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
@@ -39,6 +39,8 @@ Every access or change to a personal data field is recorded in a dedicated datab
 
 **No raw personal data values are ever stored in the log.**
 
+The one value that *is* recorded is the responder-certification stage (e.g. `Changed to Certified`) — a service status rather than personal data, and the whole point of auditing that field.
+
 #### Events tracked automatically
 
 | Event | Hook | What is logged |
@@ -46,6 +48,7 @@ Every access or change to a personal data field is recorded in a dedicated datab
 | Member edit form opened in admin | `current_screen` | Batch view of all personal data fields |
 | Personal data ACF field loaded on frontend | `acf/load_value` | Per-field view (deduplicated per request) |
 | Member fields changed | `unity/member_changing` | Individual field updates |
+| Responder certification changed | `unity/member_changing` | The new stage by name, e.g. `Changed to Certified` |
 | Group contacts changed | `unity/group_changing` | Individual contact field updates |
 | Meeting contacts changed | `unity/group_changing` | Individual contact field updates |
 | Member permanently deleted | `before_delete_post` | Batch delete of all personal data fields |
