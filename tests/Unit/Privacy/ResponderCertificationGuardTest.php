@@ -83,6 +83,11 @@ class ResponderCertificationGuardTest extends TestCase
             $field['disabled'],
             'Every choice value must be disabled so no radio option can be changed.'
         );
+        $this->assertStringContainsString(
+            'scrutiny-cert-readonly',
+            $field['wrapper']['class'],
+            'The field wrapper must be tagged so the read-only stylesheet can grey it out.'
+        );
     }
 
     /** @test */

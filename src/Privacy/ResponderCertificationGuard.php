@@ -12,9 +12,14 @@ if (!defined('ABSPATH')) {
 use Unity\Core\Interfaces\Configuration;
 use Unity\Members\Interfaces\Member;
 
+use function add_action;
 use function add_filter;
 use function current_user_can;
+use function get_current_screen;
 use function get_field;
+use function wp_add_inline_style;
+use function wp_enqueue_style;
+use function wp_register_style;
 
 /**
  * Responder Certification Guard
@@ -39,6 +44,10 @@ use function get_field;
  *                       POST could re-enable the input, so the save path — not
  *                       the DOM attribute — is where the rule is enforced.
  *
+ * A small stylesheet ({@see self::enqueueReadOnlyStyle()}) additionally greys
+ * the locked field, since ACF disables the radio inputs but does not otherwise
+ * make a read-only field look any different from an editable one.
+ *
  * Key-based filter variants are used throughout. For sub-fields inside ACF
  * groups (the certification field lives in `service-layout-group`) name-based
  * filters resolve inconsistently, whereas the key-based prepare_field and
@@ -51,6 +60,12 @@ final class ResponderCertificationGuard
      * certification stage. Assigned to administrators on activation.
      */
     public const EDIT_CAPABILITY = 'scrutiny_edit_responder_certification';
+
+    /**
+     * CSS class added to the field wrapper when it is locked, targeted by the
+     * read-only stylesheet enqueued in {@see self::enqueueReadOnlyStyle()}.
+     */
+    private const READONLY_CLASS = 'scrutiny-cert-readonly';
 
     private readonly array $member_config;
 
@@ -75,6 +90,12 @@ final class ResponderCertificationGuard
         // capability. This is the real check — the disabled attribute above
         // is only a UI affordance.
         add_filter('acf/update_value/key=' . $key, [$this, 'preserveCertification'], 10, 3);
+
+        // Read-only styling: ACF disables the radio inputs but does not grey
+        // the field, so a locked field can look identical to an editable one.
+        // Add a small stylesheet on the member edit screen that dims the field
+        // and shows a not-allowed cursor when the current user cannot edit.
+        add_action('acf/input/admin_enqueue_scripts', [$this, 'enqueueReadOnlyStyle']);
     }
 
     /**
@@ -117,7 +138,42 @@ final class ResponderCertificationGuard
             $field['disabled'] = 1;
         }
 
+        // Tag the field wrapper so the read-only stylesheet can grey it out.
+        // ACF disables the inputs but leaves the field looking editable, so
+        // this class is what makes "not editable" visible.
+        $existingClass = $field['wrapper']['class'] ?? '';
+        $field['wrapper']['class'] = trim($existingClass . ' ' . self::READONLY_CLASS);
+
         return $field;
+    }
+
+    /**
+     * Enqueue the read-only stylesheet on the member edit screen for users
+     * who cannot edit the certification. Dims the tagged field and shows a
+     * not-allowed cursor so it is visibly locked, not just inert.
+     */
+    public function enqueueReadOnlyStyle(): void
+    {
+        if ($this->currentUserCanEdit()) {
+            return;
+        }
+
+        $screen = get_current_screen();
+        $postType = $this->member_config['POST_TYPE'] ?? '';
+        if (!$screen || $postType === '' || $screen->post_type !== $postType) {
+            return;
+        }
+
+        // Registering a src-less handle is the supported way to attach inline
+        // CSS without shipping a stylesheet file for a rule set this small.
+        wp_register_style('scrutiny-cert-readonly', false);
+        wp_enqueue_style('scrutiny-cert-readonly');
+        wp_add_inline_style(
+            'scrutiny-cert-readonly',
+            '.acf-field.' . self::READONLY_CLASS . '{opacity:.6;}'
+            . '.acf-field.' . self::READONLY_CLASS . ' label,'
+            . '.acf-field.' . self::READONLY_CLASS . ' input{cursor:not-allowed;}'
+        );
     }
 
     /**
