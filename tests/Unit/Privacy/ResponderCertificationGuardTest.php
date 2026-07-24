@@ -8,6 +8,7 @@ use PHPUnit\Framework\TestCase;
 use Scrutiny\Privacy\ResponderCertificationGuard;
 use Unity\Core\Interfaces\Configuration;
 use Unity\Members\Interfaces\Member;
+use WP_Mock;
 
 /**
  * Tests for ResponderCertificationGuard.
@@ -27,22 +28,40 @@ class ResponderCertificationGuardTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        WP_Mock::setUp();
 
         // The bootstrap's in-memory stubs back current_user_can() and
         // get_field(); reset them so capabilities and stored values do not
         // leak between cases.
         $GLOBALS['scrutiny_test_capabilities'] = [];
         $GLOBALS['scrutiny_test_acf_fields'] = [];
+
+        // add_action is a bootstrap recorder; register() also wires an action,
+        // so reset the recorder between cases.
+        $GLOBALS['scrutiny_test_actions'] = [];
     }
 
-    private function makeGuard(): ResponderCertificationGuard
+    protected function tearDown(): void
+    {
+        WP_Mock::tearDown();
+        parent::tearDown();
+    }
+
+    private const POST_TYPE = 'member';
+
+    /**
+     * @param array<string, mixed>|null $config Config override; null uses the
+     *                                           standard fully-populated config.
+     */
+    private function makeGuard(?array $config = null): ResponderCertificationGuard
     {
         $configuration = $this->createMock(Configuration::class);
         $configuration->method('getConfig')
             ->with(Member::class)
-            ->willReturn([
+            ->willReturn($config ?? [
                 'FIELD_RESPONDER_CERTIFICATION' => self::FIELD_RESPONDER_CERTIFICATION,
                 'KEY_RESPONDER_CERTIFICATION'   => self::KEY_RESPONDER_CERTIFICATION,
+                'POST_TYPE'                     => self::POST_TYPE,
             ]);
 
         return new ResponderCertificationGuard($configuration);
@@ -183,5 +202,98 @@ class ResponderCertificationGuardTest extends TestCase
         );
 
         $this->assertSame('Pending', $result);
+    }
+
+    /** @test */
+    public function register_wires_the_prepare_save_and_style_hooks_when_the_key_is_set(): void
+    {
+        $guard = $this->makeGuard();
+
+        // prepare_field + update_value are filters (WP_Mock-tracked); the
+        // enqueue hook is an action recorded by the bootstrap add_action stub.
+        WP_Mock::expectFilterAdded('acf/prepare_field/key=' . self::KEY_RESPONDER_CERTIFICATION, [$guard, 'disableForReadOnlyUser']);
+        WP_Mock::expectFilterAdded('acf/update_value/key=' . self::KEY_RESPONDER_CERTIFICATION, [$guard, 'preserveCertification'], 10, 3);
+
+        $guard->register();
+
+        WP_Mock::assertHooksAdded();
+        $this->assertContains(
+            'acf/input/admin_enqueue_scripts',
+            array_column($GLOBALS['scrutiny_test_actions'], 'hook'),
+        );
+    }
+
+    /** @test */
+    public function register_is_a_noop_when_the_certification_key_is_absent(): void
+    {
+        // Without a configured field key there is nothing to hook: register()
+        // returns before any add_filter/add_action call, so the action
+        // recorder stays empty.
+        $this->makeGuard(['POST_TYPE' => self::POST_TYPE])->register();
+
+        $this->assertSame([], $GLOBALS['scrutiny_test_actions']);
+    }
+
+    /** @test */
+    public function it_falls_back_to_a_boolean_disabled_for_a_non_radio_field(): void
+    {
+        // A field that is neither radio nor checkbox has no per-choice
+        // disable semantics, so the guard uses the boolean form.
+        $field = $this->makeGuard()->disableForReadOnlyUser([
+            'name' => self::FIELD_RESPONDER_CERTIFICATION,
+            'key'  => self::KEY_RESPONDER_CERTIFICATION,
+            'type' => 'text',
+        ]);
+
+        $this->assertIsArray($field);
+        $this->assertSame(1, $field['disabled']);
+        $this->assertStringContainsString('scrutiny-cert-readonly', $field['wrapper']['class']);
+    }
+
+    /** @test */
+    public function it_enqueues_the_readonly_style_on_the_member_screen_for_locked_users(): void
+    {
+        WP_Mock::userFunction('get_current_screen')
+            ->andReturn((object) ['post_type' => self::POST_TYPE]);
+        WP_Mock::userFunction('wp_register_style')->once();
+        WP_Mock::userFunction('wp_enqueue_style')->once()->with('scrutiny-cert-readonly');
+        WP_Mock::userFunction('wp_add_inline_style')
+            ->once()
+            ->with('scrutiny-cert-readonly', \Mockery::pattern('/scrutiny-cert-readonly/'));
+
+        $this->makeGuard()->enqueueReadOnlyStyle();
+
+        // The ->once() expectations are verified on tearDown; assert here too
+        // so the test is not marked risky.
+        $this->assertTrue(true);
+    }
+
+    /** @test */
+    public function it_does_not_enqueue_the_style_for_users_who_can_edit(): void
+    {
+        $GLOBALS['scrutiny_test_capabilities'][ResponderCertificationGuard::EDIT_CAPABILITY] = true;
+
+        // Returns before touching the screen or the style functions.
+        WP_Mock::userFunction('wp_enqueue_style')->never();
+
+        $this->makeGuard()->enqueueReadOnlyStyle();
+
+        $this->assertTrue(true);
+    }
+
+    /** @test */
+    public function it_does_not_enqueue_the_style_off_the_member_screen(): void
+    {
+        WP_Mock::userFunction('wp_enqueue_style')->never();
+
+        // No screen resolved…
+        WP_Mock::userFunction('get_current_screen')->andReturn(null);
+        $this->makeGuard()->enqueueReadOnlyStyle();
+
+        // …and a different post type.
+        WP_Mock::userFunction('get_current_screen')->andReturn((object) ['post_type' => 'post']);
+        $this->makeGuard()->enqueueReadOnlyStyle();
+
+        $this->assertTrue(true);
     }
 }
