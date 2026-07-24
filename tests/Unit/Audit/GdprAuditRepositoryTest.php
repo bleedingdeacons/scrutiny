@@ -245,6 +245,66 @@ class GdprAuditRepositoryTest extends TestCase
         );
     }
 
+    /**
+     * @test
+     */
+    public function find_builds_the_user_field_and_date_where_clauses(): void
+    {
+        // These four filters are the ones the declaration-order test above
+        // does not set, so drive them here to cover their WHERE branches.
+        $this->repository->find([
+            'user_id'    => 7,
+            'field_name' => 'personal-email',
+            'date_from'  => '2026-01-01 00:00:00',
+            'date_to'    => '2026-12-31 23:59:59',
+        ]);
+
+        // user_id, field_name, date_from, date_to, then LIMIT 50, OFFSET 0.
+        $this->assertSame(
+            [7, 'personal-email', '2026-01-01 00:00:00', '2026-12-31 23:59:59', 50, 0],
+            $this->wpdb->lastPrepareValues,
+        );
+    }
+
+    /**
+     * @test
+     */
+    public function count_builds_the_entity_and_action_where_clauses(): void
+    {
+        $this->wpdb->getVarReturn = 4;
+
+        $this->assertSame(4, $this->repository->count([
+            'entity_type' => 'member',
+            'entity_id'   => 42,
+            'action'      => 'update',
+        ]));
+
+        $this->assertSame(['member', 42, 'update'], $this->wpdb->lastPrepareValues);
+    }
+
+    /**
+     * @test
+     */
+    public function count_expands_entity_ids_into_an_in_list(): void
+    {
+        $this->wpdb->getVarReturn = 2;
+
+        // Duplicates and non-positives are dropped and de-duped, mirroring find().
+        $this->repository->count(['entity_ids' => [5, 5, 0, -3, 8]]);
+
+        $this->assertSame([5, 8], $this->wpdb->lastPrepareValues);
+    }
+
+    /**
+     * @test
+     */
+    public function count_forces_an_impossible_id_when_no_valid_entity_ids_remain(): void
+    {
+        $this->repository->count(['entity_ids' => [0, -1]]);
+
+        $this->assertSame([0], $this->wpdb->lastPrepareValues);
+    }
+
     // ─── purge ──────────────────────────────────────────────────────
 
     /**
