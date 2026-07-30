@@ -115,7 +115,7 @@ class AuditLogAdmin
     /**
      * Get all users who have made audit log entries
      *
-     * @return array Array of user objects with id and login
+     * @return array<int, object> Array of user objects with id and login
      */
     private function getAuditUsers(): array
     {

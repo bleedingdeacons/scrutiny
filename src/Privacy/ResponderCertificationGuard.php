@@ -67,6 +67,7 @@ final class ResponderCertificationGuard
      */
     private const READONLY_CLASS = 'scrutiny-cert-readonly';
 
+    /** @var array<string, mixed> */
     private readonly array $member_config;
 
     public function __construct(Configuration $configuration)
@@ -110,8 +111,8 @@ final class ResponderCertificationGuard
      * ACF prepare_field: disable the certification radio for users who lack
      * the edit capability, so the value is visible but not editable.
      *
-     * @param array|false $field The ACF field array, or false if already hidden
-     * @return array|false The modified field array
+     * @param array<string, mixed>|false $field The ACF field array, or false if already hidden
+     * @return array<string, mixed>|false The modified field array
      */
     public function disableForReadOnlyUser(array|false $field): array|false
     {
@@ -182,7 +183,7 @@ final class ResponderCertificationGuard
      *
      * @param mixed $value The new value being saved
      * @param mixed $postId The post ID
-     * @param array $field The ACF field array
+     * @param array<string, mixed> $field The ACF field array
      * @return mixed The value to save
      */
     public function preserveCertification(mixed $value, mixed $postId, array $field): mixed

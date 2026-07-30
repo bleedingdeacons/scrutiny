@@ -54,14 +54,14 @@ interface AuditRepository
      *     per_page?: int,
      *     page?: int
      * } $args Query arguments
-     * @return array Array of audit log entry objects
+     * @return array<int, object> Array of audit log entry objects
      */
     public function find(array $args = []): array;
 
     /**
      * Count audit log entries matching the given criteria
      *
-     * @param array $args Query arguments (same as find, excluding pagination)
+     * @param array<string, mixed> $args Query arguments (same as find, excluding pagination)
      * @return int Total count
      */
     public function count(array $args = []): int;

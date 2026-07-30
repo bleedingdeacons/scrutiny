@@ -30,6 +30,7 @@ use function get_field;
  */
 final class MemberFieldsObscurer
 {
+    /** @var array<string, mixed> */
     private readonly array $member_config;
 
     public function __construct(
@@ -103,7 +104,7 @@ final class MemberFieldsObscurer
      *
      * @param mixed $value The field value
      * @param mixed $postId The post ID
-     * @param array $field The ACF field array
+     * @param array<string, mixed> $field The ACF field array
      * @return mixed The potentially obscured value
      */
     public function obscureAcfPersonalEmail(mixed $value, mixed $postId, array $field): mixed
@@ -124,7 +125,7 @@ final class MemberFieldsObscurer
      *
      * @param mixed $value The field value
      * @param mixed $postId The post ID
-     * @param array $field The ACF field array
+     * @param array<string, mixed> $field The ACF field array
      * @return mixed The potentially obscured value
      */
     public function obscureAcfMobileNumber(mixed $value, mixed $postId, array $field): mixed
@@ -148,8 +149,8 @@ final class MemberFieldsObscurer
      * user can type a replacement value. An acf/update_value filter
      * ensures that submitting an empty field preserves the original.
      *
-     * @param array|false $field The ACF field array, or false if already hidden
-     * @return array|false The modified field array
+     * @param array<string, mixed>|false $field The ACF field array, or false if already hidden
+     * @return array<string, mixed>|false The modified field array
      */
     public function prepareAcfPersonalEmail(array|false $field): array|false
     {
@@ -180,8 +181,8 @@ final class MemberFieldsObscurer
     /**
      * ACF prepare_field: obscure mobile number in admin edit forms
      *
-     * @param array|false $field The ACF field array, or false if already hidden
-     * @return array|false The modified field array
+     * @param array<string, mixed>|false $field The ACF field array, or false if already hidden
+     * @return array<string, mixed>|false The modified field array
      */
     public function prepareAcfMobileNumber(array|false $field): array|false
     {
@@ -220,7 +221,7 @@ final class MemberFieldsObscurer
      *
      * @param mixed $value The new value being saved
      * @param mixed $postId The post ID
-     * @param array $field The ACF field array
+     * @param array<string, mixed> $field The ACF field array
      * @return mixed The value to save
      */
     public function preservePersonalEmail(mixed $value, mixed $postId, array $field): mixed
@@ -237,7 +238,7 @@ final class MemberFieldsObscurer
      *
      * @param mixed $value The new value being saved
      * @param mixed $postId The post ID
-     * @param array $field The ACF field array
+     * @param array<string, mixed> $field The ACF field array
      * @return mixed The value to save
      */
     public function preserveMobileNumber(mixed $value, mixed $postId, array $field): mixed

@@ -28,6 +28,7 @@ use function wp_localize_script;
  */
 class PersonalDataMinder
 {
+    /** @var array<string, mixed> */
     private readonly array $memberConfig;
 
     public function __construct(Configuration $configuration)
