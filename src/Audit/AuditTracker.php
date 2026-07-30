@@ -60,6 +60,7 @@ class AuditTracker
      */
     private array $loggedMemberViews = [];
 
+    /** @var array<string, mixed> */
     private readonly array $member_config;
 
     /**
@@ -183,7 +184,7 @@ class AuditTracker
      *
      * @param mixed $value The field value
      * @param int|string $postId The post ID
-     * @param array $field The field array
+     * @param array<string, mixed> $field The field array
      * @return mixed The unchanged field value
      */
     public function onPersonalDataFieldLoaded($value, $postId, array $field)
@@ -462,8 +463,8 @@ class AuditTracker
      *
      * @param string $entityType The entity type constant (group or meeting)
      * @param int    $entityId   The entity post ID
-     * @param array  $originalContacts Contacts before the change
-     * @param array  $updatedContacts  Contacts after the change
+     * @param array<int, mixed>  $originalContacts Contacts before the change
+     * @param array<int, mixed>  $updatedContacts  Contacts after the change
      * @param string $nameField  The PersonalDataFields constant for the name field
      * @param string $emailField The PersonalDataFields constant for the email field
      * @param string $phoneField The PersonalDataFields constant for the phone field
