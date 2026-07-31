@@ -4,13 +4,13 @@ declare(strict_types=1);
 
 namespace Scrutiny\Tests\Unit\Audit;
 
+use BleedingDeacons\WpMocks\WpState;
+use Brain\Monkey\Functions;
 use Mockery;
-use Mockery\Adapter\Phpunit\MockeryPHPUnitIntegration;
-use PHPUnit\Framework\TestCase;
 use Scrutiny\Audit\GdprAuditLogger;
 use Scrutiny\Audit\Interfaces\AuditLogger;
 use Scrutiny\Audit\Interfaces\AuditRepository;
-use WP_Mock;
+use Scrutiny\Tests\TestCase;
 
 /**
  * Tests for GdprAuditLogger — the entry assembly, current-user capture and
@@ -20,18 +20,13 @@ use WP_Mock;
  */
 class GdprAuditLoggerTest extends TestCase
 {
-    use MockeryPHPUnitIntegration;
-
     protected function setUp(): void
     {
         parent::setUp();
-        WP_Mock::setUp();
     }
 
     protected function tearDown(): void
     {
-        WP_Mock::tearDown();
-        Mockery::close();
         unset($_SERVER['REMOTE_ADDR']);
         parent::tearDown();
     }
@@ -43,8 +38,8 @@ class GdprAuditLoggerTest extends TestCase
     {
         $_SERVER['REMOTE_ADDR'] = '203.0.113.42';
 
-        WP_Mock::userFunction('wp_get_current_user')->andReturn((object) ['user_login' => 'admin']);
-        WP_Mock::userFunction('get_current_user_id')->andReturn(7);
+        Functions\when('wp_get_current_user')->justReturn($this->currentUser('admin'));
+        WpState::$currentUserId = 7;
 
         $captured = null;
         $repository = Mockery::mock(AuditRepository::class);
@@ -85,8 +80,8 @@ class GdprAuditLoggerTest extends TestCase
     {
         $_SERVER['REMOTE_ADDR'] = '2001:db8:1234:5678:9abc:def0:1234:5678';
 
-        WP_Mock::userFunction('wp_get_current_user')->andReturn((object) ['user_login' => 'admin']);
-        WP_Mock::userFunction('get_current_user_id')->andReturn(1);
+        Functions\when('wp_get_current_user')->justReturn($this->currentUser('admin'));
+        WpState::$currentUserId = 1;
 
         $captured = null;
         $repository = Mockery::mock(AuditRepository::class);
@@ -110,8 +105,13 @@ class GdprAuditLoggerTest extends TestCase
     {
         $_SERVER['REMOTE_ADDR'] = 'not-an-ip';
 
-        WP_Mock::userFunction('wp_get_current_user')->andReturn((object) []);
-        WP_Mock::userFunction('get_current_user_id')->andReturn(0);
+        $noLogin = new \WP_User();
+        // The 'system' fallback is reached through ?? , which uses isset()
+        // semantics — so an unset typed property takes that branch without
+        // erroring, exactly as a user object with no login would.
+        unset($noLogin->user_login);
+        Functions\when('wp_get_current_user')->justReturn($noLogin);
+        WpState::$currentUserId = 0;
 
         $captured = null;
         $repository = Mockery::mock(AuditRepository::class);
@@ -134,8 +134,8 @@ class GdprAuditLoggerTest extends TestCase
      */
     public function log_batch_logs_one_entry_per_field(): void
     {
-        WP_Mock::userFunction('wp_get_current_user')->andReturn((object) ['user_login' => 'admin']);
-        WP_Mock::userFunction('get_current_user_id')->andReturn(1);
+        Functions\when('wp_get_current_user')->justReturn($this->currentUser('admin'));
+        WpState::$currentUserId = 1;
         $_SERVER['REMOTE_ADDR'] = '198.51.100.5';
 
         $repository = Mockery::mock(AuditRepository::class);
@@ -149,4 +149,21 @@ class GdprAuditLoggerTest extends TestCase
             'Member deleted'
         );
     }
+
+    /**
+     * A current-user stand-in with the given login.
+     *
+     * wp-mocks types wp_get_current_user() as returning WP_User, and Patchwork
+     * keeps a function's original signature when Brain Monkey redefines it, so
+     * an ad-hoc stdClass is a TypeError now — which is the more faithful
+     * behaviour anyway: real WordPress always hands back a WP_User.
+     */
+    private function currentUser(string $login): \WP_User
+    {
+        $user = new \WP_User();
+        $user->user_login = $login;
+
+        return $user;
+    }
+
 }

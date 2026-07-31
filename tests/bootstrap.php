@@ -19,7 +19,23 @@ declare(strict_types=1);
  *
  * Tests that mutate the option store or read the log stream reset
  * the relevant globals in setUp() to avoid cross-test contamination.
+ *
+ * Those hand-rolled stubs are kept rather than handed over wholesale to
+ * bleedingdeacons/wp-mocks: a dozen test files assert directly on the globals
+ * behind them. The shared stub layer is loaded at the foot of this file
+ * instead, where its function_exists() guards make it a backstop for
+ * everything this file does *not* define — which is exactly the role
+ * WP_Mock::bootstrap() used to play, and for the same reason.
+ *
+ * Patchwork, however, must be loaded before any of it. It rewrites functions
+ * as their defining file is included, so anything defined before it cannot be
+ * overridden afterwards, and Brain Monkey only requires it lazily inside
+ * Monkey\setUp(). Hence the call below, above the first stub.
  */
+
+use BleedingDeacons\WpMocks\Bootstrap;
+
+Bootstrap::loadPatchwork();
 
 if (!defined('ABSPATH')) {
     define('ABSPATH', '/var/www/html/');
@@ -644,22 +660,27 @@ if (!class_exists('WP_REST_Server')) {
     }
 }
 
-// WP_Mock, bootstrapped last, on purpose.
+// The shared stub layer, loaded last, on purpose — the role WP_Mock's
+// bootstrap used to play here, for the same reason.
 //
-// It defines a broad set of WordPress functions, each guarded by
-// function_exists() — as are the hand-rolled stubs above. Whichever loads
-// first therefore wins, per function:
+// Every definition in it is guarded by function_exists(), as are the
+// hand-rolled stubs above, so whichever loads first wins, per function:
 //
-//   - Bootstrapping WP_Mock first would shadow the recording add_action()
-//     and the globals-backed get_field() above, silently breaking the cron
+//   - Loading it first would shadow the recording add_action() and the
+//     globals-backed get_field() above, silently breaking the cron
 //     registration tests and the privacy-policy controller tests that read
 //     $GLOBALS['scrutiny_test_actions'] / ['scrutiny_test_acf_fields'].
-//   - Bootstrapping it last leaves those intact and lets WP_Mock own the
-//     functions this file does *not* define — wp_get_current_user() and
-//     get_current_user_id(), which GdprAuditLogger::log() calls and which
-//     AuditLoggerTest stubs per test.
+//   - Loading it last leaves those intact and lets it own the functions this
+//     file does *not* define — wp_get_current_user() and get_current_user_id(),
+//     which GdprAuditLogger::log() calls, and the escaping, screen and asset
+//     helpers the admin classes touch.
 //
-// Both mechanisms coexist because their function sets do not overlap. If a
-// test ever needs WP_Mock control over a function stubbed above, remove the
-// hand-rolled version rather than reordering this call.
-WP_Mock::bootstrap();
+// Only the `wordpress` group. `sentinel` would be shadowed anyway by the
+// recording Sentinel_Log_Channel above, and `acf` by this file's get_field().
+//
+// Note what is *not* in that group: add_action, add_filter and the rest of the
+// hook layer, which Brain Monkey owns. This file's own recording add_action()
+// therefore still wins — deliberately, since the cron tests read the array it
+// fills — while add_filter is left to Brain Monkey, so Filters\expectAdded()
+// and the ACF filter assertions work.
+Bootstrap::load(['wordpress']);

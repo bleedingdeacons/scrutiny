@@ -4,9 +4,8 @@ declare(strict_types=1);
 
 namespace Scrutiny\Tests\Unit\Audit;
 
-use PHPUnit\Framework\TestCase;
+use Scrutiny\Tests\TestCase;
 use Scrutiny\Audit\GdprAuditRepository;
-use WP_Mock;
 
 /**
  * Tests for GdprAuditRepository's SQL-building read/write paths.
@@ -31,11 +30,9 @@ class GdprAuditRepositoryTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        WP_Mock::setUp();
         $GLOBALS['scrutiny_test_log_entries'] = [];
 
         // esc_sql is a passthrough for the table name in these tests.
-        WP_Mock::userFunction('esc_sql')->andReturnUsing(fn ($v) => $v);
 
         $this->previousWpdb = $GLOBALS['wpdb'] ?? null;
         $this->wpdb = new class {
@@ -92,7 +89,6 @@ class GdprAuditRepositoryTest extends TestCase
     protected function tearDown(): void
     {
         $GLOBALS['wpdb'] = $this->previousWpdb;
-        WP_Mock::tearDown();
         parent::tearDown();
     }
 

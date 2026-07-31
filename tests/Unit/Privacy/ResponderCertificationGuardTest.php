@@ -4,11 +4,13 @@ declare(strict_types=1);
 
 namespace Scrutiny\Tests\Unit\Privacy;
 
-use PHPUnit\Framework\TestCase;
+use BleedingDeacons\WpMocks\WpState;
+use Brain\Monkey\Filters;
+use Brain\Monkey\Functions;
 use Scrutiny\Privacy\ResponderCertificationGuard;
+use Scrutiny\Tests\TestCase;
 use Unity\Core\Interfaces\Configuration;
 use Unity\Members\Interfaces\Member;
-use WP_Mock;
 
 /**
  * Tests for ResponderCertificationGuard.
@@ -28,7 +30,6 @@ class ResponderCertificationGuardTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        WP_Mock::setUp();
 
         // The bootstrap's in-memory stubs back current_user_can() and
         // get_field(); reset them so capabilities and stored values do not
@@ -43,7 +44,6 @@ class ResponderCertificationGuardTest extends TestCase
 
     protected function tearDown(): void
     {
-        WP_Mock::tearDown();
         parent::tearDown();
     }
 
@@ -209,14 +209,14 @@ class ResponderCertificationGuardTest extends TestCase
     {
         $guard = $this->makeGuard();
 
-        // prepare_field + update_value are filters (WP_Mock-tracked); the
-        // enqueue hook is an action recorded by the bootstrap add_action stub.
-        WP_Mock::expectFilterAdded('acf/prepare_field/key=' . self::KEY_RESPONDER_CERTIFICATION, [$guard, 'disableForReadOnlyUser']);
-        WP_Mock::expectFilterAdded('acf/update_value/key=' . self::KEY_RESPONDER_CERTIFICATION, [$guard, 'preserveCertification'], 10, 3);
-
         $guard->register();
 
-        WP_Mock::assertHooksAdded();
+        // prepare_field + update_value are filters, so Brain Monkey holds
+        // them; the enqueue hook is an action, recorded by the bootstrap's own
+        // add_action stub, which this file's tests read directly.
+        self::assertSame(10, Filters\has('acf/prepare_field/key=' . self::KEY_RESPONDER_CERTIFICATION, [$guard, 'disableForReadOnlyUser']));
+        self::assertSame(10, Filters\has('acf/update_value/key=' . self::KEY_RESPONDER_CERTIFICATION, [$guard, 'preserveCertification']));
+
         $this->assertContains(
             'acf/input/admin_enqueue_scripts',
             array_column($GLOBALS['scrutiny_test_actions'], 'hook'),
@@ -253,11 +253,11 @@ class ResponderCertificationGuardTest extends TestCase
     /** @test */
     public function it_enqueues_the_readonly_style_on_the_member_screen_for_locked_users(): void
     {
-        WP_Mock::userFunction('get_current_screen')
+        Functions\expect('get_current_screen')
             ->andReturn((object) ['post_type' => self::POST_TYPE]);
-        WP_Mock::userFunction('wp_register_style')->once();
-        WP_Mock::userFunction('wp_enqueue_style')->once()->with('scrutiny-cert-readonly');
-        WP_Mock::userFunction('wp_add_inline_style')
+        Functions\expect('wp_register_style')->once();
+        Functions\expect('wp_enqueue_style')->once()->with('scrutiny-cert-readonly');
+        Functions\expect('wp_add_inline_style')
             ->once()
             ->with('scrutiny-cert-readonly', \Mockery::pattern('/scrutiny-cert-readonly/'));
 
@@ -274,7 +274,7 @@ class ResponderCertificationGuardTest extends TestCase
         $GLOBALS['scrutiny_test_capabilities'][ResponderCertificationGuard::EDIT_CAPABILITY] = true;
 
         // Returns before touching the screen or the style functions.
-        WP_Mock::userFunction('wp_enqueue_style')->never();
+        Functions\expect('wp_enqueue_style')->never();
 
         $this->makeGuard()->enqueueReadOnlyStyle();
 
@@ -284,14 +284,14 @@ class ResponderCertificationGuardTest extends TestCase
     /** @test */
     public function it_does_not_enqueue_the_style_off_the_member_screen(): void
     {
-        WP_Mock::userFunction('wp_enqueue_style')->never();
+        Functions\expect('wp_enqueue_style')->never();
 
         // No screen resolved…
-        WP_Mock::userFunction('get_current_screen')->andReturn(null);
+        WpState::$screen = null;
         $this->makeGuard()->enqueueReadOnlyStyle();
 
         // …and a different post type.
-        WP_Mock::userFunction('get_current_screen')->andReturn((object) ['post_type' => 'post']);
+        Functions\expect('get_current_screen')->andReturn((object) ['post_type' => 'post']);
         $this->makeGuard()->enqueueReadOnlyStyle();
 
         $this->assertTrue(true);

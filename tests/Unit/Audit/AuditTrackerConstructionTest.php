@@ -4,13 +4,12 @@ declare(strict_types=1);
 
 namespace Scrutiny\Tests\Unit\Audit;
 
-use PHPUnit\Framework\TestCase;
+use Scrutiny\Tests\TestCase;
 use Scrutiny\Audit\AuditTracker;
 use Scrutiny\Audit\Interfaces\AuditLogger;
 use Scrutiny\Privacy\PersonalDataPolicy;
 use Unity\Core\Interfaces\Configuration;
 use Unity\Members\Interfaces\Member;
-use WP_Mock;
 
 /**
  * Covers the AuditTracker constructor.
@@ -26,14 +25,12 @@ class AuditTrackerConstructionTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        WP_Mock::setUp();
         // add_action is a bootstrap recorder; reset it between cases.
         $GLOBALS['scrutiny_test_actions'] = [];
     }
 
     protected function tearDown(): void
     {
-        WP_Mock::tearDown();
         parent::tearDown();
     }
 
@@ -50,10 +47,10 @@ class AuditTrackerConstructionTest extends TestCase
                 'FIELD_MOBILE_NUMBER'  => 'field_mobile_number_key',
             ]);
 
-        // add_filter is WP_Mock-owned; permit the constructor's single
-        // acf/load_value filter. The rest of the hooks are actions recorded
-        // by the bootstrap add_action stub, asserted below.
-        WP_Mock::userFunction('add_filter')->andReturn(true);
+        // add_filter belongs to Brain Monkey, which records the
+        // constructor's single acf/load_value filter without needing a stub.
+        // The rest of the hooks are actions recorded by the bootstrap's own
+        // add_action stub, asserted below.
 
         $tracker = new AuditTracker(
             $configuration,

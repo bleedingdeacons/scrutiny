@@ -4,19 +4,18 @@ declare(strict_types=1);
 
 namespace Scrutiny\Tests\Unit\Audit;
 
+use BleedingDeacons\WpMocks\WpState;
 use Mockery;
-use Mockery\Adapter\Phpunit\MockeryPHPUnitIntegration;
-use PHPUnit\Framework\TestCase;
 use Scrutiny\Audit\AuditTracker;
 use Scrutiny\Audit\Interfaces\AuditLogger;
 use Scrutiny\Privacy\PersonalDataFields;
 use Scrutiny\Privacy\PersonalDataPolicy;
+use Scrutiny\Tests\TestCase;
 use Unity\Contacts\Interfaces\Contact;
 use Unity\Groups\Interfaces\Group;
 use Unity\Meetings\Interfaces\Meeting;
 use Unity\Members\Interfaces\Member;
 use Unity\Members\ResponderCertification;
-use WP_Mock;
 
 /**
  * Broad coverage for AuditTracker's view-tracking, group/contact change,
@@ -26,20 +25,15 @@ use WP_Mock;
  */
 class AuditTrackerCoverageTest extends TestCase
 {
-    use MockeryPHPUnitIntegration;
-
     protected function setUp(): void
     {
         parent::setUp();
-        WP_Mock::setUp();
         $GLOBALS['scrutiny_test_capabilities'] = [];
         $_GET = [];
     }
 
     protected function tearDown(): void
     {
-        WP_Mock::tearDown();
-        Mockery::close();
         $_GET = [];
         parent::tearDown();
     }
@@ -68,7 +62,6 @@ class AuditTrackerCoverageTest extends TestCase
     private function setProp(object $object, string $name, mixed $value): void
     {
         $prop = (new \ReflectionClass($object))->getProperty($name);
-        $prop->setAccessible(true);
         $prop->setValue($object, $value);
     }
 
@@ -356,8 +349,8 @@ class AuditTrackerCoverageTest extends TestCase
     {
         $this->grantView();
 
-        WP_Mock::userFunction('get_post_type')->with(50)->andReturn('unity_member');
-        WP_Mock::userFunction('is_admin')->andReturn(false);
+        WpState::addPost(50, ['post_type' => 'unity_member']);
+        WpState::$isAdmin = false;
 
         $logger = Mockery::mock(AuditLogger::class);
         $logger->shouldReceive('log')->once()
@@ -395,12 +388,12 @@ class AuditTrackerCoverageTest extends TestCase
         $this->assertSame('v', $tracker->onPersonalDataFieldLoaded('v', 'user_1', ['key' => 'field_email_key']));
 
         // Wrong post type.
-        WP_Mock::userFunction('get_post_type')->with(50)->andReturn('post');
+        WpState::addPost(50, ['post_type' => 'post']);
         $this->assertSame('v', $tracker->onPersonalDataFieldLoaded('v', 50, ['key' => 'field_email_key']));
 
         // Member, but in admin context.
-        WP_Mock::userFunction('get_post_type')->with(51)->andReturn('unity_member');
-        WP_Mock::userFunction('is_admin')->andReturn(true);
+        WpState::addPost(51, ['post_type' => 'unity_member']);
+        WpState::$isAdmin = true;
         $this->assertSame('v', $tracker->onPersonalDataFieldLoaded('v', 51, ['key' => 'field_email_key']));
     }
 
@@ -413,8 +406,8 @@ class AuditTrackerCoverageTest extends TestCase
         $logger = Mockery::mock(AuditLogger::class);
         $logger->shouldNotReceive('log');
 
-        WP_Mock::userFunction('get_post_type')->with(50)->andReturn('unity_member');
-        WP_Mock::userFunction('is_admin')->andReturn(false);
+        WpState::addPost(50, ['post_type' => 'unity_member']);
+        WpState::$isAdmin = false;
 
         $tracker = $this->tracker(
             $logger,

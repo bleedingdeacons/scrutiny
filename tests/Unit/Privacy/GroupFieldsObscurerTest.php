@@ -4,10 +4,11 @@ declare(strict_types=1);
 
 namespace Scrutiny\Tests\Unit\Privacy;
 
-use PHPUnit\Framework\TestCase;
+use BleedingDeacons\WpMocks\WpState;
+use Brain\Monkey\Functions;
 use Scrutiny\Privacy\GroupFieldsObscurer;
 use Scrutiny\Privacy\PersonalDataPolicy;
-use WP_Mock;
+use Scrutiny\Tests\TestCase;
 use WP_Post;
 
 /**
@@ -21,25 +22,20 @@ class GroupFieldsObscurerTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        WP_Mock::setUp();
         $GLOBALS['scrutiny_test_capabilities'] = [];
         $GLOBALS['scrutiny_test_post_meta'] = [];
         $GLOBALS['scrutiny_test_actions'] = [];
 
         // protectedContactFields()'s two filters pass through unchanged
-        // (WP_Mock's default apply_filters behaviour), so the default set
-        // of six contact fields is used.
-        // The banner text passes through translation untouched.
-        WP_Mock::userFunction('__')->andReturnUsing(fn ($text) => $text);
-        // The admin UI serialises field lists/masks to JSON for its script.
-        WP_Mock::userFunction('wp_json_encode')->andReturnUsing(
-            fn ($data, int $options = 0) => json_encode($data, $options)
-        );
+        // (Brain Monkey's apply_filters returns the value it was handed), so
+        // the default set of six contact fields is used.
+        //
+        // __() and wp_json_encode() are real pass-through stubs in wp-mocks,
+        // so neither needs standing in for here any more.
     }
 
     protected function tearDown(): void
     {
-        WP_Mock::tearDown();
         unset($_POST, $_GET);
         $_POST = [];
         $_GET = [];
@@ -58,7 +54,7 @@ class GroupFieldsObscurerTest extends TestCase
      */
     public function register_always_wires_the_save_strip_and_admin_ui_when_admin(): void
     {
-        WP_Mock::userFunction('is_admin')->andReturn(true);
+        WpState::$isAdmin = true;
 
         $this->obscurer()->register();
 
@@ -74,7 +70,7 @@ class GroupFieldsObscurerTest extends TestCase
      */
     public function register_skips_the_admin_ui_hooks_outside_admin(): void
     {
-        WP_Mock::userFunction('is_admin')->andReturn(false);
+        WpState::$isAdmin = false;
 
         $this->obscurer()->register();
 
@@ -90,8 +86,6 @@ class GroupFieldsObscurerTest extends TestCase
      */
     public function strip_removes_protected_fields_for_a_user_who_cannot_edit(): void
     {
-        WP_Mock::userFunction('wp_is_post_autosave')->andReturn(false);
-        WP_Mock::userFunction('wp_is_post_revision')->andReturn(false);
 
         $_POST = [
             'contact_1_email' => 'leak@example.com',
@@ -113,8 +107,6 @@ class GroupFieldsObscurerTest extends TestCase
     {
         $GLOBALS['scrutiny_test_capabilities'][PersonalDataPolicy::EDIT_CAPABILITY] = true;
 
-        WP_Mock::userFunction('wp_is_post_autosave')->andReturn(false);
-        WP_Mock::userFunction('wp_is_post_revision')->andReturn(false);
 
         $_POST = ['contact_1_email' => 'kept@example.com'];
 
@@ -128,8 +120,10 @@ class GroupFieldsObscurerTest extends TestCase
      */
     public function strip_skips_autosaves_and_revisions(): void
     {
-        WP_Mock::userFunction('wp_is_post_autosave')->andReturn(true);
-        WP_Mock::userFunction('wp_is_post_revision')->andReturn(false);
+        // WordPress answers with the autosave's own post ID, not a bare
+        // true — and wp-mocks types the stub int|false to match, so that is
+        // what a "yes, this is an autosave" answer has to look like.
+        Functions\when('wp_is_post_autosave')->justReturn(9001);
 
         $_POST = ['contact_1_email' => 'kept@example.com'];
 
@@ -187,7 +181,7 @@ class GroupFieldsObscurerTest extends TestCase
         // A group post: contact meta lives on the group itself.
         $GLOBALS['scrutiny_test_post_meta'][5]['contact_1_email'] = 'secret@example.com';
 
-        WP_Mock::userFunction('get_post_type')->with(5)->andReturn('tsml_group');
+        WpState::addPost(5, ['post_type' => 'tsml_group']);
 
         $output = $this->captureEmit('tsml_group', 5);
 
@@ -210,7 +204,7 @@ class GroupFieldsObscurerTest extends TestCase
         $GLOBALS['scrutiny_test_post_meta'][5]['group_id'] = '9';
         $GLOBALS['scrutiny_test_post_meta'][9]['contact_1_email'] = 'secret@example.com';
 
-        WP_Mock::userFunction('get_post_type')->with(5)->andReturn('tsml_meeting');
+        WpState::addPost(5, ['post_type' => 'tsml_meeting']);
 
         $output = $this->captureEmit('tsml_meeting', 5);
 

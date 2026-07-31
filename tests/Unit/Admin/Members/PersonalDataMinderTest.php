@@ -4,12 +4,14 @@ declare(strict_types=1);
 
 namespace Scrutiny\Tests\Unit\Admin\Members;
 
-use PHPUnit\Framework\TestCase;
+use BleedingDeacons\WpMocks\WpState;
+use Brain\Monkey\Functions;
+use Mockery;
 use Scrutiny\Admin\Members\PersonalDataMinder;
 use Scrutiny\Privacy\PersonalDataPolicy;
+use Scrutiny\Tests\TestCase;
 use Unity\Core\Interfaces\Configuration;
 use Unity\Members\Interfaces\Member;
-use WP_Mock;
 
 /**
  * Tests for PersonalDataMinder's conditional script enqueue.
@@ -21,14 +23,12 @@ class PersonalDataMinderTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        WP_Mock::setUp();
         $GLOBALS['scrutiny_test_actions'] = [];
         $GLOBALS['scrutiny_test_capabilities'] = [];
     }
 
     protected function tearDown(): void
     {
-        WP_Mock::tearDown();
         parent::tearDown();
     }
 
@@ -58,10 +58,10 @@ class PersonalDataMinderTest extends TestCase
      */
     public function it_does_nothing_without_a_current_screen(): void
     {
-        WP_Mock::userFunction('get_current_screen')->andReturn(null);
+        WpState::$screen = null;
 
         $enqueued = false;
-        WP_Mock::userFunction('wp_enqueue_script')->andReturnUsing(
+        Functions\expect('wp_enqueue_script')->andReturnUsing(
             function () use (&$enqueued) {
                 $enqueued = true;
             }
@@ -77,12 +77,12 @@ class PersonalDataMinderTest extends TestCase
      */
     public function it_does_nothing_on_a_different_post_type_screen(): void
     {
-        WP_Mock::userFunction('get_current_screen')->andReturn(
+        Functions\expect('get_current_screen')->andReturn(
             (object) ['post_type' => 'post']
         );
 
         $enqueued = false;
-        WP_Mock::userFunction('wp_enqueue_script')->andReturnUsing(
+        Functions\expect('wp_enqueue_script')->andReturnUsing(
             function () use (&$enqueued) {
                 $enqueued = true;
             }
@@ -103,20 +103,20 @@ class PersonalDataMinderTest extends TestCase
             PersonalDataPolicy::VIEW_CAPABILITY => false,
         ];
 
-        WP_Mock::userFunction('get_current_screen')->andReturn(
+        Functions\expect('get_current_screen')->andReturn(
             (object) ['post_type' => 'unity_member']
         );
-        WP_Mock::userFunction('plugin_dir_url')->andReturn('https://example.com/wp-content/plugins/scrutiny/');
-        WP_Mock::userFunction('wp_enqueue_script')->once()->with(
+        Functions\expect('plugin_dir_url')->andReturn('https://example.com/wp-content/plugins/scrutiny/');
+        Functions\expect('wp_enqueue_script')->once()->with(
             'scrutiny-personal-data-minder',
-            \WP_Mock\Functions::type('string'),
+            Mockery::type('string'),
             ['jquery', 'acf-input'],
-            \WP_Mock\Functions::type('string'),
+            Mockery::type('string'),
             true
         );
 
         $localised = null;
-        WP_Mock::userFunction('wp_localize_script')->once()->andReturnUsing(
+        Functions\expect('wp_localize_script')->once()->andReturnUsing(
             function ($handle, $object, $data) use (&$localised) {
                 $localised = $data;
                 return true;

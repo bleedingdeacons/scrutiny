@@ -38,7 +38,6 @@ class AuditTrackerGroupTest extends TestCase
         $instance = $reflection->newInstanceWithoutConstructor();
 
         $prop = $reflection->getProperty('logger');
-        $prop->setAccessible(true);
         $prop->setValue($instance, $logger);
 
         return $instance;
