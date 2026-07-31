@@ -43,7 +43,6 @@ class HasLoggerTest extends TestCase
     private function resetChannel(): void
     {
         $prop = (new \ReflectionClass(HasLoggerFixture::class))->getProperty('loggerChannel');
-        $prop->setAccessible(true);
         $prop->setValue(null, null);
     }
 

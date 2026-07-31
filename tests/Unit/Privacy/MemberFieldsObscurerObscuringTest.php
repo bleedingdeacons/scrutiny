@@ -4,12 +4,12 @@ declare(strict_types=1);
 
 namespace Scrutiny\Tests\Unit\Privacy;
 
-use PHPUnit\Framework\TestCase;
+use Brain\Monkey\Filters;
 use Scrutiny\Privacy\MemberFieldsObscurer;
 use Scrutiny\Privacy\PersonalDataPolicy;
+use Scrutiny\Tests\TestCase;
 use Unity\Core\Interfaces\Configuration;
 use Unity\Members\Interfaces\Member;
-use WP_Mock;
 
 /**
  * Tests for MemberFieldsObscurer's read-side obscuring: the format_value
@@ -28,14 +28,12 @@ class MemberFieldsObscurerObscuringTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        WP_Mock::setUp();
         $GLOBALS['scrutiny_test_capabilities'] = [];
         $GLOBALS['scrutiny_test_actions'] = [];
     }
 
     protected function tearDown(): void
     {
-        WP_Mock::tearDown();
         parent::tearDown();
     }
 
@@ -73,25 +71,29 @@ class MemberFieldsObscurerObscuringTest extends TestCase
     {
         $obscurer = $this->makeObscurer();
 
-        // format_value (frontend), priority 20, 3 args.
-        WP_Mock::expectFilterAdded('acf/format_value/name=' . self::FIELD_PERSONAL_EMAIL, [$obscurer, 'obscureAcfPersonalEmail'], 20, 3);
-        WP_Mock::expectFilterAdded('acf/format_value/name=' . self::FIELD_MOBILE_NUMBER, [$obscurer, 'obscureAcfMobileNumber'], 20, 3);
-
-        // prepare_field (admin) on the short sub-field name, default priority.
-        WP_Mock::expectFilterAdded('acf/prepare_field/name=personal-email', [$obscurer, 'prepareAcfPersonalEmail']);
-        WP_Mock::expectFilterAdded('acf/prepare_field/name=mobile-number', [$obscurer, 'prepareAcfMobileNumber']);
-
-        // …and again on the full name because the short name differs.
-        WP_Mock::expectFilterAdded('acf/prepare_field/name=' . self::FIELD_PERSONAL_EMAIL, [$obscurer, 'prepareAcfPersonalEmail']);
-        WP_Mock::expectFilterAdded('acf/prepare_field/name=' . self::FIELD_MOBILE_NUMBER, [$obscurer, 'prepareAcfMobileNumber']);
-
-        // update_value guards keyed by ACF field key, priority 10, 3 args.
-        WP_Mock::expectFilterAdded('acf/update_value/key=' . self::KEY_PERSONAL_EMAIL, [$obscurer, 'preservePersonalEmail'], 10, 3);
-        WP_Mock::expectFilterAdded('acf/update_value/key=' . self::KEY_MOBILE_NUMBER, [$obscurer, 'preserveMobileNumber'], 10, 3);
-
         $obscurer->register();
 
-        WP_Mock::assertHooksAdded();
+        // Brain Monkey's Filters\has() answers with the registered priority
+        // when given a callback, and false when the callback is not hooked,
+        // so one assertion covers both "was it wired" and "at what priority".
+        // Accepted-argument counts are not recorded by Brain Monkey, so the
+        // 3-arg expectations the WP_Mock version carried are not reproduced.
+
+        // format_value (frontend), priority 20.
+        self::assertSame(20, Filters\has('acf/format_value/name=' . self::FIELD_PERSONAL_EMAIL, [$obscurer, 'obscureAcfPersonalEmail']));
+        self::assertSame(20, Filters\has('acf/format_value/name=' . self::FIELD_MOBILE_NUMBER, [$obscurer, 'obscureAcfMobileNumber']));
+
+        // prepare_field (admin) on the short sub-field name, default priority.
+        self::assertSame(10, Filters\has('acf/prepare_field/name=personal-email', [$obscurer, 'prepareAcfPersonalEmail']));
+        self::assertSame(10, Filters\has('acf/prepare_field/name=mobile-number', [$obscurer, 'prepareAcfMobileNumber']));
+
+        // …and again on the full name because the short name differs.
+        self::assertSame(10, Filters\has('acf/prepare_field/name=' . self::FIELD_PERSONAL_EMAIL, [$obscurer, 'prepareAcfPersonalEmail']));
+        self::assertSame(10, Filters\has('acf/prepare_field/name=' . self::FIELD_MOBILE_NUMBER, [$obscurer, 'prepareAcfMobileNumber']));
+
+        // update_value guards keyed by ACF field key, priority 10.
+        self::assertSame(10, Filters\has('acf/update_value/key=' . self::KEY_PERSONAL_EMAIL, [$obscurer, 'preservePersonalEmail']));
+        self::assertSame(10, Filters\has('acf/update_value/key=' . self::KEY_MOBILE_NUMBER, [$obscurer, 'preserveMobileNumber']));
     }
 
     // ─── format_value (frontend) ────────────────────────────────────

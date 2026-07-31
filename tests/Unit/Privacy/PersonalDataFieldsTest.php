@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace Scrutiny\Tests\Unit\Privacy;
 
-use PHPUnit\Framework\TestCase;
+use Brain\Monkey\Filters;
 use Scrutiny\Privacy\PersonalDataFields;
-use WP_Mock;
+use Scrutiny\Tests\TestCase;
 
 /**
  * Tests for PersonalDataFields label lookup and the filterable
@@ -19,12 +19,10 @@ class PersonalDataFieldsTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        WP_Mock::setUp();
     }
 
     protected function tearDown(): void
     {
-        WP_Mock::tearDown();
         parent::tearDown();
     }
 
@@ -61,8 +59,8 @@ class PersonalDataFieldsTest extends TestCase
      */
     public function protected_contact_fields_returns_the_default_set_unfiltered(): void
     {
-        // With no onFilter override registered, WP_Mock's apply_filters
-        // returns the value unchanged — the default set.
+        // With no expectation registered, Brain Monkey's apply_filters returns
+        // the value unchanged — the default set.
         $fields = PersonalDataFields::protectedContactFields();
 
         $this->assertSame([
@@ -83,12 +81,12 @@ class PersonalDataFieldsTest extends TestCase
             'contact_3_email', 'contact_3_phone',
         ];
 
-        // The first filter narrows the list; the second passes it through
-        // unchanged (default WP_Mock behaviour). Non-string/empty entries
-        // are then dropped and the keys reindexed by the method.
-        WP_Mock::onFilter('scrutiny_tsml_protected_fields')
+        // The filter narrows the list; non-string/empty entries are then
+        // dropped and the keys reindexed by the method.
+        Filters\expectApplied('scrutiny_tsml_protected_fields')
+            ->once()
             ->with($default)
-            ->reply(['contact_1_email', '', 'contact_2_phone']);
+            ->andReturn(['contact_1_email', '', 'contact_2_phone']);
 
         $this->assertSame(
             ['contact_1_email', 'contact_2_phone'],

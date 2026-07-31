@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Scrutiny\Tests\Unit;
 
+use Brain\Monkey\Functions;
 use Mockery;
-use PHPUnit\Framework\TestCase;
 use RuntimeException;
 use Scrutiny\Audit\AuditTracker;
 use Scrutiny\Audit\GdprAuditLogger;
@@ -22,10 +22,10 @@ use Scrutiny\Privacy\MemberFieldsObscurer;
 use Scrutiny\Privacy\PersonalDataPolicy;
 use Scrutiny\Privacy\PrivacyPolicyFormatter;
 use Scrutiny\Privacy\ResponderCertificationGuard;
+use Scrutiny\Tests\TestCase;
 use Unity\Core\Interfaces\Configuration;
 use Unity\Core\Interfaces\Container;
 use Unity\Members\Interfaces\MemberRepository;
-use WP_Mock;
 
 /**
  * Covers the Plugin bootstrap: the container registrations in
@@ -43,7 +43,6 @@ class PluginWiringTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        WP_Mock::setUp();
         $GLOBALS['scrutiny_test_actions'] = [];
         $this->resetPluginStatics();
     }
@@ -51,18 +50,15 @@ class PluginWiringTest extends TestCase
     protected function tearDown(): void
     {
         $this->resetPluginStatics();
-        WP_Mock::tearDown();
-        Mockery::close();
         parent::tearDown();
     }
 
     /** @test */
     public function register_services_binds_and_resolves_every_scrutiny_service(): void
     {
-        // AuditTracker's constructor wires an acf/load_value filter (WP_Mock
-        // owns add_filter); permit it. The action hooks it also wires go
-        // through the bootstrap add_action recorder.
-        WP_Mock::userFunction('add_filter')->andReturn(true);
+        // AuditTracker's constructor wires an acf/load_value filter, which
+        // Brain Monkey records for free. The action hooks it also wires go
+        // through the bootstrap's add_action recorder.
 
         $container = new PluginFakeContainer([
             Configuration::class    => $this->configuration(),
@@ -105,7 +101,7 @@ class PluginWiringTest extends TestCase
             ->times(3)
             ->with(Mockery::type('string'));
 
-        WP_Mock::userFunction('get_role')->with('administrator')->andReturn($role);
+        Functions\when('get_role')->justReturn($role);
 
         (new \ReflectionMethod(Plugin::class, 'ensureCapabilities'))->invoke(null);
 
@@ -115,7 +111,7 @@ class PluginWiringTest extends TestCase
     /** @test */
     public function ensure_capabilities_bails_when_there_is_no_admin_role(): void
     {
-        WP_Mock::userFunction('get_role')->with('administrator')->andReturn(null);
+        Functions\when('get_role')->justReturn(null);
 
         (new \ReflectionMethod(Plugin::class, 'ensureCapabilities'))->invoke(null);
 

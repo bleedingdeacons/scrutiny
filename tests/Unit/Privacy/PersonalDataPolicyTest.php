@@ -13,7 +13,8 @@ use Scrutiny\Privacy\PersonalDataPolicy;
  * The policy class has no WordPress side effects in its constructor, so
  * it can be instantiated directly — no reflection, no mocks. Capability
  * checks (currentUserCanView / currentUserCanEdit / tier) are covered
- * elsewhere against real WP_Mock since they call current_user_can().
+ * elsewhere against the bootstrap's capability store, since they call
+ * current_user_can().
  */
 class PersonalDataPolicyTest extends TestCase
 {
