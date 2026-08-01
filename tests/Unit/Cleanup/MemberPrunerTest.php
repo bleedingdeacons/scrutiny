@@ -11,6 +11,8 @@ use Scrutiny\Cleanup\PruneResult;
 use Scrutiny\Cleanup\PrunerSettings;
 use Unity\Members\Interfaces\Member;
 use Unity\Members\Interfaces\MemberRepository;
+use Unity\Testing\Doubles\InMemoryMemberRepository;
+use Unity\Testing\Doubles\MemberStub;
 
 /**
  * Tests for MemberPruner.
@@ -926,44 +928,15 @@ class MemberPrunerTest extends TestCase
         string $updated = '',
         bool $isTwelfthStepper = false
     ): Member {
-        return new class($id, $position, $rotation, $homeGroup, $isGSR, $updated, $isTwelfthStepper) implements Member {
-            public function __construct(
-                private int $id,
-                private int $position,
-                private string $rotation,
-                private int $homeGroup,
-                private bool $isGSR,
-                private string $updated,
-                private bool $isTwelfthStepper
-            ) {}
-
-            public function getId(): int { return $this->id; }
-            public function getIntergroupPosition(): int { return $this->position; }
-            public function getIntergroupPositionRotation(): string { return $this->rotation; }
-            public function getHomeGroup(): int { return $this->homeGroup; }
-            public function isGSR(): bool { return $this->isGSR; }
-            public function getUpdated(): string { return $this->updated; }
-            public function isTwelfthStepper(): bool { return $this->isTwelfthStepper; }
-            public function isTelephoneResponder(): bool { return false; }
-            public function getResponderCertification(): \Unity\Members\ResponderCertification { return \Unity\Members\ResponderCertification::None; }
-
-            // Unused by the pruner; provide harmless defaults so the
-            // interface contract is satisfied.
-            public function getAnonymousName(): string { return ''; }
-            public function showAnonymousName(): bool { return false; }
-            public function showMemberProfile(): bool { return false; }
-            public function getAnonymousProfile(): string { return ''; }
-            public function getMeetingPO(): mixed { return null; }
-            public function getPersonalEmail(): string { return ''; }
-            public function getMobileNumber(): string { return ''; }
-            public function isGdprAccepted(): bool { return false; }
-            public function getGdprAcceptedAt(): string { return ''; }
-            public function getGdprAcceptanceVersion(): string { return ''; }
-            public function getGdprAcceptanceMethod(): string { return ''; }
-            public function getGdprAcceptanceStatement(): string { return ''; }
-            public function getArea(): string { return ''; }
-            public function getAccepts(): array { return []; }
-        };
+        return new MemberStub(
+            id: $id,
+            intergroupPosition: $position,
+            intergroupPositionRotation: $rotation,
+            homeGroup: $homeGroup,
+            isGSR: $isGSR,
+            twelfthStepper: $isTwelfthStepper,
+            updated: $updated,
+        );
     }
 
     /**
@@ -974,7 +947,7 @@ class MemberPrunerTest extends TestCase
         bool $trashSucceeds = true,
         ?PrunerSettings $settings = null
     ): MemberPrunerForTest {
-        $repository = new InMemoryMemberRepository($members);
+        $repository = new InMemoryMemberRepository($members, rejectWrites: true);
 
         return new MemberPrunerForTest(
             $repository,

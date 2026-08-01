@@ -11,6 +11,7 @@ use Scrutiny\Cleanup\MemberTrashCleaner;
 use Scrutiny\Cleanup\PrunerCron;
 use Scrutiny\Cleanup\PrunerSettings;
 use Unity\Members\Interfaces\MemberRepository;
+use Unity\Testing\Doubles\InMemoryMemberRepository;
 
 /**
  * Tests for PrunerCron.
@@ -267,7 +268,7 @@ class PrunerCronTest extends TestCase
      */
     private function makeCron(): PrunerCron
     {
-        $repository   = new InMemoryMemberRepository([]);
+        $repository   = new InMemoryMemberRepository([], rejectWrites: true);
         $settings     = new PrunerSettings();
         $pruner       = new MemberPruner($repository, new DateTimeImmutable('2025-07-15 12:00:00'), $settings);
         $trashCleaner = new MemberTrashCleaner($repository, new DateTimeImmutable('2025-07-15 12:00:00'));
@@ -294,7 +295,7 @@ final class SpyPruner extends MemberPruner
         // an empty in-memory repo. The spy never calls findAll()
         // because prune() is overridden.
         parent::__construct(
-            new InMemoryMemberRepository([]),
+            new InMemoryMemberRepository([], rejectWrites: true),
             new DateTimeImmutable('2025-07-15 12:00:00')
         );
     }
@@ -321,7 +322,7 @@ final class SpyTrashCleaner extends MemberTrashCleaner
     public function __construct()
     {
         parent::__construct(
-            new InMemoryMemberRepository([]),
+            new InMemoryMemberRepository([], rejectWrites: true),
             new DateTimeImmutable('2025-07-15 12:00:00')
         );
     }

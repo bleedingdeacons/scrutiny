@@ -9,6 +9,8 @@ use PHPUnit\Framework\TestCase;
 use Scrutiny\Cleanup\MemberTrashCleaner;
 use Scrutiny\Cleanup\TrashCleanResult;
 use Unity\Members\Interfaces\Member;
+use Unity\Testing\Doubles\InMemoryMemberRepository;
+use Unity\Testing\Doubles\MemberStub;
 
 /**
  * Tests for MemberTrashCleaner.
@@ -126,7 +128,7 @@ class MemberTrashCleanerTest extends TestCase
         // path is actually exercised. That means it will call the
         // bootstrap stub, which honours scrutiny_test_delete_returns_false.
         $cleaner = new MemberTrashCleaner(
-            new InMemoryMemberRepository([$member]),
+            new InMemoryMemberRepository([$member], rejectWrites: true),
             new DateTimeImmutable(self::NOW)
         );
         $result = $cleaner->clean(retentionDays: 7);
@@ -257,34 +259,7 @@ class MemberTrashCleanerTest extends TestCase
      */
     private function makeMember(int $id): Member
     {
-        return new class($id) implements Member {
-            public function __construct(private int $id) {}
-
-            public function getId(): int { return $this->id; }
-            public function getIntergroupPosition(): int { return 0; }
-            public function getIntergroupPositionRotation(): string { return ''; }
-            public function getHomeGroup(): int { return 0; }
-            public function isGSR(): bool { return false; }
-            public function getUpdated(): string { return ''; }
-
-            public function getAnonymousName(): string { return ''; }
-            public function showAnonymousName(): bool { return false; }
-            public function showMemberProfile(): bool { return false; }
-            public function getAnonymousProfile(): string { return ''; }
-            public function getMeetingPO(): mixed { return null; }
-            public function getPersonalEmail(): string { return ''; }
-            public function getMobileNumber(): string { return ''; }
-            public function isGdprAccepted(): bool { return false; }
-            public function getGdprAcceptedAt(): string { return ''; }
-            public function getGdprAcceptanceVersion(): string { return ''; }
-            public function getGdprAcceptanceMethod(): string { return ''; }
-            public function getGdprAcceptanceStatement(): string { return ''; }
-            public function isTwelfthStepper(): bool { return false; }
-            public function isTelephoneResponder(): bool { return false; }
-            public function getResponderCertification(): \Unity\Members\ResponderCertification { return \Unity\Members\ResponderCertification::None; }
-            public function getArea(): string { return ''; }
-            public function getAccepts(): array { return []; }
-        };
+        return new MemberStub(id: $id);
     }
 
     /**
@@ -293,7 +268,7 @@ class MemberTrashCleanerTest extends TestCase
     private function makeCleaner(array $members): MemberTrashCleanerForTest
     {
         return new MemberTrashCleanerForTest(
-            new InMemoryMemberRepository($members),
+            new InMemoryMemberRepository($members, rejectWrites: true),
             new DateTimeImmutable(self::NOW)
         );
     }
