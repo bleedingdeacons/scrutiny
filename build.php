@@ -49,6 +49,17 @@ class PluginBuilder
         // Tests
         'tests',
 
+        // Test doubles shipped for the *other* plugins' suites (SpyAuditLogger).
+        // They live under src/ so they autoload through the Scrutiny\ PSR-4
+        // prefix in a consumer's test run — which is the point, since
+        // implementing the real interface from inside Scrutiny is what stops
+        // them drifting from it. Nothing in production resolves them.
+        //
+        // Written with the src/ prefix deliberately: shouldExclude() matches a
+        // bare name anywhere in the path, and a plain 'Testing' would also drop
+        // any future src/Foo/Testing/ directory.
+        'src/Testing',
+
         // Setup/config files not needed in production
         'setup',
         'node_modules',
@@ -87,7 +98,7 @@ class PluginBuilder
         'build.php',
 
         // Vendor (no production dependencies needed)
-        'vendor',
+        'vendor',
 
         // Dev artefacts that must never ship
         '.phpunit.result.cache',

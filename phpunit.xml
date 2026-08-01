@@ -47,6 +47,18 @@
                 unit-test in them.
             -->
             <directory suffix=".php">src/Audit/Interfaces</directory>
+
+            <!--
+                Test doubles Scrutiny ships for the other plugins' suites. Test
+                infrastructure that happens to live under src/ so it autoloads
+                through the Scrutiny\ prefix in a consumer's test run — not
+                production behaviour, so counting it would distort the
+                denominator exactly as the interfaces above do.
+
+                Its own behaviour is covered by tests/Unit/Testing, which still
+                runs; it is only the coverage figure it stays out of.
+            -->
+            <directory suffix=".php">src/Testing</directory>
         </exclude>
     </source>
 </phpunit>
