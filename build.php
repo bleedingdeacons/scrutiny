@@ -87,7 +87,7 @@ class PluginBuilder
         'build.php',
 
         // Vendor (no production dependencies needed)
-        'vendor',
+        'vendor',
 
         // Dev artefacts that must never ship
         '.phpunit.result.cache',
