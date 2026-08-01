@@ -9,6 +9,8 @@ use PHPUnit\Framework\TestCase;
 use Scrutiny\Cleanup\PruneResult;
 use Scrutiny\Cleanup\PrunerSettings;
 use Unity\Members\Interfaces\Member;
+use Unity\Testing\Doubles\InMemoryMemberRepository;
+use Unity\Testing\Doubles\MemberStub;
 
 /**
  * Logging tests for MemberPruner.
@@ -319,41 +321,14 @@ class MemberPrunerLoggingTest extends TestCase
         bool $isGSR = false,
         string $updated = ''
     ): Member {
-        return new class($id, $position, $rotation, $homeGroup, $isGSR, $updated) implements Member {
-            public function __construct(
-                private int $id,
-                private int $position,
-                private string $rotation,
-                private int $homeGroup,
-                private bool $isGSR,
-                private string $updated
-            ) {}
-
-            public function getId(): int { return $this->id; }
-            public function getIntergroupPosition(): int { return $this->position; }
-            public function getIntergroupPositionRotation(): string { return $this->rotation; }
-            public function getHomeGroup(): int { return $this->homeGroup; }
-            public function isGSR(): bool { return $this->isGSR; }
-            public function getUpdated(): string { return $this->updated; }
-
-            public function getAnonymousName(): string { return ''; }
-            public function showAnonymousName(): bool { return false; }
-            public function showMemberProfile(): bool { return false; }
-            public function getAnonymousProfile(): string { return ''; }
-            public function getMeetingPO(): mixed { return null; }
-            public function getPersonalEmail(): string { return ''; }
-            public function getMobileNumber(): string { return ''; }
-            public function isGdprAccepted(): bool { return false; }
-            public function getGdprAcceptedAt(): string { return ''; }
-            public function getGdprAcceptanceVersion(): string { return ''; }
-            public function getGdprAcceptanceMethod(): string { return ''; }
-            public function getGdprAcceptanceStatement(): string { return ''; }
-            public function isTwelfthStepper(): bool { return false; }
-            public function isTelephoneResponder(): bool { return false; }
-            public function getResponderCertification(): \Unity\Members\ResponderCertification { return \Unity\Members\ResponderCertification::None; }
-            public function getArea(): string { return ''; }
-            public function getAccepts(): array { return []; }
-        };
+        return new MemberStub(
+            id: $id,
+            intergroupPosition: $position,
+            intergroupPositionRotation: $rotation,
+            homeGroup: $homeGroup,
+            isGSR: $isGSR,
+            updated: $updated,
+        );
     }
 
     /**
@@ -365,7 +340,7 @@ class MemberPrunerLoggingTest extends TestCase
         ?PrunerSettings $settings = null
     ): MemberPrunerForTest {
         return new MemberPrunerForTest(
-            new InMemoryMemberRepository($members),
+            new InMemoryMemberRepository($members, rejectWrites: true),
             new DateTimeImmutable(self::NOW),
             $trashSucceeds,
             $settings

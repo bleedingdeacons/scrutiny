@@ -26,6 +26,7 @@ use Scrutiny\Tests\TestCase;
 use Unity\Core\Interfaces\Configuration;
 use Unity\Core\Interfaces\Container;
 use Unity\Members\Interfaces\MemberRepository;
+use Unity\Testing\Doubles\FakeContainer;
 
 /**
  * Covers the Plugin bootstrap: the container registrations in
@@ -60,7 +61,7 @@ class PluginWiringTest extends TestCase
         // Brain Monkey records for free. The action hooks it also wires go
         // through the bootstrap's add_action recorder.
 
-        $container = new PluginFakeContainer([
+        $container = new FakeContainer([
             Configuration::class    => $this->configuration(),
             MemberRepository::class => $this->createMock(MemberRepository::class),
         ]);
@@ -155,41 +156,3 @@ class PluginWiringTest extends TestCase
     }
 }
 
-/**
- * Recording container implementing Unity's Container contract: presets are
- * pre-built leaf services; everything else runs its registered factory once.
- */
-final class PluginFakeContainer implements Container
-{
-    /** @var array<string, callable> */
-    private array $factories = [];
-    /** @var array<string, mixed> */
-    private array $instances;
-
-    /** @param array<string, mixed> $presets */
-    public function __construct(array $presets = [])
-    {
-        $this->instances = $presets;
-    }
-
-    public function register(string $id, callable $factory): void
-    {
-        $this->factories[$id] = $factory;
-    }
-
-    public function get(string $id): mixed
-    {
-        if (array_key_exists($id, $this->instances)) {
-            return $this->instances[$id];
-        }
-        if (isset($this->factories[$id])) {
-            return $this->instances[$id] = ($this->factories[$id])($this);
-        }
-        throw new RuntimeException('No service registered for ' . $id);
-    }
-
-    public function has(string $id): bool
-    {
-        return isset($this->factories[$id]) || array_key_exists($id, $this->instances);
-    }
-}
