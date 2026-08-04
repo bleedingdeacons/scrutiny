@@ -57,16 +57,16 @@
         },
         {
             "name": "bleedingdeacons/wp-mocks",
-            "version": "v1.0.2",
+            "version": "v1.5.2",
             "source": {
                 "type": "git",
                 "url": "https://github.com/bleedingdeacons/wp-mocks.git",
-                "reference": "246c26c12164b20c4a001e8ddd4f1422f7e74728"
+                "reference": "a9698851f4b9e0f7dc5c29f1eb6a6396a1c93a55"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/bleedingdeacons/wp-mocks/zipball/246c26c12164b20c4a001e8ddd4f1422f7e74728",
-                "reference": "246c26c12164b20c4a001e8ddd4f1422f7e74728",
+                "url": "https://api.github.com/repos/bleedingdeacons/wp-mocks/zipball/a9698851f4b9e0f7dc5c29f1eb6a6396a1c93a55",
+                "reference": "a9698851f4b9e0f7dc5c29f1eb6a6396a1c93a55",
                 "shasum": ""
             },
             "require": {
@@ -135,10 +135,10 @@
                 "wordpress"
             ],
             "support": {
-                "source": "https://github.com/bleedingdeacons/wp-mocks/tree/v1.0.2",
+                "source": "https://github.com/bleedingdeacons/wp-mocks/tree/v1.5.2",
                 "issues": "https://github.com/bleedingdeacons/wp-mocks/issues"
             },
-            "time": "2026-07-31T17:14:08+00:00"
+            "time": "2026-08-01T17:01:44+00:00"
         },
         {
             "name": "brain/monkey",
