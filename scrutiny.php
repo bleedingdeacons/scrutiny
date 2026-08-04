@@ -8,7 +8,7 @@ declare(strict_types=1);
  * Version: 1.25.0
  * Requires at least: 6.0
  * Requires PHP: 8.1
- * GitHub Plugin URI: https://github.com/thebleedingdeacons/scrutiny
+ * GitHub Plugin URI: https://github.com/bleedingdeacons/scrutiny
  * GitHub Branch: main
  * Author: The Bleeding Deacons
  * Author URI: https://github.com/bleedingdeacons/scrutiny
