@@ -126,6 +126,24 @@ class MemberPrunerAdmin
             wp_die(esc_html__('You do not have permission to perform this action.', 'scrutiny'));
         }
 
+        $this->persistPostedSettings();
+
+        wp_safe_redirect($this->savedRedirectUrl());
+        exit;
+    }
+
+    /**
+     * Read the four posted fields and write them through PrunerSettings.
+     *
+     * Split out of handleSave() so it can be exercised on its own: the
+     * caller ends in wp_safe_redirect() followed by a bare exit, which
+     * takes the whole process with it, so everything after the guards
+     * is unreachable from a test that drives handleSave() directly.
+     * Behaviour is unchanged — this is the same sequence of statements
+     * in the same order.
+     */
+    private function persistPostedSettings(): void
+    {
         $rotation       = $this->readBoundedIntField('rotation_grace_months', self::MAX_MONTHS);
         $inactivity     = $this->readBoundedIntField('inactivity_months', self::MAX_MONTHS);
         $trashRetention = $this->readBoundedIntField('trash_retention_days', self::MAX_DAYS);
@@ -133,28 +151,35 @@ class MemberPrunerAdmin
         // An unchecked HTML checkbox is not posted at all, so a missing
         // field means "disabled". This is intentional: the only way to
         // enable the pruner is to deliberately tick the box and save.
-        // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- nonce verified above
+        // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- nonce verified by handleSave()
         $enabled = !empty($_POST['enabled']);
 
         $this->settings->setRotationGraceMonths($rotation);
         $this->settings->setInactivityMonths($inactivity);
         $this->settings->setTrashRetentionDays($trashRetention);
         $this->settings->setEnabled($enabled);
+    }
 
-        // Post/redirect/get so refreshing the page doesn't re-submit.
-        // Submenu pages registered via add_submenu_page are served
-        // through admin.php with ?page=<slug>, so that's the
-        // redirect target.
-        $redirectUrl = add_query_arg(
+    /**
+     * Where a successful save sends the browser.
+     *
+     * Post/redirect/get so refreshing the page doesn't re-submit.
+     * Submenu pages registered via add_submenu_page are served through
+     * admin.php with ?page=<slug>, so that's the redirect target. The
+     * `updated=1` flag is what renderPage() reads back to show the
+     * "Settings saved." notice.
+     *
+     * Split out for the same reason as persistPostedSettings().
+     */
+    private function savedRedirectUrl(): string
+    {
+        return add_query_arg(
             [
                 'page'    => self::MENU_SLUG,
                 'updated' => '1',
             ],
             admin_url('admin.php')
         );
-
-        wp_safe_redirect($redirectUrl);
-        exit;
     }
 
     /**
