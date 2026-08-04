@@ -31,16 +31,32 @@
         </include>
         <exclude>
             <!--
-                Admin screens are WordPress render/callback glue (list tables,
-                settings fields, meta boxes, menu registration) exercised
-                through WordPress at runtime rather than in unit tests, so they
-                are excluded from the coverage denominator — the same call
-                Reach and Integrity make for their own src/Admin.
+                src/Admin is deliberately NOT excluded, and should not be
+                re-added. It was, on the grounds that admin screens are
+                render/callback glue only WordPress can exercise. Amber
+                disproves that — it covers its whole src/Admin (7,815 lines) on
+                this same tooling — and tests/Unit/Admin now covers Scrutiny's,
+                including the render methods, driven inside an output buffer.
 
-                Load-bearing: dropping this block on the move from <coverage>
-                to <source> would silently shift the Coveralls number.
+                Two things genuinely cannot run in-process, and neither is a
+                reason to exclude the directory:
+
+                  - handleSave() ends in wp_safe_redirect() followed by a bare
+                    exit. The stubs record the redirect rather than throwing,
+                    so exit runs and takes PHPUnit with it. The work behind
+                    that guard lives in persistPostedSettings() and
+                    savedRedirectUrl(), which are driven directly.
+                  - The `if (!defined('ABSPATH')) exit;` header on every file,
+                    which is never true under test.
+
+                Those are the only uncovered lines in the directory: 443 of 446
+                are hit. Removing this block moved the headline line coverage
+                from 90.43% (1124/1243) to 92.16% (1564/1697) — it rose because
+                the newly-counted lines are better covered than the existing
+                average, which is not something to rely on in general. The
+                denominator is the number to watch, not the percentage.
             -->
-            <directory suffix=".php">src/Admin</directory>
+
             <!--
                 Interface files carry no executable behaviour beyond the
                 `if (!defined('ABSPATH')) exit;` guard, so there is nothing to
