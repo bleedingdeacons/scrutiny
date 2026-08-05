@@ -150,7 +150,9 @@ if (!class_exists('Sentinel_Log_Channel')) {
      */
     class Sentinel_Log_Channel
     {
-        public function __construct(public readonly string $channel) {}
+        public function __construct(public readonly string $channel)
+        {
+        }
 
         private function record(string $level, string $message, array $context): void
         {
@@ -162,14 +164,38 @@ if (!class_exists('Sentinel_Log_Channel')) {
             ];
         }
 
-        public function emergency(string $message, array $context = []): void { $this->record('emergency', $message, $context); }
-        public function alert(string $message, array $context = []): void     { $this->record('alert', $message, $context); }
-        public function critical(string $message, array $context = []): void  { $this->record('critical', $message, $context); }
-        public function error(string $message, array $context = []): void     { $this->record('error', $message, $context); }
-        public function warning(string $message, array $context = []): void   { $this->record('warning', $message, $context); }
-        public function notice(string $message, array $context = []): void    { $this->record('notice', $message, $context); }
-        public function info(string $message, array $context = []): void      { $this->record('info', $message, $context); }
-        public function debug(string $message, array $context = []): void     { $this->record('debug', $message, $context); }
+        public function emergency(string $message, array $context = []): void
+        {
+            $this->record('emergency', $message, $context);
+        }
+        public function alert(string $message, array $context = []): void
+        {
+            $this->record('alert', $message, $context);
+        }
+        public function critical(string $message, array $context = []): void
+        {
+            $this->record('critical', $message, $context);
+        }
+        public function error(string $message, array $context = []): void
+        {
+            $this->record('error', $message, $context);
+        }
+        public function warning(string $message, array $context = []): void
+        {
+            $this->record('warning', $message, $context);
+        }
+        public function notice(string $message, array $context = []): void
+        {
+            $this->record('notice', $message, $context);
+        }
+        public function info(string $message, array $context = []): void
+        {
+            $this->record('info', $message, $context);
+        }
+        public function debug(string $message, array $context = []): void
+        {
+            $this->record('debug', $message, $context);
+        }
     }
 }
 
@@ -586,7 +612,7 @@ if (!class_exists('WP_Post')) {
      */
     class WP_Post
     {
-        public int    $ID = 0;
+        public int $ID = 0;
         public string $post_title = '';
         public string $post_type = '';
         public string $post_status = 'publish';
@@ -610,7 +636,9 @@ if (!class_exists('WP_REST_Request')) {
      */
     class WP_REST_Request
     {
-        public function __construct(private array $params = []) {}
+        public function __construct(private array $params = [])
+        {
+        }
 
         public function get_param(string $key): mixed
         {
@@ -634,7 +662,8 @@ if (!class_exists('WP_REST_Response')) {
         public function __construct(
             public mixed $data = null,
             public int $status = 200
-        ) {}
+        ) {
+        }
 
         public function get_status(): int
         {

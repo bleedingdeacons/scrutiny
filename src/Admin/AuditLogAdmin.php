@@ -74,12 +74,12 @@ class AuditLogAdmin
     public function registerMenu(): void
     {
         add_submenu_page(
-                'intergroup',
-                'Audit Log',
-                'Audit Log',
-                self::CAPABILITY,
-                self::MENU_SLUG,
-                [$this, 'renderPage']
+            'intergroup',
+            'Audit Log',
+            'Audit Log',
+            self::CAPABILITY,
+            self::MENU_SLUG,
+            [$this, 'renderPage']
         );
     }
 
@@ -98,11 +98,11 @@ class AuditLogAdmin
         $deleted = $this->repository->purge($days);
 
         $this->logger->log(
-                'purge',
-                'audit_log',
-                0,
-                'all',
-                "Purged {$deleted} entries older than {$days} days"
+            'purge',
+            'audit_log',
+            0,
+            'all',
+            "Purged {$deleted} entries older than {$days} days"
         );
 
         add_action('admin_notices', function () use ($deleted, $days) {
@@ -124,7 +124,7 @@ class AuditLogAdmin
 
         $users = $wpdb->get_results(
         // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- table name from $wpdb->prefix; cannot be parameterised with prepare()
-                "SELECT DISTINCT user_id, user_login 
+            "SELECT DISTINCT user_id, user_login 
              FROM `" . esc_sql($table) . "` 
              ORDER BY user_login ASC"
         );
@@ -223,8 +223,8 @@ class AuditLogAdmin
         $totalPages = (int) ceil($total / $filters['per_page']);
 
         $purgeUrl = wp_nonce_url(
-                admin_url('admin.php?page=' . self::MENU_SLUG . '&scrutiny_purge=1&scrutiny_purge_days=365'),
-                self::NONCE_ACTION
+            admin_url('admin.php?page=' . self::MENU_SLUG . '&scrutiny_purge=1&scrutiny_purge_days=365'),
+            self::NONCE_ACTION
         );
 
         // Get users for filter dropdown
@@ -257,7 +257,7 @@ class AuditLogAdmin
                         <span style="display:block; font-weight:600; margin-bottom:2px;">Entity Type</span>
                         <select name="entity_type">
                             <option value="">All Types</option>
-                            <?php foreach (self::ENTITY_TYPES as $key => $label): ?>
+                            <?php foreach (self::ENTITY_TYPES as $key => $label) : ?>
                                 <option value="<?php echo esc_attr($key); ?>" <?php selected($filters['entity_type'], $key); ?>>
                                     <?php echo esc_html($label); ?>
                                 </option>
@@ -270,7 +270,7 @@ class AuditLogAdmin
                         <span style="display:block; font-weight:600; margin-bottom:2px;">Action</span>
                         <select name="filter_action">
                             <option value="">All Actions</option>
-                            <?php foreach (self::ACTION_TYPES as $action): ?>
+                            <?php foreach (self::ACTION_TYPES as $action) : ?>
                                 <option value="<?php echo esc_attr($action); ?>" <?php selected($filters['action'], $action); ?>>
                                     <?php echo esc_html(ucfirst($action)); ?>
                                 </option>
@@ -283,7 +283,7 @@ class AuditLogAdmin
                         <span style="display:block; font-weight:600; margin-bottom:2px;">Field</span>
                         <select name="field_name">
                             <option value="">All Fields</option>
-                            <?php foreach (PersonalDataFields::LABELS as $key => $label): ?>
+                            <?php foreach (PersonalDataFields::LABELS as $key => $label) : ?>
                                 <option value="<?php echo esc_attr($key); ?>" <?php selected($filters['field_name'], $key); ?>>
                                     <?php echo esc_html($label); ?>
                                 </option>
@@ -296,7 +296,7 @@ class AuditLogAdmin
                         <span style="display:block; font-weight:600; margin-bottom:2px;">User</span>
                         <select name="user_id">
                             <option value="">All Users</option>
-                            <?php foreach ($auditUsers as $user): ?>
+                            <?php foreach ($auditUsers as $user) : ?>
                                 <option value="<?php echo esc_attr((string) $user->user_id); ?>" <?php selected($filters['user_id'], (int) $user->user_id); ?>>
                                     <?php echo esc_html($user->user_login); ?>
                                 </option>
@@ -331,44 +331,48 @@ class AuditLogAdmin
             </form>
 
             <!-- Active Filters Summary -->
-            <?php if (!empty(array_filter($queryArgs, function($k) { return $k !== 'per_page' && $k !== 'page'; }, ARRAY_FILTER_USE_KEY))): ?>
+            <?php if (
+            !empty(array_filter($queryArgs, function ($k) {
+                return $k !== 'per_page' && $k !== 'page';
+            }, ARRAY_FILTER_USE_KEY))
+) : ?>
                 <div style="margin-bottom: 15px; padding: 10px; background: #f0f0f1; border-left: 4px solid #2271b1;">
                     <strong>Active Filters:</strong>
-                    <?php
-                    $activeFilters = [];
-                    if (!empty($filters['entity_type'])) {
-                        $activeFilters[] = 'Entity: ' . (self::ENTITY_TYPES[$filters['entity_type']] ?? $filters['entity_type']);
-                    }
-                    if (!empty($filters['action'])) {
-                        $activeFilters[] = 'Action: ' . ucfirst($filters['action']);
-                    }
-                    if (!empty($filters['field_name'])) {
-                        $activeFilters[] = 'Field: ' . PersonalDataFields::getLabel($filters['field_name']);
-                    }
-                    if (!empty($filters['user_id'])) {
-                        $userData = get_userdata($filters['user_id']);
-                        $activeFilters[] = 'User: ' . ($userData ? $userData->user_login : "ID #{$filters['user_id']}");
-                    }
-                    if (!empty($filters['entity_query'])) {
-                        $activeFilters[] = ctype_digit($filters['entity_query'])
-                            ? "Member ID: #{$filters['entity_query']}"
-                            : "Member: {$filters['entity_query']}";
-                    }
-                    if (!empty($filters['date_from'])) {
-                        $activeFilters[] = 'From: ' . $filters['date_from'];
-                    }
-                    if (!empty($filters['date_to'])) {
-                        $activeFilters[] = 'To: ' . $filters['date_to'];
-                    }
-                    echo esc_html(implode(' • ', $activeFilters));
-                    ?>
+                                 <?php
+                                    $activeFilters = [];
+                                    if (!empty($filters['entity_type'])) {
+                                        $activeFilters[] = 'Entity: ' . (self::ENTITY_TYPES[$filters['entity_type']] ?? $filters['entity_type']);
+                                    }
+                                    if (!empty($filters['action'])) {
+                                        $activeFilters[] = 'Action: ' . ucfirst($filters['action']);
+                                    }
+                                    if (!empty($filters['field_name'])) {
+                                        $activeFilters[] = 'Field: ' . PersonalDataFields::getLabel($filters['field_name']);
+                                    }
+                                    if (!empty($filters['user_id'])) {
+                                        $userData = get_userdata($filters['user_id']);
+                                        $activeFilters[] = 'User: ' . ($userData ? $userData->user_login : "ID #{$filters['user_id']}");
+                                    }
+                                    if (!empty($filters['entity_query'])) {
+                                        $activeFilters[] = ctype_digit($filters['entity_query'])
+                                            ? "Member ID: #{$filters['entity_query']}"
+                                            : "Member: {$filters['entity_query']}";
+                                    }
+                                    if (!empty($filters['date_from'])) {
+                                        $activeFilters[] = 'From: ' . $filters['date_from'];
+                                    }
+                                    if (!empty($filters['date_to'])) {
+                                        $activeFilters[] = 'To: ' . $filters['date_to'];
+                                    }
+                                    echo esc_html(implode(' • ', $activeFilters));
+                                    ?>
                 </div>
             <?php endif; ?>
 
             <!-- Summary -->
             <p>
                 <strong><?php echo esc_html((string) $total); ?></strong> entries found.
-                <?php if ($totalPages > 1): ?>
+                <?php if ($totalPages > 1) : ?>
                     Page <?php echo esc_html((string) $filters['page']); ?> of <?php echo esc_html((string) $totalPages); ?>.
                 <?php endif; ?>
             </p>
@@ -388,10 +392,10 @@ class AuditLogAdmin
                 </tr>
                 </thead>
                 <tbody>
-                <?php if (empty($entries)): ?>
+                <?php if (empty($entries)) : ?>
                     <tr><td colspan="8" style="text-align:center;">No entries found.</td></tr>
-                <?php else: ?>
-                    <?php foreach ($entries as $entry): ?>
+                <?php else : ?>
+                    <?php foreach ($entries as $entry) : ?>
                         <?php
                         // Timestamps are stored in UTC (see GdprAuditLogger::log()); convert to the
                         // site's configured timezone for display. Falls back to the raw value if the
@@ -401,8 +405,8 @@ class AuditLogAdmin
                             $utc = new \DateTimeImmutable($entry->logged_at, new \DateTimeZone('UTC'));
                             $local = $utc->setTimezone(wp_timezone());
                             $loggedAtDisplay = wp_date(
-                                    get_option('date_format') . ' ' . get_option('time_format'),
-                                    $local->getTimestamp()
+                                get_option('date_format') . ' ' . get_option('time_format'),
+                                $local->getTimestamp()
                             );
                         } catch (\Exception $e) {
                             // Keep $entry->logged_at as-is if parsing fails.
@@ -419,7 +423,7 @@ class AuditLogAdmin
                             <td><?php echo esc_html(self::ENTITY_TYPES[$entry->entity_type] ?? $entry->entity_type); ?></td>
                             <td><?php echo esc_html(PersonalDataFields::getLabel($entry->field_name)); ?></td>
                             <td>
-                                <?php if ((int) $entry->entity_id > 0): ?>
+                                <?php if ((int) $entry->entity_id > 0) : ?>
                                     <?php
                                     // The entity_id is a member (or other CPT) post ID; the post
                                     // title is the member's anonymous name (e.g. "John D."), which
@@ -434,7 +438,7 @@ class AuditLogAdmin
                                     <a href="<?php echo esc_url(get_edit_post_link((int) $entry->entity_id) ?? '#'); ?>">
                                         <?php echo esc_html($entityLabel); ?>
                                     </a>
-                                <?php else: ?>
+                                <?php else : ?>
                                     —
                                 <?php endif; ?>
                             </td>
@@ -447,7 +451,7 @@ class AuditLogAdmin
             </table>
 
             <!-- Pagination -->
-            <?php if ($totalPages > 1): ?>
+            <?php if ($totalPages > 1) : ?>
                 <div class="tablenav bottom">
                     <div class="tablenav-pages">
                         <?php
@@ -458,11 +462,11 @@ class AuditLogAdmin
                             }
                         }
 
-                        for ($i = 1; $i <= $totalPages; $i++):
+                        for ($i = 1; $i <= $totalPages; $i++) :
                             $url = add_query_arg('paged', $i, $baseUrl);
-                            if ($i === $filters['page']): ?>
+                            if ($i === $filters['page']) : ?>
                                 <strong>[<?php echo $i; ?>]</strong>
-                            <?php else: ?>
+                            <?php else : ?>
                                 <a href="<?php echo esc_url($url); ?>"><?php echo $i; ?></a>
                             <?php endif;
                         endfor; ?>
@@ -530,7 +534,8 @@ class AuditLogAdmin
         $detail = (string) ($entry->detail ?? '');
         $action = (string) ($entry->action ?? '');
 
-        if ($action !== AuditLogger::ACTION_CALL
+        if (
+            $action !== AuditLogger::ACTION_CALL
             && $action !== AuditLogger::ACTION_VIEW
         ) {
             return esc_html($detail);

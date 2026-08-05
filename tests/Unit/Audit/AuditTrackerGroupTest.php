@@ -23,6 +23,7 @@ class AuditTrackerGroupTest extends TestCase
     // trait PHPUnit sees no assertions and marks every test risky —
     // and failOnRisky would then fail the suite.
     use MockeryPHPUnitIntegration;
+
     protected function tearDown(): void
     {
         Mockery::close();
