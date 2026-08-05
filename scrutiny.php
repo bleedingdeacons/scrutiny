@@ -1,7 +1,5 @@
 <?php
 
-declare(strict_types=1);
-
 /**
  * Plugin Name: Scrutiny
  * Description: GDPR-compliant audit logging and personal data obscuring for Unity. Required by Amber.
@@ -15,6 +13,8 @@ declare(strict_types=1);
  * Contact: thebleedingdeacons@gmail.com
  * License: MIT (Modified)
  */
+
+declare(strict_types=1);
 
 if (!defined('ABSPATH')) {
     exit;
@@ -66,13 +66,14 @@ spl_autoload_register(function ($class) {
  * @return \Psr\Container\ContainerInterface
  * @throws \RuntimeException If Scrutiny is not initialized
  */
-function scrutiny(): \Psr\Container\ContainerInterface {
+function scrutiny(): \Psr\Container\ContainerInterface
+{
     return \Scrutiny\Plugin::getContainer();
 }
 
 // Initialize the plugin after Unity is loaded (BEFORE Amber, so filters are ready)
 // This ensures data obscuring filters are in place before any ACF fields are rendered
-add_action('unity/loaded', function($unityContainer) {
+add_action('unity/loaded', function ($unityContainer) {
     try {
         if (!class_exists('Scrutiny\Plugin')) {
             throw new \Exception('Scrutiny\Plugin class not found. Check that Plugin.php exists in the src/ directory.');
@@ -81,14 +82,13 @@ add_action('unity/loaded', function($unityContainer) {
         \Scrutiny\Plugin::init($unityContainer);
 
         do_action('scrutiny_loaded', \Scrutiny\Plugin::getContainer());
-
     } catch (\Exception $e) {
         function_exists('wp_log')
             ? wp_log('scrutiny')->error('Scrutiny Plugin Initialization Error: ' . $e->getMessage(), ['exception' => $e->getMessage(), 'trace' => $e->getTraceAsString()])
             : error_log('Scrutiny Plugin Initialization Error: ' . $e->getMessage());
 
         if (is_admin()) {
-            add_action('admin_notices', function() use ($e) {
+            add_action('admin_notices', function () use ($e) {
                 $message = sprintf(
                     '<strong>Scrutiny Plugin Error:</strong> %s',
                     esc_html($e->getMessage())
@@ -98,14 +98,13 @@ add_action('unity/loaded', function($unityContainer) {
         }
 
         return;
-
     } catch (\Throwable $e) {
         function_exists('wp_log')
             ? wp_log('scrutiny')->critical('Scrutiny Plugin Fatal Error: ' . $e->getMessage(), ['exception' => $e->getMessage(), 'trace' => $e->getTraceAsString()])
             : error_log('Scrutiny Plugin Fatal Error: ' . $e->getMessage());
 
         if (is_admin()) {
-            add_action('admin_notices', function() {
+            add_action('admin_notices', function () {
                 echo '<div class="notice notice-error is-dismissible"><p><strong>Scrutiny Plugin Fatal Error:</strong> Plugin failed to load. Check error logs.</p></div>';
             });
         }
@@ -115,7 +114,7 @@ add_action('unity/loaded', function($unityContainer) {
 }, 5); // Priority 5 - before Amber (which uses priority 10)
 
 // Show admin notice if Unity is not available
-add_action('admin_notices', function() {
+add_action('admin_notices', function () {
     if (!function_exists('unity') && !did_action('unity/loaded')) {
         echo '<div class="notice notice-warning is-dismissible"><p><strong>Scrutiny:</strong> This plugin requires the Unity plugin to be installed and activated.</p></div>';
     }
