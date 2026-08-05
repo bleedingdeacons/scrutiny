@@ -289,10 +289,10 @@ class PrivacyPolicyShortcodeTest extends TestCase
         // Document order: h1, first h2, second h2, last paragraph,
         // then the metadata block. The metadata trails everything
         // the editor authored.
-        $this->assertLessThan($firstH2Pos,  $h1Pos);
+        $this->assertLessThan($firstH2Pos, $h1Pos);
         $this->assertLessThan($secondH2Pos, $firstH2Pos);
         $this->assertLessThan($lastBodyPos, $secondH2Pos);
-        $this->assertLessThan($metaPos,     $lastBodyPos);
+        $this->assertLessThan($metaPos, $lastBodyPos);
     }
 
     /** @test */

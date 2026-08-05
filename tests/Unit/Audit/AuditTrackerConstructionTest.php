@@ -61,7 +61,8 @@ class AuditTrackerConstructionTest extends TestCase
         $this->assertInstanceOf(AuditTracker::class, $tracker);
 
         $actionHooks = array_column($GLOBALS['scrutiny_test_actions'], 'hook');
-        foreach ([
+        foreach (
+            [
             'current_screen',
             'unity/member_created',
             'unity/member_changing',
@@ -75,7 +76,8 @@ class AuditTrackerConstructionTest extends TestCase
             'unity/group_export',
             'unity/position_import',
             'unity/position_export',
-        ] as $hook) {
+            ] as $hook
+        ) {
             $this->assertContains($hook, $actionHooks, "constructor must register the $hook action");
         }
     }

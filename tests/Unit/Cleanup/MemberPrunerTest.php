@@ -968,4 +968,3 @@ class MemberPrunerTest extends TestCase
         $this->assertSame($expectedIds, $actual);
     }
 }
-

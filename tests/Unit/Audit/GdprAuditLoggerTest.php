@@ -165,5 +165,4 @@ class GdprAuditLoggerTest extends TestCase
 
         return $user;
     }
-
 }

@@ -114,5 +114,4 @@ class AuditLoggerTest extends TestCase
 
         return $user;
     }
-
 }
