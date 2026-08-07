@@ -35,8 +35,8 @@ parameters:
     # a developer's machine and CI. Matches amber.
     reportUnmatchedIgnoredErrors: false
     ignoreErrors:
-        - '#Function get_plugin_data not found#'
-        - '#Function dbDelta not found#'
+        # get_plugin_data and dbDelta entries were removed from here once
+        # wordpress-stubs resolved them and they stopped matching.
         # PHPStan 2 phrases this as "Used function ... not found", so the
         # 1.x pattern stopped matching. Both spellings appear: "Used function"
         # for the import, "Function" for each call site.
