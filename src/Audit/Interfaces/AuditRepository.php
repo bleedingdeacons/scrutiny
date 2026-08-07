@@ -13,6 +13,26 @@ if (!defined('ABSPATH')) {
  * Audit Repository Interface
  *
  * Defines the contract for storing and retrieving audit log entries.
+ *
+ * Every field is a string because these rows come back from
+ * `$wpdb->get_results()` in OBJECT mode, which returns each column as a
+ * string regardless of its SQL type — `entity_id` is a BIGINT in the table
+ * and a numeric string here. None are nullable: every column in the schema
+ * is NOT NULL. Declaring the shape is what lets callers read the properties
+ * at all; a bare `object` has none.
+ *
+ * @phpstan-type AuditLogRow object{
+ *     id: string,
+ *     action: string,
+ *     entity_type: string,
+ *     entity_id: string,
+ *     field_name: string,
+ *     detail: string,
+ *     user_id: string,
+ *     user_login: string,
+ *     ip_address: string,
+ *     logged_at: string
+ * }
  */
 interface AuditRepository
 {
@@ -54,7 +74,7 @@ interface AuditRepository
      *     per_page?: int,
      *     page?: int
      * } $args Query arguments
-     * @return array<int, object> Array of audit log entry objects
+     * @return array<int, AuditLogRow> Array of audit log entry objects
      */
     public function find(array $args = []): array;
 

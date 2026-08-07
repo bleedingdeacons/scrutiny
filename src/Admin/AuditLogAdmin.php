@@ -115,7 +115,10 @@ class AuditLogAdmin
     /**
      * Get all users who have made audit log entries
      *
-     * @return array<int, object> Array of user objects with id and login
+     * @return array<int, object{user_id: string, user_login: string}> One row
+     *         per distinct author. Strings, not ints — $wpdb->get_results()
+     *         returns every column as a string in OBJECT mode, and both
+     *         columns are NOT NULL in the schema.
      */
     private function getAuditUsers(): array
     {
@@ -381,7 +384,7 @@ class AuditLogAdmin
             <table class="widefat striped">
                 <thead>
                 <tr>
-                    <th>Date / Time (<?php echo esc_html(wp_date('T')); ?>)</th>
+                    <th>Date / Time (<?php echo esc_html(wp_date('T') ?: ''); ?>)</th>
                     <th>User</th>
                     <th>Action</th>
                     <th>Entity Type</th>
@@ -404,10 +407,15 @@ class AuditLogAdmin
                         try {
                             $utc = new \DateTimeImmutable($entry->logged_at, new \DateTimeZone('UTC'));
                             $local = $utc->setTimezone(wp_timezone());
-                            $loggedAtDisplay = wp_date(
+                            $formatted = wp_date(
                                 get_option('date_format') . ' ' . get_option('time_format'),
                                 $local->getTimestamp()
                             );
+                            // wp_date() is string|false. Keep the raw stored
+                            // value when it fails, same as the catch below.
+                            if ($formatted !== false) {
+                                $loggedAtDisplay = $formatted;
+                            }
                         } catch (\Exception $e) {
                             // Keep $entry->logged_at as-is if parsing fails.
                         }

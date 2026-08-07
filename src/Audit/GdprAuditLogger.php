@@ -96,7 +96,14 @@ class GdprAuditLogger implements AuditLogger
                 for ($i = 6; $i < 16; $i++) {
                     $packed[$i] = "\0";
                 }
-                return inet_ntop($packed);
+                // inet_ntop() is string|false. It cannot fail on 16 bytes
+                // that inet_pton() just produced, but the anonymised address
+                // is the whole point of this branch — fall through to the
+                // placeholder rather than record an un-anonymised one.
+                $anonymised = inet_ntop($packed);
+                if ($anonymised !== false) {
+                    return $anonymised;
+                }
             }
         }
 
