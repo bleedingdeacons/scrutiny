@@ -272,7 +272,15 @@ class GdprAuditRepository implements AuditRepository
         global $wpdb;
 
         $table = self::tableName();
-        $cutoff = gmdate('Y-m-d H:i:s', strtotime("-{$days} days"));
+        // strtotime() is int|false and gmdate() will not take false. $days is
+        // an int so this always parses; falling back to now would delete
+        // everything, so refuse to purge instead.
+        $since = strtotime("-{$days} days");
+        if ($since === false) {
+            return 0;
+        }
+
+        $cutoff = gmdate('Y-m-d H:i:s', $since);
 
         // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- table name from $wpdb->prefix; cannot be parameterised with prepare()
         return (int) $wpdb->query(

@@ -64,13 +64,19 @@ final class PrivacyPolicyFormatter
     {
         $updated = $policy->getUpdated();
 
+        // mysql2date() is string|false. A false here would be a stored value
+        // that is neither empty nor parseable, and the same reasoning as the
+        // empty case applies: project it away rather than fabricate a
+        // timestamp the post never had.
+        $modified = $updated === '' ? '' : mysql2date('c', $updated, false);
+
         return [
             'id'       => $policy->getId(),
             'title'    => $policy->getTitle(),
             'version'  => $policy->getVersion(),
             'active'   => $policy->isActive(),
             'policy'   => $policy->getPolicy(),
-            'modified' => $updated === '' ? '' : mysql2date('c', $updated, false),
+            'modified' => $modified === false ? '' : $modified,
         ];
     }
 }
