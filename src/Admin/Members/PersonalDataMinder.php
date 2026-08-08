@@ -33,7 +33,9 @@ class PersonalDataMinder
 
     public function __construct(Configuration $configuration)
     {
-        $this->memberConfig = $configuration->getConfig(Member::class);
+        // getConfig() returns null when no Member config is registered; an
+        // empty map is the same thing to every reader below.
+        $this->memberConfig = $configuration->getConfig(Member::class) ?? [];
 
         add_action('acf/input/admin_enqueue_scripts', [$this, 'enqueueScripts']);
     }
