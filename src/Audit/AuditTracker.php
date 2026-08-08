@@ -76,7 +76,9 @@ class AuditTracker
         $this->logger = $logger;
         $this->policy = $policy;
 
-        $this->member_config = $configuration->getConfig(Member::class);
+        // getConfig() returns null when no Member config is registered; an
+        // empty map is the same thing to every reader below.
+        $this->member_config = $configuration->getConfig(Member::class) ?? [];
 
         // Build the ACF field map from configuration and PersonalDataFields::CONFIG_KEY_MAP
         $map = [];

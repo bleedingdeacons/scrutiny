@@ -135,14 +135,14 @@ class Plugin
         self::$initialized = true;
 
         // Start Monitoring Changes
-        self::$container->get(MemberChangeTracker::class);
+        $unityContainer->get(MemberChangeTracker::class);
 
-        self::$container->get(PositionChangeTracker::class);
+        $unityContainer->get(PositionChangeTracker::class);
 
-        self::$container->get(GroupChangeTracker::class);
+        $unityContainer->get(GroupChangeTracker::class);
 
         // Always initialise the tracker so changes are logged
-        self::$container->get(AuditTracker::class);
+        $unityContainer->get(AuditTracker::class);
 
         // Ensure capabilities are up-to-date (handles upgrades where
         // the activation hook did not re-run after new caps were added)
@@ -156,29 +156,29 @@ class Plugin
         // GroupFieldsObscurer's save_post_* hooks fire wherever a
         // post is saved (admin, REST, WP-CLI). Each obscurer gates
         // its admin-only hooks internally.
-        self::$container->get(MemberFieldsObscurer::class)->register();
-        self::$container->get(GroupFieldsObscurer::class)->register();
+        $unityContainer->get(MemberFieldsObscurer::class)->register();
+        $unityContainer->get(GroupFieldsObscurer::class)->register();
 
         // Responder Certification Guard — registers acf/prepare_field and
         // acf/update_value filters so the certification stage is visible but
         // only editable by users with the scrutiny_edit_responder_certification
         // capability. Registers unconditionally: the update_value guard must
         // fire on every save path, and prepare_field is admin-only anyway.
-        self::$container->get(ResponderCertificationGuard::class)->register();
+        $unityContainer->get(ResponderCertificationGuard::class)->register();
 
         // Cron handler — wires the WP-Cron action and the defensive
         // re-scheduling check. Runs on every page load (not just
         // admin) because WP-Cron's wake-up cycle fires on whichever
         // request hits first; gating this behind is_admin() would
         // miss front-end cron triggers entirely.
-        self::$container->get(PrunerCron::class)->register();
+        $unityContainer->get(PrunerCron::class)->register();
 
         // REST controller for the privacy-policy CPT. Registers on
         // every request (not just admin) because rest_api_init fires
         // on REST requests, which don't go through the admin
         // bootstrap. Read-only and public; see the controller
         // docblock for the route surface.
-        self::$container->get(PrivacyPolicyController::class)->register();
+        $unityContainer->get(PrivacyPolicyController::class)->register();
 
         // Privacy policy shortcode — registers unconditionally
         // because shortcodes are resolved by content rendering on
@@ -187,7 +187,7 @@ class Plugin
         // the tag is actually used in content, so registering
         // alongside the REST controller costs nothing on requests
         // where the shortcode never appears.
-        self::$container->get(PrivacyPolicyShortcode::class)->register();
+        $unityContainer->get(PrivacyPolicyShortcode::class)->register();
 
         // Initialise admin page when in the dashboard
         if (is_admin()) {
@@ -202,9 +202,9 @@ class Plugin
             add_action('admin_menu', [ScrutinyMenu::class, 'registerMenu'], 10);
             add_action('admin_menu', [ScrutinyMenu::class, 'removeDefaultSubmenu'], 999);
 
-            self::$container->get(AuditLogAdmin::class);
-            self::$container->get(PersonalDataMinder::class);
-            self::$container->get(MemberPrunerAdmin::class);
+            $unityContainer->get(AuditLogAdmin::class);
+            $unityContainer->get(PersonalDataMinder::class);
+            $unityContainer->get(MemberPrunerAdmin::class);
         }
 
         self::logDebug('Initialised', ['version' => defined('SCRUTINY_VERSION') ? SCRUTINY_VERSION : 'unknown']);

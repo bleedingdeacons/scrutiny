@@ -72,7 +72,9 @@ final class ResponderCertificationGuard
 
     public function __construct(Configuration $configuration)
     {
-        $this->member_config = $configuration->getConfig(Member::class);
+        // getConfig() returns null when no Member config is registered; an
+        // empty map is the same thing to every reader below.
+        $this->member_config = $configuration->getConfig(Member::class) ?? [];
     }
 
     public function register(): void

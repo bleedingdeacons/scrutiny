@@ -37,7 +37,9 @@ final class MemberFieldsObscurer
         Configuration $configuration,
         private readonly PersonalDataPolicy $policy,
     ) {
-        $this->member_config = $configuration->getConfig(Member::class);
+        // getConfig() returns null when no Member config is registered; an
+        // empty map is the same thing to every reader below.
+        $this->member_config = $configuration->getConfig(Member::class) ?? [];
     }
 
     public function register(): void
