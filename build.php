@@ -338,6 +338,9 @@ class PluginBuilder
         // Stamp the build date into the main plugin header
         $this->syncBuildDate();
 
+        // Sync the bundled guide's version chip with the plugin version
+        $this->syncDocsVersion();
+
         // Create ZIP archive
         // Stage a clean production vendor/ (no dev tooling) without touching
         // the working vendor/ used for tests. Dev builds keep it as-is.
@@ -610,6 +613,50 @@ class PluginBuilder
             $this->log("Updated README.md version to {$this->version} ({$badgeCount} badge, {$lineCount} line)");
         } else {
             $this->log("No version badge or **Version:** line in README.md — skipping version sync");
+        }
+    }
+
+    /**
+     * Update the version chip in the bundled HTML documentation.
+     *
+     * Replaces the version token inside <span class="version">…</span> with the
+     * current plugin version (prefixed with "v"), leaving any trailing text —
+     * such as " · Bristol & District Intergroup" — untouched.
+     *
+     * The trailing group consumes an optional suffix word, because
+     * getVersionFromPlugin() can return one ("1.2.0 beta"): without it the
+     * match would stop at the space, and each build would write the suffix
+     * in again after the one already there.
+     */
+    private function syncDocsVersion(): void
+    {
+        $docFile = $this->pluginDir . DIRECTORY_SEPARATOR . 'assets'
+            . DIRECTORY_SEPARATOR . 'docs' . DIRECTORY_SEPARATOR . 'scrutiny.html';
+
+        if (!file_exists($docFile)) {
+            $this->log("No assets/docs/scrutiny.html found — skipping doc version sync");
+            return;
+        }
+
+        $content = file_get_contents($docFile);
+        if ($content === false) {
+            $this->error("Failed to read assets/docs/scrutiny.html");
+            return;
+        }
+
+        $updated = preg_replace(
+            '/(<span class="version">\s*)v?[0-9][\w.\-]*(?:[ \t]+\w+)?/',
+            '${1}v' . $this->version,
+            $content,
+            1,
+            $count
+        );
+
+        if ($count > 0 && $updated !== null) {
+            file_put_contents($docFile, $updated);
+            $this->log("Updated assets/docs/scrutiny.html version to v{$this->version}");
+        } else {
+            $this->log("No version chip found in assets/docs/scrutiny.html — skipping doc version sync");
         }
     }
 
