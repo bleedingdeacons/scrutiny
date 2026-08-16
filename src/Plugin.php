@@ -11,6 +11,7 @@ if (!defined('ABSPATH')) {
 
 use RuntimeException;
 use Scrutiny\Admin\AuditLogAdmin;
+use Scrutiny\Admin\HelpPage;
 use Scrutiny\Admin\MemberPrunerAdmin;
 use Scrutiny\Admin\Members\PersonalDataMinder;
 use Scrutiny\Admin\ScrutinyMenu;
@@ -69,6 +70,8 @@ use function is_admin;
  *                           truth for both the pruner and its admin page
  *   MemberPrunerAdmin     – settings page for the pruner thresholds, under the
  *                           top-level Scrutiny menu (does not run the pruner itself)
+ *   HelpPage              – "Help" submenu under the top-level Scrutiny menu that
+ *                           opens the bundled user guide in a named tab
  *   PrunerCron            – schedules the weekly WP-Cron event that runs the
  *                           pruner unattended, and clears it on deactivation
  *   MemberTrashCleaner    – permanently deletes trashed members past the
@@ -201,6 +204,13 @@ class Plugin
             // submenu registration.
             add_action('admin_menu', [ScrutinyMenu::class, 'registerMenu'], 10);
             add_action('admin_menu', [ScrutinyMenu::class, 'removeDefaultSubmenu'], 999);
+
+            // Help is wired the same way: it takes no dependencies, so it
+            // needs no container registration. Priority 30 puts it after the
+            // page classes' priority-20 submenus, so Help sits last in the
+            // Scrutiny menu, and still well ahead of the 999 cleanup.
+            $helpPage = new HelpPage();
+            add_action('admin_menu', [$helpPage, 'register'], 30);
 
             $unityContainer->get(AuditLogAdmin::class);
             $unityContainer->get(PersonalDataMinder::class);
