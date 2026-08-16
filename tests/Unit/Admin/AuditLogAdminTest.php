@@ -344,6 +344,24 @@ final class AuditLogAdminTest extends TestCase
         $this->assertStringContainsString('<strong>0</strong> entries found.', $html);
     }
 
+    /**
+     * The Help link's href is the guide itself rather than "#", and the handler
+     * only cancels that navigation once window.open() has returned a window.
+     * A popup blocker refusing it returns null, and an unconditional
+     * preventDefault() would leave the link doing nothing at all.
+     *
+     * @test
+     */
+    public function the_help_link_survives_a_blocked_popup(): void
+    {
+        $html = $this->render();
+
+        $this->assertStringContainsString('assets/docs/scrutiny.html" target="_blank"', $html);
+        $this->assertStringContainsString('rel="noopener"', $html);
+        $this->assertStringContainsString('if (help) { event.preventDefault();', $html);
+        $this->assertStringNotContainsString('href="#"', $html);
+    }
+
     /** @test */
     public function the_filter_form_offers_every_entity_action_and_field(): void
     {
