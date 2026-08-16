@@ -233,6 +233,8 @@ class AuditLogAdmin
         // Get users for filter dropdown
         $auditUsers = $this->getAuditUsers();
 
+        $helpUrl = plugins_url('assets/docs/scrutiny.html', dirname(__DIR__, 2) . '/scrutiny.php');
+
         ?>
         <div class="wrap">
             <h1>
@@ -240,8 +242,16 @@ class AuditLogAdmin
                 <button type="button" class="page-title-action" onclick="location.reload();" title="Refresh the audit log" style="margin-left: 10px;">
                     <span class="dashicons dashicons-update" style="vertical-align: middle;"></span> Refresh
                 </button>
-                <a href="#" class="page-title-action" title="View Scrutiny documentation" style="margin-left: 5px;"
-                   onclick="event.preventDefault(); window.name = 'scrutiny-admin'; window.open('<?php echo esc_js(plugins_url('assets/docs/scrutiny.html', dirname(__DIR__, 2) . '/scrutiny.php')); ?>' + '?back=' + encodeURIComponent(window.location.href), 'scrutiny-help');">
+                <?php /* The href is the guide itself, so the link still works when
+                         scripting is off. The handler upgrades that to a named tab
+                         carrying ?back=, which is how the guide refocuses this tab
+                         instead of reloading it — but only cancels the navigation
+                         once window.open() has actually returned a window. A popup
+                         blocker or extension refusing it returns null, and the
+                         browser then follows the href as an ordinary new tab. */ ?>
+                <a href="<?php echo esc_url($helpUrl); ?>" target="_blank" rel="noopener"
+                   class="page-title-action" title="View Scrutiny documentation" style="margin-left: 5px;"
+                   onclick="window.name = 'scrutiny-admin'; var help = window.open(this.href + '?back=' + encodeURIComponent(window.location.href), 'scrutiny-help'); if (help) { event.preventDefault(); help.focus(); }">
                     <span class="dashicons dashicons-editor-help" style="vertical-align: middle;"></span> Help
                 </a>
             </h1>
