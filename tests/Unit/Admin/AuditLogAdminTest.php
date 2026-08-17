@@ -432,7 +432,8 @@ final class AuditLogAdminTest extends TestCase
         $html = $this->render([$this->entry()]);
 
         $this->assertStringContainsString('John D.', $html);
-        $this->assertStringContainsString('post.php?post=42&action=edit', $html);
+        // &#038;, not &: WordPress encodes the separator in an href.
+        $this->assertStringContainsString('post.php?post=42&#038;action=edit', $html);
     }
 
     /**
