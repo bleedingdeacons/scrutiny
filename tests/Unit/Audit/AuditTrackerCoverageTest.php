@@ -280,6 +280,15 @@ class AuditTrackerCoverageTest extends TestCase
             'getHomeGroup' => 0,
             'getIntergroupPosition' => 0,
             'isGSR' => false,
+            'getIntergroupPositionRotation' => '',
+            'isTwelfthStepper' => false,
+            'isTelephoneResponder' => false,
+            'showAnonymousName' => false,
+            'showMemberProfile' => false,
+            'getArea' => '',
+            'getAccepts' => [],
+            'getAnonymousProfile' => '',
+            'getMeetingPO' => null,
             'isGdprAccepted' => false,
         ];
         $data = array_merge($defaults, $overrides);

@@ -51,6 +51,36 @@ class PersonalDataFieldsTest extends TestCase
             PersonalDataFields::getLabel(PersonalDataFields::INTERGROUP_POSITION)
         );
         $this->assertSame('GSR', PersonalDataFields::getLabel(PersonalDataFields::GSR));
+        $this->assertSame(
+            'Position Rotation',
+            PersonalDataFields::getLabel(PersonalDataFields::POSITION_ROTATION)
+        );
+        $this->assertSame('12th Stepper', PersonalDataFields::getLabel(PersonalDataFields::TWELFTH_STEPPER));
+        $this->assertSame('Area', PersonalDataFields::getLabel(PersonalDataFields::AREA));
+        $this->assertSame('Meeting PO', PersonalDataFields::getLabel(PersonalDataFields::MEETING_PO));
+    }
+
+    /**
+     * @test
+     */
+    public function every_logical_field_name_has_a_label(): void
+    {
+        // The Audit Log page builds its field filter by iterating LABELS, so a
+        // constant missing from it is a field nobody can filter by. Cheaper to
+        // assert here than to notice it on the screen.
+        $reflection = new \ReflectionClass(PersonalDataFields::class);
+
+        foreach ($reflection->getConstants() as $name => $value) {
+            if (!is_string($value) || str_starts_with($name, 'FIELD_') || str_starts_with($name, 'KEY_')) {
+                continue;
+            }
+
+            $this->assertArrayHasKey(
+                $value,
+                PersonalDataFields::LABELS,
+                sprintf('%s (%s) has no entry in LABELS', $name, $value)
+            );
+        }
     }
 
     /**
