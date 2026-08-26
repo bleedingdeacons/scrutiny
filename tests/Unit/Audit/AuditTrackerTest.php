@@ -515,7 +515,7 @@ class AuditTrackerTest extends TestCase
                 AuditLogger::ENTITY_MEMBER,
                 42,
                 PersonalDataFields::HOME_GROUP,
-                '→ Thursday Big Book'
+                'Assigned to Thursday Big Book'
             );
 
         $tracker = $this->createTracker(
@@ -540,7 +540,7 @@ class AuditTrackerTest extends TestCase
                 AuditLogger::ENTITY_MEMBER,
                 42,
                 PersonalDataFields::HOME_GROUP,
-                'Thursday Big Book →'
+                'Removed from Thursday Big Book'
             );
 
         $tracker = $this->createTracker(
@@ -565,7 +565,7 @@ class AuditTrackerTest extends TestCase
                 AuditLogger::ENTITY_MEMBER,
                 42,
                 PersonalDataFields::HOME_GROUP,
-                'Thursday Big Book → Sunday Steps'
+                'Changed from Thursday Big Book to Sunday Steps'
             );
 
         $tracker = $this->createTracker(
@@ -592,7 +592,7 @@ class AuditTrackerTest extends TestCase
                 AuditLogger::ENTITY_MEMBER,
                 42,
                 PersonalDataFields::HOME_GROUP,
-                '#7 →'
+                'Removed from #7'
             );
 
         $tracker = $this->createTracker($logger, $this->groupRepository([]));
@@ -632,7 +632,7 @@ class AuditTrackerTest extends TestCase
                 AuditLogger::ENTITY_MEMBER,
                 42,
                 PersonalDataFields::INTERGROUP_POSITION,
-                '→ Telephone Liaison Officer'
+                'Assigned to Telephone Liaison Officer'
             );
 
         $tracker = $this->createTracker(
@@ -658,7 +658,7 @@ class AuditTrackerTest extends TestCase
                 AuditLogger::ENTITY_MEMBER,
                 42,
                 PersonalDataFields::INTERGROUP_POSITION,
-                'Telephone Liaison Officer →'
+                'Removed from Telephone Liaison Officer'
             );
 
         $tracker = $this->createTracker(
@@ -684,7 +684,7 @@ class AuditTrackerTest extends TestCase
                 AuditLogger::ENTITY_MEMBER,
                 42,
                 PersonalDataFields::HOME_GROUP,
-                '→ Thursday Big Book'
+                'Assigned to Thursday Big Book'
             );
         $logger->shouldReceive('log')
             ->once()
@@ -693,7 +693,7 @@ class AuditTrackerTest extends TestCase
                 AuditLogger::ENTITY_MEMBER,
                 42,
                 PersonalDataFields::INTERGROUP_POSITION,
-                '→ Telephone Liaison Officer'
+                'Assigned to Telephone Liaison Officer'
             );
 
         $tracker = $this->createTracker(
@@ -730,7 +730,7 @@ class AuditTrackerTest extends TestCase
                 AuditLogger::ENTITY_MEMBER,
                 42,
                 PersonalDataFields::HOME_GROUP,
-                '→ Thursday Big Book'
+                'Assigned to Thursday Big Book'
             );
         $logger->shouldReceive('log')
             ->once()
@@ -739,7 +739,7 @@ class AuditTrackerTest extends TestCase
                 AuditLogger::ENTITY_MEMBER,
                 42,
                 PersonalDataFields::INTERGROUP_POSITION,
-                '→ Telephone Liaison Officer'
+                'Assigned to Telephone Liaison Officer'
             );
 
         $tracker = $this->createTracker(
@@ -774,7 +774,7 @@ class AuditTrackerTest extends TestCase
                 AuditLogger::ENTITY_MEMBER,
                 42,
                 PersonalDataFields::HOME_GROUP,
-                '→ Thursday Big Book'
+                'Assigned to Thursday Big Book'
             );
         $logger->shouldReceive('log')
             ->once()
@@ -783,7 +783,7 @@ class AuditTrackerTest extends TestCase
                 AuditLogger::ENTITY_MEMBER,
                 42,
                 PersonalDataFields::GSR,
-                '→ Thursday Big Book'
+                'Assigned to Thursday Big Book'
             );
 
         $tracker = $this->createTracker(
@@ -811,7 +811,7 @@ class AuditTrackerTest extends TestCase
                 AuditLogger::ENTITY_MEMBER,
                 42,
                 PersonalDataFields::HOME_GROUP,
-                'Thursday Big Book →'
+                'Removed from Thursday Big Book'
             );
         $logger->shouldReceive('log')
             ->once()
@@ -820,7 +820,7 @@ class AuditTrackerTest extends TestCase
                 AuditLogger::ENTITY_MEMBER,
                 42,
                 PersonalDataFields::INTERGROUP_POSITION,
-                'Telephone Liaison Officer →'
+                'Removed from Telephone Liaison Officer'
             );
 
         $tracker = $this->createTracker(
@@ -850,7 +850,7 @@ class AuditTrackerTest extends TestCase
                 AuditLogger::ENTITY_MEMBER,
                 42,
                 PersonalDataFields::GSR,
-                '→ Thursday Big Book'
+                'Assigned to Thursday Big Book'
             );
 
         $tracker = $this->createTracker(
@@ -875,7 +875,7 @@ class AuditTrackerTest extends TestCase
                 AuditLogger::ENTITY_MEMBER,
                 42,
                 PersonalDataFields::GSR,
-                'Thursday Big Book →'
+                'Removed from Thursday Big Book'
             );
 
         $tracker = $this->createTracker(
@@ -902,7 +902,7 @@ class AuditTrackerTest extends TestCase
                 AuditLogger::ENTITY_MEMBER,
                 42,
                 PersonalDataFields::HOME_GROUP,
-                'Thursday Big Book → Sunday Steps'
+                'Changed from Thursday Big Book to Sunday Steps'
             );
         $logger->shouldReceive('log')
             ->once()
@@ -911,7 +911,7 @@ class AuditTrackerTest extends TestCase
                 AuditLogger::ENTITY_MEMBER,
                 42,
                 PersonalDataFields::GSR,
-                'Thursday Big Book → Sunday Steps'
+                'Changed from Thursday Big Book to Sunday Steps'
             );
 
         $tracker = $this->createTracker(
@@ -958,7 +958,7 @@ class AuditTrackerTest extends TestCase
                 AuditLogger::ENTITY_MEMBER,
                 42,
                 PersonalDataFields::GSR,
-                '→ (no group)'
+                'Assigned to (no home group)'
             );
 
         $tracker = $this->createTracker($logger, $this->groupRepository([]));
@@ -981,7 +981,7 @@ class AuditTrackerTest extends TestCase
                 AuditLogger::ENTITY_MEMBER,
                 42,
                 PersonalDataFields::HOME_GROUP,
-                'Thursday Big Book →'
+                'Removed from Thursday Big Book'
             );
         $logger->shouldReceive('log')
             ->once()
@@ -990,7 +990,7 @@ class AuditTrackerTest extends TestCase
                 AuditLogger::ENTITY_MEMBER,
                 42,
                 PersonalDataFields::GSR,
-                'Thursday Big Book →'
+                'Removed from Thursday Big Book'
             );
 
         $tracker = $this->createTracker(
@@ -1019,7 +1019,7 @@ class AuditTrackerTest extends TestCase
                 AuditLogger::ENTITY_MEMBER,
                 42,
                 PersonalDataFields::HOME_GROUP,
-                '→ ' . str_repeat('A', 99) . '…'
+                'Assigned to ' . str_repeat('A', 99) . '…'
             );
 
         $tracker = $this->createTracker($logger, $this->groupRepository([7 => $longName]));
