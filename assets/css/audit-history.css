@@ -1,0 +1,51 @@
+/**
+ * Scrutiny — GdprAuditHistory ACF field.
+ *
+ * Loaded on any admin screen rendering ACF inputs (the field type hooks
+ * acf/input/admin_enqueue_scripts). Every rule is scoped under
+ * .scrutiny-audit-history so screens without the field are unaffected.
+ *
+ * The badge colours mirror the Audit Log admin page, which carries its own
+ * copy inline.
+ */
+
+.scrutiny-audit-history__table {
+    border-collapse: collapse;
+    margin: 0;
+}
+
+.scrutiny-audit-history__table th,
+.scrutiny-audit-history__table td {
+    padding: 6px 10px;
+    vertical-align: top;
+}
+
+.scrutiny-audit-history__table code {
+    font-size: 11px;
+}
+
+.scrutiny-audit-history__summary,
+.scrutiny-audit-history__empty {
+    margin: 8px 0 0;
+}
+
+.scrutiny-audit-history .scrutiny-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 3px;
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    white-space: nowrap;
+}
+
+.scrutiny-audit-history .scrutiny-badge--view    { background: #e8f4fd; color: #1d5d90; }
+.scrutiny-audit-history .scrutiny-badge--create  { background: #e6f9e6; color: #1a7a1a; }
+.scrutiny-audit-history .scrutiny-badge--update  { background: #fff3e0; color: #b45309; }
+.scrutiny-audit-history .scrutiny-badge--delete  { background: #fde8e8; color: #991b1b; }
+.scrutiny-audit-history .scrutiny-badge--export  { background: #f3e8fd; color: #6b21a8; }
+.scrutiny-audit-history .scrutiny-badge--import  { background: #e0f2fe; color: #0369a1; }
+.scrutiny-audit-history .scrutiny-badge--call    { background: #fef3c7; color: #92400e; }
+.scrutiny-audit-history .scrutiny-badge--message { background: #ede9fe; color: #5b21b6; }
+.scrutiny-audit-history .scrutiny-badge--purge   { background: #f1f1f1; color: #555; }

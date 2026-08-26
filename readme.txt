@@ -98,6 +98,21 @@ A read-only **Audit Log** submenu page is added under the Intergroup menu, acces
 * Pagination (up to 200 entries per page).
 * A nonce-protected **Purge** action to delete entries older than a configurable number of days.
 
+= GDPR Audit History Field =
+
+Scrutiny registers a `gdpr_audit_history` field type with Advanced Custom Fields. Add it to the member CPT's field group and the member's own edit screen shows the audit trail recorded against that member — who viewed, created, updated or called them, and when — without leaving the record.
+
+It is display only: like ACF's own layout fields it renders no input, so nothing is posted, nothing is written to postmeta, and it is excluded from REST. Requires ACF; with ACF inactive the field type is simply never registered.
+
+Four settings are available in the field group editor:
+
+* **Record type** — which entity type to match (defaults to `member`; groups, meetings and positions work too).
+* **Entries to show** — how many of the most recent entries to display, capped at 200. The full total is always shown alongside.
+* **Limit to action** — show only `view` entries, only `update` entries, and so on.
+* **Show IP addresses** — adds the truncated IP each entry was recorded from.
+
+The field requires `manage_options`, the same capability as the Audit Log page, since it is the same data. Lower it with the `scrutiny_audit_history_capability` filter; users below the Audit Log page's own bar still see the table, but not the link through to it.
+
 == Installation ==
 
 1. Place the `scrutiny` folder in `wp-content/plugins/`.

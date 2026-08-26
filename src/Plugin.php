@@ -20,6 +20,8 @@ use Scrutiny\Audit\GdprAuditRepository;
 use Scrutiny\Audit\AuditTracker;
 use Scrutiny\Audit\Interfaces\AuditLogger;
 use Scrutiny\Audit\Interfaces\AuditRepository;
+use Scrutiny\Fields\AuditHistoryRenderer;
+use Scrutiny\Fields\GdprAuditHistory;
 use Scrutiny\Cleanup\MemberPruner;
 use Scrutiny\Cleanup\MemberTrashCleaner;
 use Scrutiny\Cleanup\PrunerCron;
@@ -59,6 +61,13 @@ use function is_admin;
  *   GroupFieldsObscurer   – masks and write-protects TSML's nine named-contact fields
  *                           (contact_1_name … contact_3_phone) on the meeting and group
  *                           edit screens
+ *   AuditHistoryRenderer  – renders one record's audit trail as an HTML table;
+ *                           the whole behaviour of the GdprAuditHistory field,
+ *                           kept free of ACF so it can be tested on its own
+ *   GdprAuditHistory      – ACF field type (`gdpr_audit_history`) that drops that
+ *                           table onto a record's edit screen — intended for the
+ *                           member CPT's field group. Display only: it renders no
+ *                           input and stores no value
  *   AuditLogAdmin         – read-only admin page for viewing the audit trail
  *                           (lives under the Intergroup menu — operational tool)
  *   ScrutinyMenu          – registers the top-level "Scrutiny" admin menu
@@ -192,6 +201,24 @@ class Plugin
         // where the shortcode never appears.
         $unityContainer->get(PrivacyPolicyShortcode::class)->register();
 
+        // GdprAuditHistory ACF field type. Registered on
+        // acf/include_field_types (ACF's own field types are included
+        // immediately before it fires, on `init` priority 5) because that is
+        // the first point at which the acf_field base class exists — resolving
+        // the binding any earlier is a fatal error.
+        //
+        // Not gated on is_admin(): a field type has to be registered wherever
+        // ACF loads field groups, or ACF treats fields of this type as
+        // unrecognised. Nothing is rendered outside the admin regardless,
+        // since the field emits no value.
+        add_action('acf/include_field_types', static function () use ($unityContainer): void {
+            if (!function_exists('acf_register_field_type') || !class_exists('acf_field')) {
+                return;
+            }
+
+            acf_register_field_type($unityContainer->get(GdprAuditHistory::class));
+        });
+
         // Initialise admin page when in the dashboard
         if (is_admin()) {
             // Register the top-level Scrutiny menu first. The menu
@@ -261,6 +288,26 @@ class Plugin
         $container->register(AuditLogger::class, function (ContainerInterface $c) {
             return new GdprAuditLogger(
                 $c->get(AuditRepository::class)
+            );
+        });
+
+        // Audit History Renderer — turns one record's audit trail into an
+        // HTML table. Holds only the repository; the GdprAuditHistory ACF
+        // field is a thin adapter over it, and nothing else about the field
+        // needs ACF, so this is where the behaviour (and its tests) live.
+        $container->register(AuditHistoryRenderer::class, function (ContainerInterface $c) {
+            return new AuditHistoryRenderer(
+                $c->get(AuditRepository::class)
+            );
+        });
+
+        // GdprAuditHistory ACF field type. Registered here so the binding
+        // sits with the rest of the wiring, but never resolved outside the
+        // acf/include_field_types callback in init(): the class extends
+        // acf_field, which does not exist until ACF fires that action.
+        $container->register(GdprAuditHistory::class, function (ContainerInterface $c) {
+            return new GdprAuditHistory(
+                $c->get(AuditHistoryRenderer::class)
             );
         });
 

@@ -26,9 +26,13 @@
         <exclude name="PSR1.Files.SideEffects"/>
     </rule>
 
-    <!-- Tests use snake_case BDD method names (it_returns_null_when_absent). -->
+    <!-- Tests use snake_case BDD method names (it_returns_null_when_absent).
+         The ACF field type is snake_case for a different reason: render_field,
+         render_field_settings and input_admin_enqueue_scripts are the names
+         acf_field calls. Renamed to camelCase they would simply never run. -->
     <rule ref="PSR1.Methods.CamelCapsMethodName">
         <exclude-pattern>tests/*</exclude-pattern>
+        <exclude-pattern>src/Fields/GdprAuditHistory\.php</exclude-pattern>
     </rule>
 
     <!-- Test doubles, fakes and WP_* stubs are deliberately global, deliberately not

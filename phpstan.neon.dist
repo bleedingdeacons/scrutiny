@@ -29,6 +29,14 @@ parameters:
         - ../unity/src
         - ../sentinel/src
         - ../tsml-for-unity/src
+    scanFiles:
+        # Advanced Custom Fields is a third-party plugin: not a Composer
+        # dependency, and not checked out beside Scrutiny in CI. Without this
+        # the acf_field base class GdprAuditHistory extends, and the three ACF
+        # functions it calls, are all "not found". The stub reproduces only
+        # that surface; tests/bootstrap.php loads the same file so the field
+        # type can be instantiated in a unit run.
+        - tests/stubs/acf.php
     # An ignoreErrors pattern that stops matching is reported as an error by
     # default, so a stale pattern would fail the gate — and whether a pattern
     # matches depends on which siblings are checked out, which differs between

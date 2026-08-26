@@ -12,6 +12,7 @@ use Scrutiny\Audit\GdprAuditLogger;
 use Scrutiny\Audit\GdprAuditRepository;
 use Scrutiny\Audit\Interfaces\AuditLogger;
 use Scrutiny\Audit\Interfaces\AuditRepository;
+use Scrutiny\Fields\AuditHistoryRenderer;
 use Scrutiny\Cleanup\MemberPruner;
 use Scrutiny\Cleanup\MemberTrashCleaner;
 use Scrutiny\Cleanup\PrunerCron;
@@ -72,12 +73,16 @@ class PluginWiringTest extends TestCase
 
         // Resolve every Scrutiny-owned binding so its factory closure runs.
         // The tsml-backed privacy-policy bindings are intentionally skipped —
-        // their concretes are not on the classpath here.
+        // their concretes are not on the classpath here. So is GdprAuditHistory,
+        // whose acf_field base class only exists once ACF fires
+        // acf/include_field_types; tests/Unit/Fields covers it against the
+        // stub base class instead.
         $expectations = [
             AuditRepository::class          => GdprAuditRepository::class,
             AuditLogger::class              => GdprAuditLogger::class,
             PersonalDataPolicy::class       => PersonalDataPolicy::class,
             AuditTracker::class             => AuditTracker::class,
+            AuditHistoryRenderer::class     => AuditHistoryRenderer::class,
             MemberFieldsObscurer::class     => MemberFieldsObscurer::class,
             GroupFieldsObscurer::class      => GroupFieldsObscurer::class,
             ResponderCertificationGuard::class => ResponderCertificationGuard::class,
