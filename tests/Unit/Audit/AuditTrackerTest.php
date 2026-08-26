@@ -117,6 +117,7 @@ class AuditTrackerTest extends TestCase
             'getResponderCertification' => ResponderCertification::None,
             'getHomeGroup' => 0,
             'getIntergroupPosition' => 0,
+            'isGSR' => false,
             'isGdprAccepted' => false,
             'getGdprAcceptedAt' => '',
             'getGdprAcceptanceVersion' => '',
@@ -754,6 +755,49 @@ class AuditTrackerTest extends TestCase
     }
 
     /** @test */
+    public function it_records_a_member_created_as_a_gsr(): void
+    {
+        $logger = Mockery::mock(AuditLogger::class);
+        $logger->shouldReceive('log')
+            ->once()
+            ->with(
+                AuditLogger::ACTION_CREATE,
+                AuditLogger::ENTITY_MEMBER,
+                42,
+                PersonalDataFields::ALL_FIELDS_SENTINEL,
+                'Member created'
+            );
+        $logger->shouldReceive('log')
+            ->once()
+            ->with(
+                AuditLogger::ACTION_CREATE,
+                AuditLogger::ENTITY_MEMBER,
+                42,
+                PersonalDataFields::HOME_GROUP,
+                'Assigned: Thursday Big Book'
+            );
+        $logger->shouldReceive('log')
+            ->once()
+            ->with(
+                AuditLogger::ACTION_CREATE,
+                AuditLogger::ENTITY_MEMBER,
+                42,
+                PersonalDataFields::GSR,
+                'Assigned: Thursday Big Book'
+            );
+
+        $tracker = $this->createTracker(
+            $logger,
+            $this->groupRepository([7 => 'Thursday Big Book'])
+        );
+
+        $tracker->onMemberCreated($this->createMember([
+            'getHomeGroup' => 7,
+            'isGSR' => true,
+        ]));
+    }
+
+    /** @test */
     public function it_records_the_service_roles_a_deleted_member_still_held(): void
     {
         // Phrased exactly as an ordinary removal: the entry's own action
@@ -788,6 +832,175 @@ class AuditTrackerTest extends TestCase
         $tracker->onMemberDeleted(42, $this->createMember([
             'getHomeGroup' => 7,
             'getIntergroupPosition' => 3,
+        ]));
+    }
+
+    // ─── GSR ───────────────────────────────────────────────────────────
+
+    /** @test */
+    public function it_names_the_group_when_a_member_becomes_its_gsr(): void
+    {
+        // "GSR" alone would not say what the member is GSR for, so the entry
+        // names the group the role is held on behalf of.
+        $logger = Mockery::mock(AuditLogger::class);
+        $logger->shouldReceive('log')
+            ->once()
+            ->with(
+                AuditLogger::ACTION_UPDATE,
+                AuditLogger::ENTITY_MEMBER,
+                42,
+                PersonalDataFields::GSR,
+                'Assigned: Thursday Big Book'
+            );
+
+        $tracker = $this->createTracker(
+            $logger,
+            $this->groupRepository([7 => 'Thursday Big Book'])
+        );
+
+        $original = $this->createMember(['getHomeGroup' => 7, 'isGSR' => false]);
+        $updated = $this->createMember(['getHomeGroup' => 7, 'isGSR' => true]);
+
+        $tracker->onMemberChanged($updated, $original);
+    }
+
+    /** @test */
+    public function it_names_the_group_when_a_member_stops_being_its_gsr(): void
+    {
+        $logger = Mockery::mock(AuditLogger::class);
+        $logger->shouldReceive('log')
+            ->once()
+            ->with(
+                AuditLogger::ACTION_UPDATE,
+                AuditLogger::ENTITY_MEMBER,
+                42,
+                PersonalDataFields::GSR,
+                'Removed: Thursday Big Book'
+            );
+
+        $tracker = $this->createTracker(
+            $logger,
+            $this->groupRepository([7 => 'Thursday Big Book'])
+        );
+
+        $original = $this->createMember(['getHomeGroup' => 7, 'isGSR' => true]);
+        $updated = $this->createMember(['getHomeGroup' => 7, 'isGSR' => false]);
+
+        $tracker->onMemberChanged($updated, $original);
+    }
+
+    /** @test */
+    public function it_logs_a_gsr_who_carries_the_role_to_a_new_home_group(): void
+    {
+        // The flag does not change here, so comparing isGSR() alone would log
+        // nothing and leave the member looking like the old group's GSR still.
+        $logger = Mockery::mock(AuditLogger::class);
+        $logger->shouldReceive('log')
+            ->once()
+            ->with(
+                AuditLogger::ACTION_UPDATE,
+                AuditLogger::ENTITY_MEMBER,
+                42,
+                PersonalDataFields::HOME_GROUP,
+                'Thursday Big Book → Sunday Steps'
+            );
+        $logger->shouldReceive('log')
+            ->once()
+            ->with(
+                AuditLogger::ACTION_UPDATE,
+                AuditLogger::ENTITY_MEMBER,
+                42,
+                PersonalDataFields::GSR,
+                'Thursday Big Book → Sunday Steps'
+            );
+
+        $tracker = $this->createTracker(
+            $logger,
+            $this->groupRepository([7 => 'Thursday Big Book', 8 => 'Sunday Steps'])
+        );
+
+        $original = $this->createMember(['getHomeGroup' => 7, 'isGSR' => true]);
+        $updated = $this->createMember(['getHomeGroup' => 8, 'isGSR' => true]);
+
+        $tracker->onMemberChanged($updated, $original);
+    }
+
+    /** @test */
+    public function it_does_not_log_a_gsr_flag_that_did_not_change(): void
+    {
+        $logger = Mockery::mock(AuditLogger::class);
+        $logger->shouldNotReceive('log');
+
+        $tracker = $this->createTracker(
+            $logger,
+            $this->groupRepository([7 => 'Thursday Big Book'])
+        );
+
+        $original = $this->createMember(['getHomeGroup' => 7, 'isGSR' => true]);
+        $updated = $this->createMember(['getHomeGroup' => 7, 'isGSR' => true]);
+
+        $tracker->onMemberChanged($updated, $original);
+
+        self::assertTrue(true, 'onMemberChanged completed without logging');
+    }
+
+    /** @test */
+    public function it_records_a_gsr_flag_set_without_a_home_group_behind_it(): void
+    {
+        // Meaningless data — the role is held on behalf of a group — but it
+        // is still a change, and dropping it silently is the gap this
+        // tracking exists to close.
+        $logger = Mockery::mock(AuditLogger::class);
+        $logger->shouldReceive('log')
+            ->once()
+            ->with(
+                AuditLogger::ACTION_UPDATE,
+                AuditLogger::ENTITY_MEMBER,
+                42,
+                PersonalDataFields::GSR,
+                'Assigned: (no home group)'
+            );
+
+        $tracker = $this->createTracker($logger, $this->groupRepository([]));
+
+        $original = $this->createMember(['getHomeGroup' => 0, 'isGSR' => false]);
+        $updated = $this->createMember(['getHomeGroup' => 0, 'isGSR' => true]);
+
+        $tracker->onMemberChanged($updated, $original);
+    }
+
+    /** @test */
+    public function it_records_the_gsr_role_a_deleted_member_still_held(): void
+    {
+        $logger = Mockery::mock(AuditLogger::class);
+        $logger->shouldReceive('logBatch')->once();
+        $logger->shouldReceive('log')
+            ->once()
+            ->with(
+                AuditLogger::ACTION_DELETE,
+                AuditLogger::ENTITY_MEMBER,
+                42,
+                PersonalDataFields::HOME_GROUP,
+                'Removed: Thursday Big Book'
+            );
+        $logger->shouldReceive('log')
+            ->once()
+            ->with(
+                AuditLogger::ACTION_DELETE,
+                AuditLogger::ENTITY_MEMBER,
+                42,
+                PersonalDataFields::GSR,
+                'Removed: Thursday Big Book'
+            );
+
+        $tracker = $this->createTracker(
+            $logger,
+            $this->groupRepository([7 => 'Thursday Big Book'])
+        );
+
+        $tracker->onMemberDeleted(42, $this->createMember([
+            'getHomeGroup' => 7,
+            'isGSR' => true,
         ]));
     }
 

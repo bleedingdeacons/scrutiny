@@ -74,6 +74,16 @@ final class PersonalDataFields
     public const HOME_GROUP = 'home-group';
 
     /**
+     * Logical field name: whether the member is their home group's GSR
+     *
+     * Not personal data, on the same reasoning as {@see self::HOME_GROUP} —
+     * being a General Service Representative is a service role, and the role
+     * belongs to a public group. Its entries name that group, since "GSR" on
+     * its own does not say what the member is GSR for.
+     */
+    public const GSR = 'gsr';
+
+    /**
      * Logical field name: the member's intergroup service position
      *
      * Not personal data, for the same reason as {@see self::HOME_GROUP}: an
@@ -245,6 +255,7 @@ final class PersonalDataFields
         self::RESPONDER_CERTIFICATION => 'Responder Certification',
         self::HOME_GROUP => 'Home Group',
         self::INTERGROUP_POSITION => 'Intergroup Position',
+        self::GSR => 'GSR',
         self::ALL_FIELDS_SENTINEL => 'All fields',
         self::GROUP_CONTACT_NAME   => 'Group Contact Name',
         self::GROUP_CONTACT_EMAIL  => 'Group Contact Email',

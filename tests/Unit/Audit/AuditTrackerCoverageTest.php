@@ -279,6 +279,7 @@ class AuditTrackerCoverageTest extends TestCase
             'getResponderCertification' => ResponderCertification::None,
             'getHomeGroup' => 0,
             'getIntergroupPosition' => 0,
+            'isGSR' => false,
             'isGdprAccepted' => false,
         ];
         $data = array_merge($defaults, $overrides);

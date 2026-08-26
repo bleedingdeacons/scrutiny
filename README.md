@@ -112,11 +112,12 @@ Every access or change to a personal data field is recorded in a dedicated datab
 
 **No raw personal data values are ever stored in the log.**
 
-Three values *are* recorded outright, because none of them is personal data — each names a service status or a public entity rather than the member:
+Four values *are* recorded outright, because none of them is personal data — each names a service status or a public entity rather than the member:
 
 * the responder-certification stage (e.g. `Changed to Certified`),
 * the member's home group (e.g. `Assigned: Thursday Big Book`),
-* the member's intergroup position (e.g. `Removed: Telephone Liaison Officer`).
+* the member's intergroup position (e.g. `Removed: Telephone Liaison Officer`),
+* whether the member is their home group's GSR, named by that group (e.g. `Assigned: Thursday Big Book`).
 
 Knowing *which* stage, group or position is the whole point of auditing these fields; an entry reading `Value changed` would answer nothing. Details are kept terse because the action and field columns beside them already say what kind of event it is: a move reads `Old → New`. A group or position that no longer resolves is recorded as `#<id>` so the entry stays traceable.
 
@@ -130,11 +131,14 @@ Knowing *which* stage, group or position is the whole point of auditing these fi
 | Responder certification changed | `unity/member_changing` | The new stage by name, e.g. `Changed to Certified` |
 | Home group assigned, changed or removed | `unity/member_changing` | The group by name, e.g. `Thursday Big Book → Sunday Steps` |
 | Intergroup position assigned, changed or removed | `unity/member_changing` | The position by name, e.g. `Assigned: Telephone Liaison Officer` |
-| Member created holding a home group or position | `unity/member_created` | One entry per role, e.g. `Assigned: Sunday Steps` |
+| GSR taken, given up, or carried to a new home group | `unity/member_changing` | The group the role is held for, e.g. `Assigned: Thursday Big Book` |
+| Member created holding any of those roles | `unity/member_created` | One entry per role, e.g. `Assigned: Sunday Steps` |
 | Group contacts changed | `unity/group_changing` | Individual contact field updates |
 | Meeting contacts changed | `unity/group_changing` | Individual contact field updates |
 | Member permanently deleted | `before_delete_post` | Batch delete of all personal data fields, plus any role the member still held |
 | Member moved to trash | `wp_trash_post` | Batch delete of all personal data fields, plus any role the member still held |
+
+GSR is compared as *the group the member is GSR for*, not as the flag on its own. That folds three transitions into one entry — taking the role, giving it up, and carrying it to a new home group. The last of those changes no flag, so comparing `isGSR()` alone would log nothing and leave the trail showing a member who moved group while apparently still GSR of the old one. A GSR flag with no home group behind it is recorded as `(no home group)` rather than dropped.
 
 ### Data Obscuring
 

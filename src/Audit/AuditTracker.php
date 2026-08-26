@@ -34,13 +34,13 @@ use function is_admin;
  * actually see the unobscured values are tracked, since users
  * without the capability only ever see masked placeholders.
  *
- * Two service roles are tracked alongside the personal data: the member's
- * home group and their intergroup position. Neither is personal data — both
- * name a public entity rather than the member — so their entries record the
- * group or position by name, rather than the opaque "Value changed" used for
- * the fields that are. Assignments are logged at creation, changes and
- * removals as they happen, and the standing role once more when the member
- * is deleted.
+ * Three service roles are tracked alongside the personal data: the member's
+ * home group, their intergroup position, and whether they are their home
+ * group's GSR. None is personal data — each names a public entity rather
+ * than the member — so their entries record the group or position by name,
+ * rather than the opaque "Value changed" used for the fields that are.
+ * Assignments are logged at creation, changes and removals as they happen,
+ * and the standing roles once more when the member is deleted.
  *
  * Listens to:
  *   - current_screen             (fired when admin screen loads - used for admin form view tracking)
@@ -301,7 +301,7 @@ class AuditTracker
             'Member created'
         );
 
-        [$homeGroup, $position] = $this->serviceRoleNames($member);
+        [$homeGroup, $position, $gsr] = $this->serviceRoleNames($member);
 
         if ($homeGroup !== '') {
             $this->logger->log(
@@ -320,6 +320,16 @@ class AuditTracker
                 $memberId,
                 PersonalDataFields::INTERGROUP_POSITION,
                 'Assigned: ' . $position
+            );
+        }
+
+        if ($gsr !== '') {
+            $this->logger->log(
+                AuditLogger::ACTION_CREATE,
+                AuditLogger::ENTITY_MEMBER,
+                $memberId,
+                PersonalDataFields::GSR,
+                'Assigned: ' . $gsr
             );
         }
     }
@@ -424,6 +434,24 @@ class AuditTracker
                 )
             );
         }
+
+        // GSR is compared as the group the member is GSR *for*, which folds
+        // three transitions into one test: taking the role, giving it up, and
+        // carrying it to a new home group. That last one changes no flag, so
+        // comparing isGSR() alone would miss it and leave the log showing a
+        // member moving group while apparently still GSR of the old one.
+        $originalGsr = $this->gsrRole($originalMember);
+        $updatedGsr = $this->gsrRole($updatedMember);
+
+        if ($originalGsr !== $updatedGsr) {
+            $this->logger->log(
+                AuditLogger::ACTION_UPDATE,
+                AuditLogger::ENTITY_MEMBER,
+                $memberId,
+                PersonalDataFields::GSR,
+                self::assignmentDetail($originalGsr, $updatedGsr)
+            );
+        }
     }
 
     /**
@@ -458,18 +486,42 @@ class AuditTracker
     }
 
     /**
-     * Resolve both of a member's service roles to display names.
+     * Resolve each of a member's service roles to a display name.
      *
      * @param Member $member The member to read
-     * @return array{0: string, 1: string} Home group name then position name,
-     *                                     either being '' when unfilled
+     * @return array{0: string, 1: string, 2: string} Home group, position and
+     *                                                GSR group, each '' when
+     *                                                the role is unfilled
      */
     private function serviceRoleNames(Member $member): array
     {
         return [
             $this->groupName($member->getHomeGroup()),
             $this->positionName($member->getIntergroupPosition()),
+            $this->gsrRole($member),
         ];
+    }
+
+    /**
+     * The group a member is GSR for, or '' when they are not a GSR.
+     *
+     * A GSR flag with no home group behind it is meaningless — the role is
+     * held on behalf of that group — but setting or clearing it is still a
+     * change, and dropping it silently is the gap this tracking exists to
+     * close. Such entries name the absence instead.
+     *
+     * @param Member $member The member to read
+     * @return string The group name, or '' when the member is not a GSR
+     */
+    private function gsrRole(Member $member): string
+    {
+        if (!$member->isGSR()) {
+            return '';
+        }
+
+        $group = $this->groupName($member->getHomeGroup());
+
+        return $group !== '' ? $group : '(no home group)';
     }
 
     /**
@@ -774,7 +826,7 @@ class AuditTracker
             return;
         }
 
-        [$homeGroup, $position] = $this->serviceRoleNames($member);
+        [$homeGroup, $position, $gsr] = $this->serviceRoleNames($member);
 
         if ($homeGroup !== '') {
             $this->logger->log(
@@ -793,6 +845,16 @@ class AuditTracker
                 $postId,
                 PersonalDataFields::INTERGROUP_POSITION,
                 'Removed: ' . $position
+            );
+        }
+
+        if ($gsr !== '') {
+            $this->logger->log(
+                AuditLogger::ACTION_DELETE,
+                AuditLogger::ENTITY_MEMBER,
+                $postId,
+                PersonalDataFields::GSR,
+                'Removed: ' . $gsr
             );
         }
     }

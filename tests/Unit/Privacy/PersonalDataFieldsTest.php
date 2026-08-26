@@ -50,6 +50,7 @@ class PersonalDataFieldsTest extends TestCase
             'Intergroup Position',
             PersonalDataFields::getLabel(PersonalDataFields::INTERGROUP_POSITION)
         );
+        $this->assertSame('GSR', PersonalDataFields::getLabel(PersonalDataFields::GSR));
     }
 
     /**
@@ -62,6 +63,9 @@ class PersonalDataFieldsTest extends TestCase
         // them — neither of which applies to a public service role.
         $this->assertNotContains(PersonalDataFields::HOME_GROUP, PersonalDataFields::ALL_FIELDS);
         $this->assertNotContains(PersonalDataFields::INTERGROUP_POSITION, PersonalDataFields::ALL_FIELDS);
+        $this->assertNotContains(PersonalDataFields::GSR, PersonalDataFields::ALL_FIELDS);
+        $this->assertNotContains(PersonalDataFields::GSR, PersonalDataFields::CONFIG_KEY_MAP);
+        $this->assertNotContains(PersonalDataFields::GSR, PersonalDataFields::CONFIG_ACF_KEY_MAP);
         $this->assertNotContains(PersonalDataFields::HOME_GROUP, PersonalDataFields::CONFIG_KEY_MAP);
         $this->assertNotContains(PersonalDataFields::INTERGROUP_POSITION, PersonalDataFields::CONFIG_KEY_MAP);
         $this->assertNotContains(PersonalDataFields::HOME_GROUP, PersonalDataFields::CONFIG_ACF_KEY_MAP);
