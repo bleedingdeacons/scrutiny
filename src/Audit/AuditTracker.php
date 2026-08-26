@@ -309,7 +309,7 @@ class AuditTracker
                 AuditLogger::ENTITY_MEMBER,
                 $memberId,
                 PersonalDataFields::HOME_GROUP,
-                'Assigned: ' . $homeGroup
+                self::assignmentDetail('', $homeGroup)
             );
         }
 
@@ -319,7 +319,7 @@ class AuditTracker
                 AuditLogger::ENTITY_MEMBER,
                 $memberId,
                 PersonalDataFields::INTERGROUP_POSITION,
-                'Assigned: ' . $position
+                self::assignmentDetail('', $position)
             );
         }
 
@@ -329,7 +329,7 @@ class AuditTracker
                 AuditLogger::ENTITY_MEMBER,
                 $memberId,
                 PersonalDataFields::GSR,
-                'Assigned: ' . $gsr
+                self::assignmentDetail('', $gsr)
             );
         }
     }
@@ -457,16 +457,18 @@ class AuditTracker
     /**
      * Phrase a service-role transition from the names either side of it.
      *
-     * Kept terse: the detail sits in a narrow admin column beside an action
-     * and a field name that already say what kind of event this is, so the
-     * words those two columns would repeat are left out. A move reads
-     * `Old → New`; the one-sided cases keep a verb only because
-     * `→ New` alone is easy to misread as a truncated cell.
+     * The detail sits in a narrow admin column beside an action and a field
+     * name that already say what kind of event this is, so it carries only
+     * what those cannot: the arrow runs from what the role was to what it
+     * became, and the side that does not exist is simply absent.
      *
-     * An empty name means "no role": empty on the left is an assignment,
-     * empty on the right a removal, and two names a move between the two.
-     * Both empty cannot reach here — the caller only logs when the IDs
-     * differ, and only an unfilled role resolves to an empty name.
+     *     → New        taken
+     *     Old → New    moved
+     *     Old →        given up
+     *
+     * An empty name means "no role". Both empty cannot reach here — every
+     * caller logs only once the two sides differ, and only an unfilled role
+     * resolves to an empty name.
      *
      * @param string $from The role held before the change ('' when none)
      * @param string $to   The role held after the change ('' when none)
@@ -475,11 +477,11 @@ class AuditTracker
     private static function assignmentDetail(string $from, string $to): string
     {
         if ($from === '') {
-            return 'Assigned: ' . $to;
+            return '→ ' . $to;
         }
 
         if ($to === '') {
-            return 'Removed: ' . $from;
+            return $from . ' →';
         }
 
         return $from . ' → ' . $to;
@@ -521,7 +523,7 @@ class AuditTracker
 
         $group = $this->groupName($member->getHomeGroup());
 
-        return $group !== '' ? $group : '(no home group)';
+        return $group !== '' ? $group : '(no group)';
     }
 
     /**
@@ -834,7 +836,7 @@ class AuditTracker
                 AuditLogger::ENTITY_MEMBER,
                 $postId,
                 PersonalDataFields::HOME_GROUP,
-                'Removed: ' . $homeGroup
+                self::assignmentDetail($homeGroup, '')
             );
         }
 
@@ -844,7 +846,7 @@ class AuditTracker
                 AuditLogger::ENTITY_MEMBER,
                 $postId,
                 PersonalDataFields::INTERGROUP_POSITION,
-                'Removed: ' . $position
+                self::assignmentDetail($position, '')
             );
         }
 
@@ -854,7 +856,7 @@ class AuditTracker
                 AuditLogger::ENTITY_MEMBER,
                 $postId,
                 PersonalDataFields::GSR,
-                'Removed: ' . $gsr
+                self::assignmentDetail($gsr, '')
             );
         }
     }
