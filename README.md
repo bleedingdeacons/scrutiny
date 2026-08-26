@@ -112,7 +112,7 @@ Every access or change to a personal data field is recorded in a dedicated datab
 
 **No raw personal data values are ever stored in the log.**
 
-Four values *are* recorded outright, because none of them is personal data — each names a service status or a public entity rather than the member:
+Many fields *are* recorded outright, because they are not personal data — each names a service status, a public entity or a setting rather than the member. [Every tracked member field](#every-tracked-member-field) below lists them one by one; the service roles are the ones worth calling out here:
 
 * the responder-certification stage (e.g. `Changed to Certified`),
 * the member's home group (e.g. `Assigned to Thursday Big Book`),
