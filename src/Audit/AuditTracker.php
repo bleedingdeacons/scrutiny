@@ -44,7 +44,7 @@ use function is_admin;
  *
  * The remaining tracked member fields — position rotation, the two
  * availability flags, the two visibility toggles, area, accepts, the profile
- * and the meeting PO reference — are logged on change only. The first four
+ * and the meeting PO reference — are logged on change only. The first five
  * name their new value, being service or privacy settings that describe
  * nobody; the last four record only that they changed.
  *
