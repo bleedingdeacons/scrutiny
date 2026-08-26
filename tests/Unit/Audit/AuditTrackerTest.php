@@ -8,8 +8,12 @@ use PHPUnit\Framework\TestCase;
 use Scrutiny\Audit\AuditTracker;
 use Scrutiny\Audit\Interfaces\AuditLogger;
 use Scrutiny\Privacy\PersonalDataFields;
+use Unity\Groups\Interfaces\Group;
+use Unity\Groups\Interfaces\GroupRepository;
 use Unity\Members\Interfaces\Member;
 use Unity\Members\ResponderCertification;
+use Unity\Positions\Interfaces\Position;
+use Unity\Positions\Interfaces\PositionRepository;
 use Mockery;
 use Mockery\Adapter\Phpunit\MockeryPHPUnitIntegration;
 
@@ -31,16 +35,77 @@ class AuditTrackerTest extends TestCase
 
     /**
      * Create an AuditTracker without WP hooks by using reflection
+     *
+     * The repositories are only consulted once a service role actually
+     * changes, so cases that leave home group and position alone can take
+     * the bare mocks and never touch them.
      */
-    private function createTracker(AuditLogger $logger): AuditTracker
-    {
+    private function createTracker(
+        AuditLogger $logger,
+        ?GroupRepository $groupRepository = null,
+        ?PositionRepository $positionRepository = null
+    ): AuditTracker {
         $reflection = new \ReflectionClass(AuditTracker::class);
         $instance = $reflection->newInstanceWithoutConstructor();
 
-        $prop = $reflection->getProperty('logger');
-        $prop->setValue($instance, $logger);
+        $reflection->getProperty('logger')->setValue($instance, $logger);
+        $reflection->getProperty('groupRepository')
+            ->setValue($instance, $groupRepository ?? Mockery::mock(GroupRepository::class));
+        $reflection->getProperty('positionRepository')
+            ->setValue($instance, $positionRepository ?? Mockery::mock(PositionRepository::class));
 
         return $instance;
+    }
+
+    /**
+     * A group repository resolving the given IDs to the given titles.
+     *
+     * Any ID outside the map resolves to null, standing in for a group that
+     * has since been deleted.
+     *
+     * @param array<int, string> $titles Map of group ID to group title
+     */
+    private function groupRepository(array $titles): GroupRepository
+    {
+        $repository = Mockery::mock(GroupRepository::class);
+        $repository->shouldReceive('findById')->andReturnUsing(
+            static function (int $id) use ($titles): ?Group {
+                if (!isset($titles[$id])) {
+                    return null;
+                }
+
+                $group = Mockery::mock(Group::class);
+                $group->shouldReceive('getTitle')->andReturn($titles[$id]);
+
+                return $group;
+            }
+        );
+
+        return $repository;
+    }
+
+    /**
+     * A position repository resolving the given IDs to the given long names.
+     *
+     * @param array<int, string> $names Map of position ID to long name
+     */
+    private function positionRepository(array $names): PositionRepository
+    {
+        $repository = Mockery::mock(PositionRepository::class);
+        $repository->shouldReceive('findById')->andReturnUsing(
+            static function (int $id) use ($names): ?Position {
+                if (!isset($names[$id])) {
+                    return null;
+                }
+
+                $position = Mockery::mock(Position::class);
+                $position->shouldReceive('getLongName')->andReturn($names[$id]);
+
+                return $position;
+            }
+        );
+
+        return $repository;
     }
 
     private function createMember(array $overrides = []): Member
@@ -50,6 +115,8 @@ class AuditTrackerTest extends TestCase
             'getPersonalEmail' => 'john@example.com',
             'getMobileNumber' => '07700 900123',
             'getResponderCertification' => ResponderCertification::None,
+            'getHomeGroup' => 0,
+            'getIntergroupPosition' => 0,
             'isGdprAccepted' => false,
             'getGdprAcceptedAt' => '',
             'getGdprAcceptanceVersion' => '',
@@ -421,6 +488,8 @@ class AuditTrackerTest extends TestCase
     /** @test */
     public function it_does_not_emit_per_field_log_calls_when_a_member_is_deleted(): void
     {
+        // The member here holds neither a home group nor a position, so the
+        // batch entry is the whole of it.
         $logger = Mockery::mock(AuditLogger::class);
         $logger->shouldReceive('logBatch')->once();
         $logger->shouldNotReceive('log');
@@ -428,5 +497,323 @@ class AuditTrackerTest extends TestCase
         $tracker = $this->createTracker($logger);
 
         $tracker->onMemberDeleted(42, $this->createMember());
+    }
+
+    // ─── Home group ────────────────────────────────────────────────────
+
+    /** @test */
+    public function it_names_the_group_when_a_home_group_is_assigned(): void
+    {
+        // Home group is a service role, not personal data, so the entry says
+        // which group — not merely that something changed.
+        $logger = Mockery::mock(AuditLogger::class);
+        $logger->shouldReceive('log')
+            ->once()
+            ->with(
+                AuditLogger::ACTION_UPDATE,
+                AuditLogger::ENTITY_MEMBER,
+                42,
+                PersonalDataFields::HOME_GROUP,
+                'Assigned: Thursday Big Book'
+            );
+
+        $tracker = $this->createTracker(
+            $logger,
+            $this->groupRepository([7 => 'Thursday Big Book'])
+        );
+
+        $original = $this->createMember(['getHomeGroup' => 0]);
+        $updated = $this->createMember(['getHomeGroup' => 7]);
+
+        $tracker->onMemberChanged($updated, $original);
+    }
+
+    /** @test */
+    public function it_names_the_group_left_behind_when_a_home_group_is_cleared(): void
+    {
+        $logger = Mockery::mock(AuditLogger::class);
+        $logger->shouldReceive('log')
+            ->once()
+            ->with(
+                AuditLogger::ACTION_UPDATE,
+                AuditLogger::ENTITY_MEMBER,
+                42,
+                PersonalDataFields::HOME_GROUP,
+                'Removed: Thursday Big Book'
+            );
+
+        $tracker = $this->createTracker(
+            $logger,
+            $this->groupRepository([7 => 'Thursday Big Book'])
+        );
+
+        $original = $this->createMember(['getHomeGroup' => 7]);
+        $updated = $this->createMember(['getHomeGroup' => 0]);
+
+        $tracker->onMemberChanged($updated, $original);
+    }
+
+    /** @test */
+    public function it_names_both_groups_when_a_home_group_moves(): void
+    {
+        $logger = Mockery::mock(AuditLogger::class);
+        $logger->shouldReceive('log')
+            ->once()
+            ->with(
+                AuditLogger::ACTION_UPDATE,
+                AuditLogger::ENTITY_MEMBER,
+                42,
+                PersonalDataFields::HOME_GROUP,
+                'Thursday Big Book → Sunday Steps'
+            );
+
+        $tracker = $this->createTracker(
+            $logger,
+            $this->groupRepository([7 => 'Thursday Big Book', 8 => 'Sunday Steps'])
+        );
+
+        $original = $this->createMember(['getHomeGroup' => 7]);
+        $updated = $this->createMember(['getHomeGroup' => 8]);
+
+        $tracker->onMemberChanged($updated, $original);
+    }
+
+    /** @test */
+    public function it_falls_back_to_the_id_when_a_group_no_longer_resolves(): void
+    {
+        // A group deleted since the assignment still has to be traceable —
+        // an entry reading "Removed from " and nothing else would not be.
+        $logger = Mockery::mock(AuditLogger::class);
+        $logger->shouldReceive('log')
+            ->once()
+            ->with(
+                AuditLogger::ACTION_UPDATE,
+                AuditLogger::ENTITY_MEMBER,
+                42,
+                PersonalDataFields::HOME_GROUP,
+                'Removed: #7'
+            );
+
+        $tracker = $this->createTracker($logger, $this->groupRepository([]));
+
+        $original = $this->createMember(['getHomeGroup' => 7]);
+        $updated = $this->createMember(['getHomeGroup' => 0]);
+
+        $tracker->onMemberChanged($updated, $original);
+    }
+
+    /** @test */
+    public function it_does_not_log_a_home_group_that_did_not_change(): void
+    {
+        $logger = Mockery::mock(AuditLogger::class);
+        $logger->shouldNotReceive('log');
+
+        $tracker = $this->createTracker($logger);
+
+        $original = $this->createMember(['getHomeGroup' => 7]);
+        $updated = $this->createMember(['getHomeGroup' => 7]);
+
+        $tracker->onMemberChanged($updated, $original);
+
+        self::assertTrue(true, 'onMemberChanged completed without logging');
+    }
+
+    // ─── Intergroup position ───────────────────────────────────────────
+
+    /** @test */
+    public function it_names_the_position_when_an_intergroup_position_is_assigned(): void
+    {
+        $logger = Mockery::mock(AuditLogger::class);
+        $logger->shouldReceive('log')
+            ->once()
+            ->with(
+                AuditLogger::ACTION_UPDATE,
+                AuditLogger::ENTITY_MEMBER,
+                42,
+                PersonalDataFields::INTERGROUP_POSITION,
+                'Assigned: Telephone Liaison Officer'
+            );
+
+        $tracker = $this->createTracker(
+            $logger,
+            null,
+            $this->positionRepository([3 => 'Telephone Liaison Officer'])
+        );
+
+        $original = $this->createMember(['getIntergroupPosition' => 0]);
+        $updated = $this->createMember(['getIntergroupPosition' => 3]);
+
+        $tracker->onMemberChanged($updated, $original);
+    }
+
+    /** @test */
+    public function it_names_the_position_vacated_when_an_intergroup_position_is_removed(): void
+    {
+        $logger = Mockery::mock(AuditLogger::class);
+        $logger->shouldReceive('log')
+            ->once()
+            ->with(
+                AuditLogger::ACTION_UPDATE,
+                AuditLogger::ENTITY_MEMBER,
+                42,
+                PersonalDataFields::INTERGROUP_POSITION,
+                'Removed: Telephone Liaison Officer'
+            );
+
+        $tracker = $this->createTracker(
+            $logger,
+            null,
+            $this->positionRepository([3 => 'Telephone Liaison Officer'])
+        );
+
+        $original = $this->createMember(['getIntergroupPosition' => 3]);
+        $updated = $this->createMember(['getIntergroupPosition' => 0]);
+
+        $tracker->onMemberChanged($updated, $original);
+    }
+
+    /** @test */
+    public function it_logs_a_home_group_and_a_position_that_change_together(): void
+    {
+        $logger = Mockery::mock(AuditLogger::class);
+        $logger->shouldReceive('log')
+            ->once()
+            ->with(
+                AuditLogger::ACTION_UPDATE,
+                AuditLogger::ENTITY_MEMBER,
+                42,
+                PersonalDataFields::HOME_GROUP,
+                'Assigned: Thursday Big Book'
+            );
+        $logger->shouldReceive('log')
+            ->once()
+            ->with(
+                AuditLogger::ACTION_UPDATE,
+                AuditLogger::ENTITY_MEMBER,
+                42,
+                PersonalDataFields::INTERGROUP_POSITION,
+                'Assigned: Telephone Liaison Officer'
+            );
+
+        $tracker = $this->createTracker(
+            $logger,
+            $this->groupRepository([7 => 'Thursday Big Book']),
+            $this->positionRepository([3 => 'Telephone Liaison Officer'])
+        );
+
+        $original = $this->createMember(['getHomeGroup' => 0, 'getIntergroupPosition' => 0]);
+        $updated = $this->createMember(['getHomeGroup' => 7, 'getIntergroupPosition' => 3]);
+
+        $tracker->onMemberChanged($updated, $original);
+    }
+
+    // ─── Service roles at creation and deletion ────────────────────────
+
+    /** @test */
+    public function it_records_the_service_roles_a_member_is_created_holding(): void
+    {
+        $logger = Mockery::mock(AuditLogger::class);
+        $logger->shouldReceive('log')
+            ->once()
+            ->with(
+                AuditLogger::ACTION_CREATE,
+                AuditLogger::ENTITY_MEMBER,
+                42,
+                PersonalDataFields::ALL_FIELDS_SENTINEL,
+                'Member created'
+            );
+        $logger->shouldReceive('log')
+            ->once()
+            ->with(
+                AuditLogger::ACTION_CREATE,
+                AuditLogger::ENTITY_MEMBER,
+                42,
+                PersonalDataFields::HOME_GROUP,
+                'Assigned: Thursday Big Book'
+            );
+        $logger->shouldReceive('log')
+            ->once()
+            ->with(
+                AuditLogger::ACTION_CREATE,
+                AuditLogger::ENTITY_MEMBER,
+                42,
+                PersonalDataFields::INTERGROUP_POSITION,
+                'Assigned: Telephone Liaison Officer'
+            );
+
+        $tracker = $this->createTracker(
+            $logger,
+            $this->groupRepository([7 => 'Thursday Big Book']),
+            $this->positionRepository([3 => 'Telephone Liaison Officer'])
+        );
+
+        $tracker->onMemberCreated($this->createMember([
+            'getHomeGroup' => 7,
+            'getIntergroupPosition' => 3,
+        ]));
+    }
+
+    /** @test */
+    public function it_records_the_service_roles_a_deleted_member_still_held(): void
+    {
+        // Phrased exactly as an ordinary removal: the entry's own action
+        // column is what marks it as a deletion.
+        $logger = Mockery::mock(AuditLogger::class);
+        $logger->shouldReceive('logBatch')->once();
+        $logger->shouldReceive('log')
+            ->once()
+            ->with(
+                AuditLogger::ACTION_DELETE,
+                AuditLogger::ENTITY_MEMBER,
+                42,
+                PersonalDataFields::HOME_GROUP,
+                'Removed: Thursday Big Book'
+            );
+        $logger->shouldReceive('log')
+            ->once()
+            ->with(
+                AuditLogger::ACTION_DELETE,
+                AuditLogger::ENTITY_MEMBER,
+                42,
+                PersonalDataFields::INTERGROUP_POSITION,
+                'Removed: Telephone Liaison Officer'
+            );
+
+        $tracker = $this->createTracker(
+            $logger,
+            $this->groupRepository([7 => 'Thursday Big Book']),
+            $this->positionRepository([3 => 'Telephone Liaison Officer'])
+        );
+
+        $tracker->onMemberDeleted(42, $this->createMember([
+            'getHomeGroup' => 7,
+            'getIntergroupPosition' => 3,
+        ]));
+    }
+
+    /** @test */
+    public function it_truncates_a_name_too_long_for_the_detail_column(): void
+    {
+        // The detail column is VARCHAR(255) and a move holds two names at
+        // once, so each is capped well inside it.
+        $longName = str_repeat('A', 150);
+
+        $logger = Mockery::mock(AuditLogger::class);
+        $logger->shouldReceive('log')
+            ->once()
+            ->with(
+                AuditLogger::ACTION_UPDATE,
+                AuditLogger::ENTITY_MEMBER,
+                42,
+                PersonalDataFields::HOME_GROUP,
+                'Assigned: ' . str_repeat('A', 99) . '…'
+            );
+
+        $tracker = $this->createTracker($logger, $this->groupRepository([7 => $longName]));
+
+        $original = $this->createMember(['getHomeGroup' => 0]);
+        $updated = $this->createMember(['getHomeGroup' => 7]);
+
+        $tracker->onMemberChanged($updated, $original);
     }
 }

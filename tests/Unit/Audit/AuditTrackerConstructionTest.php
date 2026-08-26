@@ -9,7 +9,9 @@ use Scrutiny\Audit\AuditTracker;
 use Scrutiny\Audit\Interfaces\AuditLogger;
 use Scrutiny\Privacy\PersonalDataPolicy;
 use Unity\Core\Interfaces\Configuration;
+use Unity\Groups\Interfaces\GroupRepository;
 use Unity\Members\Interfaces\Member;
+use Unity\Positions\Interfaces\PositionRepository;
 
 /**
  * Covers the AuditTracker constructor.
@@ -56,6 +58,8 @@ class AuditTrackerConstructionTest extends TestCase
             $configuration,
             $this->createMock(AuditLogger::class),
             new PersonalDataPolicy(),
+            $this->createMock(GroupRepository::class),
+            $this->createMock(PositionRepository::class),
         );
 
         $this->assertInstanceOf(AuditTracker::class, $tracker);

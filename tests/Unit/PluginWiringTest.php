@@ -26,7 +26,9 @@ use Scrutiny\Privacy\ResponderCertificationGuard;
 use Scrutiny\Tests\TestCase;
 use Unity\Core\Interfaces\Configuration;
 use Unity\Core\Interfaces\Container;
+use Unity\Groups\Interfaces\GroupRepository;
 use Unity\Members\Interfaces\MemberRepository;
+use Unity\Positions\Interfaces\PositionRepository;
 use Unity\Testing\Doubles\FakeContainer;
 
 /**
@@ -63,8 +65,12 @@ class PluginWiringTest extends TestCase
         // through the bootstrap's add_action recorder.
 
         $container = new FakeContainer([
-            Configuration::class    => $this->configuration(),
-            MemberRepository::class => $this->createMock(MemberRepository::class),
+            Configuration::class      => $this->configuration(),
+            MemberRepository::class   => $this->createMock(MemberRepository::class),
+            // AuditTracker resolves these to name home groups and positions
+            // in its entries.
+            GroupRepository::class    => $this->createMock(GroupRepository::class),
+            PositionRepository::class => $this->createMock(PositionRepository::class),
         ]);
 
         // registerServices() is private static; invoke it directly.

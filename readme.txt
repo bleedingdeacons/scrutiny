@@ -39,7 +39,7 @@ Every access or change to a personal data field is recorded in a dedicated datab
 
 **No raw personal data values are ever stored in the log.**
 
-The one value that *is* recorded is the responder-certification stage (e.g. `Changed to Certified`) — a service status rather than personal data, and the whole point of auditing that field.
+Three values *are* recorded outright, none of them personal data — each names a service status or a public entity rather than the member: the responder-certification stage (e.g. `Changed to Certified`), the member's home group (e.g. `Assigned: Thursday Big Book`) and their intergroup position (e.g. `Removed: Telephone Liaison Officer`). Knowing which stage, group or position is the whole point of auditing these fields. Details are kept terse because the action and field columns beside them already say what kind of event it is: a move reads `Old → New`. A group or position that no longer resolves is recorded as `#<id>` so the entry stays traceable.
 
 #### Events tracked automatically
 
@@ -49,10 +49,13 @@ The one value that *is* recorded is the responder-certification stage (e.g. `Cha
 | Personal data ACF field loaded on frontend | `acf/load_value` | Per-field view (deduplicated per request) |
 | Member fields changed | `unity/member_changing` | Individual field updates |
 | Responder certification changed | `unity/member_changing` | The new stage by name, e.g. `Changed to Certified` |
+| Home group assigned, changed or removed | `unity/member_changing` | The group by name, e.g. `Thursday Big Book → Sunday Steps` |
+| Intergroup position assigned, changed or removed | `unity/member_changing` | The position by name, e.g. `Assigned: Telephone Liaison Officer` |
+| Member created holding a home group or position | `unity/member_created` | One entry per role, e.g. `Assigned: Sunday Steps` |
 | Group contacts changed | `unity/group_changing` | Individual contact field updates |
 | Meeting contacts changed | `unity/group_changing` | Individual contact field updates |
-| Member permanently deleted | `before_delete_post` | Batch delete of all personal data fields |
-| Member moved to trash | `wp_trash_post` | Batch delete of all personal data fields |
+| Member permanently deleted | `before_delete_post` | Batch delete of all personal data fields, plus any role the member still held |
+| Member moved to trash | `wp_trash_post` | Batch delete of all personal data fields, plus any role the member still held |
 
 = Data Obscuring =
 
