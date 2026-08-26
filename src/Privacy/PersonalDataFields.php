@@ -59,6 +59,41 @@ final class PersonalDataFields
     public const RESPONDER_CERTIFICATION = 'responder-certification';
 
     /**
+     * Logical field name: the member's home group
+     *
+     * Deliberately not personal data, on the same reasoning as
+     * {@see self::RESPONDER_CERTIFICATION}: a group is a public entity, and
+     * which one a member calls home is service information rather than
+     * something that identifies them. It is therefore absent from
+     * {@see self::ALL_FIELDS}, {@see self::CONFIG_KEY_MAP} and
+     * {@see self::CONFIG_ACF_KEY_MAP}, so it is never obscured and never
+     * generates view entries. Its audit entries name the group outright — an
+     * entry saying only that a member "was assigned to a group" would answer
+     * nothing an auditor asked.
+     */
+    public const HOME_GROUP = 'home-group';
+
+    /**
+     * Logical field name: whether the member is their home group's GSR
+     *
+     * Not personal data, on the same reasoning as {@see self::HOME_GROUP} —
+     * being a General Service Representative is a service role, and the role
+     * belongs to a public group. Its entries name that group, since "GSR" on
+     * its own does not say what the member is GSR for.
+     */
+    public const GSR = 'gsr';
+
+    /**
+     * Logical field name: the member's intergroup service position
+     *
+     * Not personal data, for the same reason as {@see self::HOME_GROUP}: an
+     * intergroup position is a public service role. Its entries likewise name
+     * the position outright, so the log answers who took a position, who
+     * vacated it, and when.
+     */
+    public const INTERGROUP_POSITION = 'intergroup-position';
+
+    /**
      * Sentinel field name used when an audit entry refers to the entire
      * record rather than a single field — for example, the one-shot
      * "Member created" entry written when a new member is inserted.
@@ -218,6 +253,9 @@ final class PersonalDataFields
         self::PERSONAL_EMAIL => 'Personal Email',
         self::MOBILE_NUMBER  => 'Mobile Number',
         self::RESPONDER_CERTIFICATION => 'Responder Certification',
+        self::HOME_GROUP => 'Home Group',
+        self::INTERGROUP_POSITION => 'Intergroup Position',
+        self::GSR => 'GSR',
         self::ALL_FIELDS_SENTINEL => 'All fields',
         self::GROUP_CONTACT_NAME   => 'Group Contact Name',
         self::GROUP_CONTACT_EMAIL  => 'Group Contact Email',

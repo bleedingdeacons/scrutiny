@@ -15,7 +15,9 @@ use Scrutiny\Privacy\PersonalDataPolicy;
 
 use Unity\Core\Interfaces\Configuration;
 use Unity\Groups\Interfaces\Group;
+use Unity\Groups\Interfaces\GroupRepository;
 use Unity\Members\Interfaces\Member;
+use Unity\Positions\Interfaces\PositionRepository;
 use function add_action;
 use function add_filter;
 use function get_post_type;
@@ -31,6 +33,14 @@ use function is_admin;
  * `scrutiny_view_personal_data` capability — only users who can
  * actually see the unobscured values are tracked, since users
  * without the capability only ever see masked placeholders.
+ *
+ * Three service roles are tracked alongside the personal data: the member's
+ * home group, their intergroup position, and whether they are their home
+ * group's GSR. None is personal data — each names a public entity rather
+ * than the member — so their entries record the group or position by name,
+ * rather than the opaque "Value changed" used for the fields that are.
+ * Assignments are logged at creation, changes and removals as they happen,
+ * and the standing roles once more when the member is deleted.
  *
  * Listens to:
  *   - current_screen             (fired when admin screen loads - used for admin form view tracking)
@@ -50,8 +60,19 @@ use function is_admin;
  */
 class AuditTracker
 {
+    /**
+     * Longest group or position name an audit detail will carry.
+     *
+     * The detail column is VARCHAR(255), and the longest string built here is
+     * a move — two names either side of an arrow — so capping each name
+     * at 100 keeps every entry comfortably inside it.
+     */
+    private const MAX_NAME_LENGTH = 100;
+
     private AuditLogger $logger;
     private PersonalDataPolicy $policy;
+    private GroupRepository $groupRepository;
+    private PositionRepository $positionRepository;
 
     /**
      * Track which member fields have been logged in this request to prevent duplicates
@@ -71,10 +92,17 @@ class AuditTracker
      */
     private readonly array $acfFieldMap;
 
-    public function __construct(Configuration $configuration, AuditLogger $logger, PersonalDataPolicy $policy)
-    {
+    public function __construct(
+        Configuration $configuration,
+        AuditLogger $logger,
+        PersonalDataPolicy $policy,
+        GroupRepository $groupRepository,
+        PositionRepository $positionRepository
+    ) {
         $this->logger = $logger;
         $this->policy = $policy;
+        $this->groupRepository = $groupRepository;
+        $this->positionRepository = $positionRepository;
 
         // getConfig() returns null when no Member config is registered; an
         // empty map is the same thing to every reader below.
@@ -252,18 +280,58 @@ class AuditTracker
      * field is, by definition, being written, so per-field rows would just
      * spam the audit log with no extra information.
      *
+     * A member created straight into a home group or an intergroup position
+     * gets one further entry per role. That is not the spam the sentinel
+     * guards against: it is at most two rows, written only when the role was
+     * actually filled, and without them the log would show a position being
+     * vacated by someone it never recorded taking it.
+     *
      * @param Member $member The freshly created member
      * @return void
      */
     public function onMemberCreated(Member $member): void
     {
+        $memberId = $member->getId();
+
         $this->logger->log(
             AuditLogger::ACTION_CREATE,
             AuditLogger::ENTITY_MEMBER,
-            $member->getId(),
+            $memberId,
             PersonalDataFields::ALL_FIELDS_SENTINEL,
             'Member created'
         );
+
+        [$homeGroup, $position, $gsr] = $this->serviceRoleNames($member);
+
+        if ($homeGroup !== '') {
+            $this->logger->log(
+                AuditLogger::ACTION_CREATE,
+                AuditLogger::ENTITY_MEMBER,
+                $memberId,
+                PersonalDataFields::HOME_GROUP,
+                self::assignmentDetail('', $homeGroup)
+            );
+        }
+
+        if ($position !== '') {
+            $this->logger->log(
+                AuditLogger::ACTION_CREATE,
+                AuditLogger::ENTITY_MEMBER,
+                $memberId,
+                PersonalDataFields::INTERGROUP_POSITION,
+                self::assignmentDetail('', $position)
+            );
+        }
+
+        if ($gsr !== '') {
+            $this->logger->log(
+                AuditLogger::ACTION_CREATE,
+                AuditLogger::ENTITY_MEMBER,
+                $memberId,
+                PersonalDataFields::GSR,
+                self::assignmentDetail('', $gsr)
+            );
+        }
     }
 
     /**
@@ -318,7 +386,207 @@ class AuditTracker
             );
         }
 
+        $this->logServiceRoleChanges($memberId, $originalMember, $updatedMember);
+
         $this->logGdprChanges($memberId, $originalMember, $updatedMember);
+    }
+
+    /**
+     * Log assignment, reassignment and removal of a member's service roles.
+     *
+     * Home group and intergroup position are both public service roles rather
+     * than personal data, so — like the responder-certification stage — these
+     * entries name the group or position outright. An audit log recording only
+     * that "a position changed" answers nothing an auditor would ask of it.
+     *
+     * One entry per role, written only when that role's ID actually changed,
+     * so an edit touching neither is silent.
+     *
+     * @param int    $memberId       The member post ID
+     * @param Member $originalMember The member before changes
+     * @param Member $updatedMember  The member after changes
+     * @return void
+     */
+    private function logServiceRoleChanges(int $memberId, Member $originalMember, Member $updatedMember): void
+    {
+        if ($originalMember->getHomeGroup() !== $updatedMember->getHomeGroup()) {
+            $this->logger->log(
+                AuditLogger::ACTION_UPDATE,
+                AuditLogger::ENTITY_MEMBER,
+                $memberId,
+                PersonalDataFields::HOME_GROUP,
+                self::assignmentDetail(
+                    $this->groupName($originalMember->getHomeGroup()),
+                    $this->groupName($updatedMember->getHomeGroup())
+                )
+            );
+        }
+
+        if ($originalMember->getIntergroupPosition() !== $updatedMember->getIntergroupPosition()) {
+            $this->logger->log(
+                AuditLogger::ACTION_UPDATE,
+                AuditLogger::ENTITY_MEMBER,
+                $memberId,
+                PersonalDataFields::INTERGROUP_POSITION,
+                self::assignmentDetail(
+                    $this->positionName($originalMember->getIntergroupPosition()),
+                    $this->positionName($updatedMember->getIntergroupPosition())
+                )
+            );
+        }
+
+        // GSR is compared as the group the member is GSR *for*, which folds
+        // three transitions into one test: taking the role, giving it up, and
+        // carrying it to a new home group. That last one changes no flag, so
+        // comparing isGSR() alone would miss it and leave the log showing a
+        // member moving group while apparently still GSR of the old one.
+        $originalGsr = $this->gsrRole($originalMember);
+        $updatedGsr = $this->gsrRole($updatedMember);
+
+        if ($originalGsr !== $updatedGsr) {
+            $this->logger->log(
+                AuditLogger::ACTION_UPDATE,
+                AuditLogger::ENTITY_MEMBER,
+                $memberId,
+                PersonalDataFields::GSR,
+                self::assignmentDetail($originalGsr, $updatedGsr)
+            );
+        }
+    }
+
+    /**
+     * Phrase a service-role transition from the names either side of it.
+     *
+     * The detail sits in a narrow admin column beside an action and a field
+     * name that already say what kind of event this is, so it carries only
+     * what those cannot: the arrow runs from what the role was to what it
+     * became, and the side that does not exist is simply absent.
+     *
+     *     → New        taken
+     *     Old → New    moved
+     *     Old →        given up
+     *
+     * An empty name means "no role". Both empty cannot reach here — every
+     * caller logs only once the two sides differ, and only an unfilled role
+     * resolves to an empty name.
+     *
+     * @param string $from The role held before the change ('' when none)
+     * @param string $to   The role held after the change ('' when none)
+     * @return string The detail string to store
+     */
+    private static function assignmentDetail(string $from, string $to): string
+    {
+        if ($from === '') {
+            return '→ ' . $to;
+        }
+
+        if ($to === '') {
+            return $from . ' →';
+        }
+
+        return $from . ' → ' . $to;
+    }
+
+    /**
+     * Resolve each of a member's service roles to a display name.
+     *
+     * @param Member $member The member to read
+     * @return array{0: string, 1: string, 2: string} Home group, position and
+     *                                                GSR group, each '' when
+     *                                                the role is unfilled
+     */
+    private function serviceRoleNames(Member $member): array
+    {
+        return [
+            $this->groupName($member->getHomeGroup()),
+            $this->positionName($member->getIntergroupPosition()),
+            $this->gsrRole($member),
+        ];
+    }
+
+    /**
+     * The group a member is GSR for, or '' when they are not a GSR.
+     *
+     * A GSR flag with no home group behind it is meaningless — the role is
+     * held on behalf of that group — but setting or clearing it is still a
+     * change, and dropping it silently is the gap this tracking exists to
+     * close. Such entries name the absence instead.
+     *
+     * @param Member $member The member to read
+     * @return string The group name, or '' when the member is not a GSR
+     */
+    private function gsrRole(Member $member): string
+    {
+        if (!$member->isGSR()) {
+            return '';
+        }
+
+        $group = $this->groupName($member->getHomeGroup());
+
+        return $group !== '' ? $group : '(no group)';
+    }
+
+    /**
+     * Resolve a group ID to the name to record for it.
+     *
+     * @param int $groupId The group post ID, 0 when the member has no home group
+     * @return string The group's title, or '' when there is no group
+     */
+    private function groupName(int $groupId): string
+    {
+        if ($groupId <= 0) {
+            return '';
+        }
+
+        $group = $this->groupRepository->findById($groupId);
+
+        return self::nameOrId($group !== null ? $group->getTitle() : '', $groupId);
+    }
+
+    /**
+     * Resolve an intergroup position ID to the name to record for it.
+     *
+     * Uses the long name, which is what Amber and the position views display.
+     *
+     * @param int $positionId The position post ID, 0 when the member holds none
+     * @return string The position's long name, or '' when there is no position
+     */
+    private function positionName(int $positionId): string
+    {
+        if ($positionId <= 0) {
+            return '';
+        }
+
+        $position = $this->positionRepository->findById($positionId);
+
+        return self::nameOrId($position !== null ? $position->getLongName() : '', $positionId);
+    }
+
+    /**
+     * Fall back to "#<id>" when a record has no usable name.
+     *
+     * The record may have been deleted since, or saved without a title. An
+     * entry naming an ID is still traceable; one naming nothing is not.
+     * Names are capped at {@see self::MAX_NAME_LENGTH} so the detail fits
+     * its column.
+     *
+     * @param string $name The resolved name, possibly empty
+     * @param int    $id   The record ID to fall back to
+     * @return string A non-empty label for the record
+     */
+    private static function nameOrId(string $name, int $id): string
+    {
+        $name = trim($name);
+
+        if ($name === '') {
+            return '#' . $id;
+        }
+
+        if (mb_strlen($name) > self::MAX_NAME_LENGTH) {
+            return mb_substr($name, 0, self::MAX_NAME_LENGTH - 1) . '…';
+        }
+
+        return $name;
     }
 
     /**
@@ -535,6 +803,13 @@ class AuditTracker
      *
      * Triggered by the unity/member_deleted hook fired from MemberChangeTracker.
      *
+     * Any service role the member still held is recorded as vacated, so the
+     * position's history closes properly rather than trailing off at the last
+     * assignment. These read the same as an ordinary removal — the row's
+     * own action column is what marks them as a deletion. The hook passes
+     * null when the member could no longer be read, and there is then
+     * nothing to name.
+     *
      * @param int $postId The post ID being deleted or trashed
      * @param Member|null $member The member at the time of deletion (may be null)
      * @return void
@@ -548,6 +823,42 @@ class AuditTracker
             array_merge(PersonalDataFields::ALL_FIELDS, PersonalDataFields::GDPR_FIELDS),
             'Member deleted'
         );
+
+        if ($member === null) {
+            return;
+        }
+
+        [$homeGroup, $position, $gsr] = $this->serviceRoleNames($member);
+
+        if ($homeGroup !== '') {
+            $this->logger->log(
+                AuditLogger::ACTION_DELETE,
+                AuditLogger::ENTITY_MEMBER,
+                $postId,
+                PersonalDataFields::HOME_GROUP,
+                self::assignmentDetail($homeGroup, '')
+            );
+        }
+
+        if ($position !== '') {
+            $this->logger->log(
+                AuditLogger::ACTION_DELETE,
+                AuditLogger::ENTITY_MEMBER,
+                $postId,
+                PersonalDataFields::INTERGROUP_POSITION,
+                self::assignmentDetail($position, '')
+            );
+        }
+
+        if ($gsr !== '') {
+            $this->logger->log(
+                AuditLogger::ACTION_DELETE,
+                AuditLogger::ENTITY_MEMBER,
+                $postId,
+                PersonalDataFields::GSR,
+                self::assignmentDetail($gsr, '')
+            );
+        }
     }
 
     /**

@@ -13,9 +13,11 @@ use Scrutiny\Privacy\PersonalDataPolicy;
 use Scrutiny\Tests\TestCase;
 use Unity\Contacts\Interfaces\Contact;
 use Unity\Groups\Interfaces\Group;
+use Unity\Groups\Interfaces\GroupRepository;
 use Unity\Meetings\Interfaces\Meeting;
 use Unity\Members\Interfaces\Member;
 use Unity\Members\ResponderCertification;
+use Unity\Positions\Interfaces\PositionRepository;
 
 /**
  * Broad coverage for AuditTracker's view-tracking, group/contact change,
@@ -55,6 +57,10 @@ class AuditTrackerCoverageTest extends TestCase
         $this->setProp($tracker, 'policy', new PersonalDataPolicy());
         $this->setProp($tracker, 'member_config', $config);
         $this->setProp($tracker, 'acfFieldMap', $acfMap);
+        // Never consulted here: no case in this file moves a member between
+        // groups or positions. AuditTrackerTest covers that path.
+        $this->setProp($tracker, 'groupRepository', Mockery::mock(GroupRepository::class));
+        $this->setProp($tracker, 'positionRepository', Mockery::mock(PositionRepository::class));
 
         return $tracker;
     }
@@ -271,6 +277,9 @@ class AuditTrackerCoverageTest extends TestCase
             'getPersonalEmail' => 'same@example.com',
             'getMobileNumber' => '07700 900000',
             'getResponderCertification' => ResponderCertification::None,
+            'getHomeGroup' => 0,
+            'getIntergroupPosition' => 0,
+            'isGSR' => false,
             'isGdprAccepted' => false,
         ];
         $data = array_merge($defaults, $overrides);

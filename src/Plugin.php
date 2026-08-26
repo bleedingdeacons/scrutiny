@@ -41,7 +41,9 @@ use Unity\Core\Interfaces\Configuration;
 use Unity\Members\Interfaces\MemberChangeTracker;
 use Unity\Members\Interfaces\MemberRepository;
 use Unity\Groups\Interfaces\GroupChangeTracker;
+use Unity\Groups\Interfaces\GroupRepository;
 use Unity\Positions\Interfaces\PositionChangeTracker;
+use Unity\Positions\Interfaces\PositionRepository;
 use Unity\PrivacyPolicies\Interfaces\PrivacyPolicyFactory;
 use Unity\PrivacyPolicies\Interfaces\PrivacyPolicyRepository;
 use function add_action;
@@ -311,12 +313,19 @@ class Plugin
             );
         });
 
-        // Audit Tracker (hooks into member lifecycle)
+        // Audit Tracker (hooks into member lifecycle).
+        //
+        // The group and position repositories are here so home-group and
+        // intergroup-position entries can name the record rather than its ID.
+        // Both are service roles, not personal data, so the audit log is
+        // allowed to hold their names.
         $container->register(AuditTracker::class, function (ContainerInterface $c) {
             return new AuditTracker(
                 $c->get(Configuration::class),
                 $c->get(AuditLogger::class),
-                $c->get(PersonalDataPolicy::class)
+                $c->get(PersonalDataPolicy::class),
+                $c->get(GroupRepository::class),
+                $c->get(PositionRepository::class)
             );
         });
 
