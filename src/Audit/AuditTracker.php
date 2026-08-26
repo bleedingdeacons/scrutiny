@@ -63,9 +63,9 @@ class AuditTracker
     /**
      * Longest group or position name an audit detail will carry.
      *
-     * The detail column is VARCHAR(255), and the longest string built here is
-     * a move — two names either side of an arrow — so capping each name
-     * at 100 keeps every entry comfortably inside it.
+     * The detail column is VARCHAR(255), and the wordiest string built here
+     * is "Changed from <old> to <new>" — two names plus 17 characters — so
+     * capping each name at 100 keeps every entry comfortably inside it.
      */
     private const MAX_NAME_LENGTH = 100;
 
@@ -457,14 +457,12 @@ class AuditTracker
     /**
      * Phrase a service-role transition from the names either side of it.
      *
-     * The detail sits in a narrow admin column beside an action and a field
-     * name that already say what kind of event this is, so it carries only
-     * what those cannot: the arrow runs from what the role was to what it
-     * became, and the side that does not exist is simply absent.
+     * Each form says in words what happened, rather than leaning on the
+     * action and field columns beside it to supply the sense:
      *
-     *     → New        taken
-     *     Old → New    moved
-     *     Old →        given up
+     *     Assigned to New              taken
+     *     Changed from Old to New      moved
+     *     Removed from Old             given up
      *
      * An empty name means "no role". Both empty cannot reach here — every
      * caller logs only once the two sides differ, and only an unfilled role
@@ -477,14 +475,14 @@ class AuditTracker
     private static function assignmentDetail(string $from, string $to): string
     {
         if ($from === '') {
-            return '→ ' . $to;
+            return 'Assigned to ' . $to;
         }
 
         if ($to === '') {
-            return $from . ' →';
+            return 'Removed from ' . $from;
         }
 
-        return $from . ' → ' . $to;
+        return 'Changed from ' . $from . ' to ' . $to;
     }
 
     /**
@@ -523,7 +521,7 @@ class AuditTracker
 
         $group = $this->groupName($member->getHomeGroup());
 
-        return $group !== '' ? $group : '(no group)';
+        return $group !== '' ? $group : '(no home group)';
     }
 
     /**
