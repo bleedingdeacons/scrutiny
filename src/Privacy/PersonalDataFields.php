@@ -94,6 +94,80 @@ final class PersonalDataFields
     public const INTERGROUP_POSITION = 'intergroup-position';
 
     /**
+     * Logical field name: date the member's intergroup position rotates
+     *
+     * Service information about a service post, so the entry records the
+     * date outright.
+     */
+    public const POSITION_ROTATION = 'position-rotation';
+
+    /**
+     * Logical field name: whether the member takes 12th-step calls
+     *
+     * Availability for service, not an attribute of the person, so the entry
+     * says which way it went.
+     */
+    public const TWELFTH_STEPPER = 'twelfth-stepper';
+
+    /**
+     * Logical field name: whether the member takes helpline calls
+     *
+     * The companion flag to {@see self::RESPONDER_CERTIFICATION}, and
+     * recorded on the same footing.
+     */
+    public const TELEPHONE_RESPONDER = 'telephone-responder';
+
+    /**
+     * Logical field name: whether the member's name is shown publicly
+     *
+     * A privacy setting whose value is a yes or a no, revealing nothing about
+     * the member by being written down — and the single most useful thing to
+     * know about a privacy setting is which way it was moved, and by whom.
+     */
+    public const SHOW_ANONYMOUS_NAME = 'show-anonymous-name';
+
+    /**
+     * Logical field name: whether the member's profile is shown publicly
+     *
+     * As {@see self::SHOW_ANONYMOUS_NAME}.
+     */
+    public const SHOW_MEMBER_PROFILE = 'show-member-profile';
+
+    /**
+     * Logical field name: the geographic area the member covers
+     *
+     * Recorded as a change only, never as a value. It is coarse, but it is
+     * still where a named individual is, and this log is not the place for
+     * that.
+     */
+    public const AREA = 'area';
+
+    /**
+     * Logical field name: the forms of contact the member accepts
+     *
+     * Recorded as a change only. Reach reads this selection for gender
+     * matching, so the values say more about the member than a service
+     * preference should be allowed to leak into an audit trail.
+     */
+    public const ACCEPTS = 'accepts';
+
+    /**
+     * Logical field name: the member's free-text profile
+     *
+     * Recorded as a change only — it is prose the member wrote about
+     * themselves and may contain anything at all.
+     */
+    public const ANONYMOUS_PROFILE = 'anonymous-profile';
+
+    /**
+     * Logical field name: the member's meeting PO reference
+     *
+     * Recorded as a change only: the field is typed `mixed` and is marked for
+     * removal in TsmlMember, so there is no value shape worth rendering.
+     */
+    public const MEETING_PO = 'meeting-po';
+
+    /**
      * Sentinel field name used when an audit entry refers to the entire
      * record rather than a single field — for example, the one-shot
      * "Member created" entry written when a new member is inserted.
@@ -256,6 +330,15 @@ final class PersonalDataFields
         self::HOME_GROUP => 'Home Group',
         self::INTERGROUP_POSITION => 'Intergroup Position',
         self::GSR => 'GSR',
+        self::POSITION_ROTATION => 'Position Rotation',
+        self::TWELFTH_STEPPER => '12th Stepper',
+        self::TELEPHONE_RESPONDER => 'Telephone Responder',
+        self::SHOW_ANONYMOUS_NAME => 'Show Anonymous Name',
+        self::SHOW_MEMBER_PROFILE => 'Show Member Profile',
+        self::AREA => 'Area',
+        self::ACCEPTS => 'Accepts',
+        self::ANONYMOUS_PROFILE => 'Anonymous Profile',
+        self::MEETING_PO => 'Meeting PO',
         self::ALL_FIELDS_SENTINEL => 'All fields',
         self::GROUP_CONTACT_NAME   => 'Group Contact Name',
         self::GROUP_CONTACT_EMAIL  => 'Group Contact Email',

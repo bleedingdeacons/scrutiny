@@ -121,13 +121,48 @@ Four values *are* recorded outright, because none of them is personal data — e
 
 Knowing *which* stage, group or position is the whole point of auditing these fields; an entry reading `Value changed` would answer nothing. Each entry says in words what happened: `Assigned to New` when the role is taken, `Changed from Old to New` when it moves, `Removed from Old` when it is given up. A group or position that no longer resolves is recorded as `#<id>` so the entry stays traceable.
 
+
+#### Every tracked member field
+
+`unity/member_changing` carries a before and an after, and every field Unity's
+change tracker compares is now examined. Which ones record their value is a
+judgement about the field, not about how interesting it is:
+
+| Field | Recorded as | Why |
+|---|---|---|
+| Responder certification | `Changed to Certified` | Service status |
+| Home group | `Assigned to Sunday Steps` | Public group |
+| Intergroup position | `Assigned to Telephone Liaison Officer` | Public service post |
+| GSR | `Assigned to Sunday Steps` | Service role, named by its group |
+| Position rotation | `Changed to 2027-01-01`, or `Cleared` | Belongs to the post, not the person |
+| 12th stepper | `Available for 12th-step calls` | Availability for service |
+| Telephone responder | `Available as a telephone responder` | Availability for service |
+| Show anonymous name | `Name shown publicly` / `Name hidden` | A yes or no that identifies nobody |
+| Show member profile | `Profile shown publicly` / `Profile hidden` | As above |
+| GDPR accepted | `Consent recorded` / `Consent revoked` | The central fact of a consent audit |
+| Personal email | `Value changed` | Personal data |
+| Mobile number | `Value changed` | Personal data |
+| Area | `Value changed` | Coarse, but still where a named individual is |
+| Accepts | `Value changed` | Reach reads this selection for gender matching |
+| Anonymous profile | `Value changed` | Prose the member wrote; may hold anything |
+| Meeting PO | `Value changed` | Typed `mixed`, and marked for removal upstream |
+
+`Accepts` is an unordered checkbox set, so it is sorted before comparing and a
+reordered-but-identical selection is not a change.
+
+**Two fields are deliberately never logged.** The anonymous name is one:
+renaming a member is not on its own an audit event, and a test pins that
+decision so it cannot be reversed by accident. The updated timestamp is the
+other, and it moves on every single save — auditing it would put a second,
+empty row beside every real one.
+
 #### Events tracked automatically
 
 | Event | Hook | What is logged |
 |---|---|---|
 | Member edit form opened in admin | `current_screen` | Batch view of all personal data fields |
 | Personal data ACF field loaded on frontend | `acf/load_value` | Per-field view (deduplicated per request) |
-| Member fields changed | `unity/member_changing` | Individual field updates |
+| Member fields changed | `unity/member_changing` | Individual field updates — see the table above |
 | Responder certification changed | `unity/member_changing` | The new stage by name, e.g. `Changed to Certified` |
 | Home group assigned, changed or removed | `unity/member_changing` | The group by name, e.g. `Changed from Thursday Big Book to Sunday Steps` |
 | Intergroup position assigned, changed or removed | `unity/member_changing` | The position by name, e.g. `Assigned to Telephone Liaison Officer` |

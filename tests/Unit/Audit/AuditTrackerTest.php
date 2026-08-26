@@ -118,6 +118,15 @@ class AuditTrackerTest extends TestCase
             'getHomeGroup' => 0,
             'getIntergroupPosition' => 0,
             'isGSR' => false,
+            'getIntergroupPositionRotation' => '',
+            'isTwelfthStepper' => false,
+            'isTelephoneResponder' => false,
+            'showAnonymousName' => false,
+            'showMemberProfile' => false,
+            'getArea' => '',
+            'getAccepts' => [],
+            'getAnonymousProfile' => '',
+            'getMeetingPO' => null,
             'isGdprAccepted' => false,
             'getGdprAcceptedAt' => '',
             'getGdprAcceptanceVersion' => '',
@@ -833,6 +842,288 @@ class AuditTrackerTest extends TestCase
             'getHomeGroup' => 7,
             'getIntergroupPosition' => 3,
         ]));
+    }
+
+    // ─── Service availability ──────────────────────────────────────────
+
+    /** @test */
+    public function it_logs_the_new_rotation_date_when_it_changes(): void
+    {
+        $logger = Mockery::mock(AuditLogger::class);
+        $logger->shouldReceive('log')
+            ->once()
+            ->with(
+                AuditLogger::ACTION_UPDATE,
+                AuditLogger::ENTITY_MEMBER,
+                42,
+                PersonalDataFields::POSITION_ROTATION,
+                'Changed to 2027-01-01'
+            );
+
+        $tracker = $this->createTracker($logger);
+
+        $original = $this->createMember(['getIntergroupPositionRotation' => '2026-01-01']);
+        $updated = $this->createMember(['getIntergroupPositionRotation' => '2027-01-01']);
+
+        $tracker->onMemberChanged($updated, $original);
+    }
+
+    /** @test */
+    public function it_says_cleared_when_a_rotation_date_is_emptied(): void
+    {
+        // 'Changed to ' with nothing after it would read as a truncated cell.
+        $logger = Mockery::mock(AuditLogger::class);
+        $logger->shouldReceive('log')
+            ->once()
+            ->with(
+                AuditLogger::ACTION_UPDATE,
+                AuditLogger::ENTITY_MEMBER,
+                42,
+                PersonalDataFields::POSITION_ROTATION,
+                'Cleared'
+            );
+
+        $tracker = $this->createTracker($logger);
+
+        $original = $this->createMember(['getIntergroupPositionRotation' => '2026-01-01']);
+        $updated = $this->createMember(['getIntergroupPositionRotation' => '']);
+
+        $tracker->onMemberChanged($updated, $original);
+    }
+
+    /** @test */
+    public function it_logs_both_directions_of_the_twelfth_step_flag(): void
+    {
+        $logger = Mockery::mock(AuditLogger::class);
+        $logger->shouldReceive('log')
+            ->once()
+            ->with(
+                AuditLogger::ACTION_UPDATE,
+                AuditLogger::ENTITY_MEMBER,
+                42,
+                PersonalDataFields::TWELFTH_STEPPER,
+                'Available for 12th-step calls'
+            );
+
+        $tracker = $this->createTracker($logger);
+
+        $tracker->onMemberChanged(
+            $this->createMember(['isTwelfthStepper' => true]),
+            $this->createMember(['isTwelfthStepper' => false])
+        );
+
+        $logger2 = Mockery::mock(AuditLogger::class);
+        $logger2->shouldReceive('log')
+            ->once()
+            ->with(
+                AuditLogger::ACTION_UPDATE,
+                AuditLogger::ENTITY_MEMBER,
+                42,
+                PersonalDataFields::TWELFTH_STEPPER,
+                'No longer available for 12th-step calls'
+            );
+
+        $this->createTracker($logger2)->onMemberChanged(
+            $this->createMember(['isTwelfthStepper' => false]),
+            $this->createMember(['isTwelfthStepper' => true])
+        );
+    }
+
+    /** @test */
+    public function it_logs_the_telephone_responder_flag(): void
+    {
+        $logger = Mockery::mock(AuditLogger::class);
+        $logger->shouldReceive('log')
+            ->once()
+            ->with(
+                AuditLogger::ACTION_UPDATE,
+                AuditLogger::ENTITY_MEMBER,
+                42,
+                PersonalDataFields::TELEPHONE_RESPONDER,
+                'Available as a telephone responder'
+            );
+
+        $tracker = $this->createTracker($logger);
+
+        $tracker->onMemberChanged(
+            $this->createMember(['isTelephoneResponder' => true]),
+            $this->createMember(['isTelephoneResponder' => false])
+        );
+    }
+
+    // ─── Visibility toggles ────────────────────────────────────────────
+
+    /** @test */
+    public function it_names_the_new_setting_when_name_visibility_changes(): void
+    {
+        // A privacy toggle's value is a yes or a no and identifies nobody, so
+        // the entry records which way it went.
+        $logger = Mockery::mock(AuditLogger::class);
+        $logger->shouldReceive('log')
+            ->once()
+            ->with(
+                AuditLogger::ACTION_UPDATE,
+                AuditLogger::ENTITY_MEMBER,
+                42,
+                PersonalDataFields::SHOW_ANONYMOUS_NAME,
+                'Name hidden'
+            );
+
+        $tracker = $this->createTracker($logger);
+
+        $tracker->onMemberChanged(
+            $this->createMember(['showAnonymousName' => false]),
+            $this->createMember(['showAnonymousName' => true])
+        );
+    }
+
+    /** @test */
+    public function it_names_the_new_setting_when_profile_visibility_changes(): void
+    {
+        $logger = Mockery::mock(AuditLogger::class);
+        $logger->shouldReceive('log')
+            ->once()
+            ->with(
+                AuditLogger::ACTION_UPDATE,
+                AuditLogger::ENTITY_MEMBER,
+                42,
+                PersonalDataFields::SHOW_MEMBER_PROFILE,
+                'Profile shown publicly'
+            );
+
+        $tracker = $this->createTracker($logger);
+
+        $tracker->onMemberChanged(
+            $this->createMember(['showMemberProfile' => true]),
+            $this->createMember(['showMemberProfile' => false])
+        );
+    }
+
+    // ─── Fields recorded without their values ──────────────────────────
+
+    /** @test */
+    public function it_records_an_area_change_without_the_area(): void
+    {
+        // Coarse, but still where a named individual is.
+        $logger = Mockery::mock(AuditLogger::class);
+        $logger->shouldReceive('log')
+            ->once()
+            ->with(
+                AuditLogger::ACTION_UPDATE,
+                AuditLogger::ENTITY_MEMBER,
+                42,
+                PersonalDataFields::AREA,
+                'Value changed'
+            );
+
+        $tracker = $this->createTracker($logger);
+
+        $tracker->onMemberChanged(
+            $this->createMember(['getArea' => 'Bristol South']),
+            $this->createMember(['getArea' => 'Bristol North'])
+        );
+    }
+
+    /** @test */
+    public function it_records_an_accepts_change_without_the_selection(): void
+    {
+        $logger = Mockery::mock(AuditLogger::class);
+        $logger->shouldReceive('log')
+            ->once()
+            ->with(
+                AuditLogger::ACTION_UPDATE,
+                AuditLogger::ENTITY_MEMBER,
+                42,
+                PersonalDataFields::ACCEPTS,
+                'Value changed'
+            );
+
+        $tracker = $this->createTracker($logger);
+
+        $tracker->onMemberChanged(
+            $this->createMember(['getAccepts' => ['men', 'women']]),
+            $this->createMember(['getAccepts' => ['men']])
+        );
+    }
+
+    /** @test */
+    public function it_ignores_a_reordered_accepts_selection(): void
+    {
+        // An unordered checkbox set: same selection, different order, so
+        // nothing changed.
+        $logger = Mockery::mock(AuditLogger::class);
+        $logger->shouldNotReceive('log');
+
+        $tracker = $this->createTracker($logger);
+
+        $tracker->onMemberChanged(
+            $this->createMember(['getAccepts' => ['women', 'men']]),
+            $this->createMember(['getAccepts' => ['men', 'women']])
+        );
+
+        self::assertTrue(true, 'onMemberChanged completed without logging');
+    }
+
+    /** @test */
+    public function it_records_a_profile_change_without_the_prose(): void
+    {
+        $logger = Mockery::mock(AuditLogger::class);
+        $logger->shouldReceive('log')
+            ->once()
+            ->with(
+                AuditLogger::ACTION_UPDATE,
+                AuditLogger::ENTITY_MEMBER,
+                42,
+                PersonalDataFields::ANONYMOUS_PROFILE,
+                'Value changed'
+            );
+
+        $tracker = $this->createTracker($logger);
+
+        $tracker->onMemberChanged(
+            $this->createMember(['getAnonymousProfile' => 'Sober since 1912.']),
+            $this->createMember(['getAnonymousProfile' => ''])
+        );
+    }
+
+    /** @test */
+    public function it_records_a_meeting_po_change_without_the_value(): void
+    {
+        $logger = Mockery::mock(AuditLogger::class);
+        $logger->shouldReceive('log')
+            ->once()
+            ->with(
+                AuditLogger::ACTION_UPDATE,
+                AuditLogger::ENTITY_MEMBER,
+                42,
+                PersonalDataFields::MEETING_PO,
+                'Value changed'
+            );
+
+        $tracker = $this->createTracker($logger);
+
+        $tracker->onMemberChanged(
+            $this->createMember(['getMeetingPO' => 77]),
+            $this->createMember(['getMeetingPO' => null])
+        );
+    }
+
+    /** @test */
+    public function it_still_does_not_log_the_updated_timestamp(): void
+    {
+        // getUpdated() moves on every save. Auditing it would put a second,
+        // empty row beside every real one, so it is deliberately never read.
+        $logger = Mockery::mock(AuditLogger::class);
+        $logger->shouldNotReceive('log');
+
+        $tracker = $this->createTracker($logger);
+
+        $tracker->onMemberChanged(
+            $this->createMember(['getUpdated' => '2026-08-26 21:00:00']),
+            $this->createMember(['getUpdated' => '2026-08-26 20:00:00'])
+        );
+
+        self::assertTrue(true, 'onMemberChanged completed without logging');
     }
 
     // ─── GSR ───────────────────────────────────────────────────────────

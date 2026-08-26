@@ -42,6 +42,18 @@ use function is_admin;
  * Assignments are logged at creation, changes and removals as they happen,
  * and the standing roles once more when the member is deleted.
  *
+ * The remaining tracked member fields — position rotation, the two
+ * availability flags, the two visibility toggles, area, accepts, the profile
+ * and the meeting PO reference — are logged on change only. The first four
+ * name their new value, being service or privacy settings that describe
+ * nobody; the last four record only that they changed.
+ *
+ * Two fields Unity's change tracker compares are deliberately never logged.
+ * The anonymous name is one: renaming a member is not on its own an audit
+ * event, and there is a test pinning that. The updated timestamp is the
+ * other, and it moves on every single save — auditing it would put a
+ * second, empty row beside every real one.
+ *
  * Listens to:
  *   - current_screen             (fired when admin screen loads - used for admin form view tracking)
  *   - acf/load_value             (fired when ACF loads a field value - used for frontend view tracking)
@@ -388,7 +400,166 @@ class AuditTracker
 
         $this->logServiceRoleChanges($memberId, $originalMember, $updatedMember);
 
+        $this->logServiceStatusChanges($memberId, $originalMember, $updatedMember);
+
+        $this->logVisibilityChanges($memberId, $originalMember, $updatedMember);
+
+        $this->logOpaqueChanges($memberId, $originalMember, $updatedMember);
+
         $this->logGdprChanges($memberId, $originalMember, $updatedMember);
+    }
+
+    /**
+     * Log changes to the member's service availability.
+     *
+     * All three name their new value. None describes the person: a rotation
+     * date belongs to a service post, and the two flags say what work the
+     * member is available for. Who put someone on the helpline, and when, is
+     * the entry an auditor comes looking for.
+     *
+     * @param int    $memberId       The member post ID
+     * @param Member $originalMember The member before changes
+     * @param Member $updatedMember  The member after changes
+     * @return void
+     */
+    private function logServiceStatusChanges(int $memberId, Member $originalMember, Member $updatedMember): void
+    {
+        $rotation = $updatedMember->getIntergroupPositionRotation();
+        if ($originalMember->getIntergroupPositionRotation() !== $rotation) {
+            $this->logger->log(
+                AuditLogger::ACTION_UPDATE,
+                AuditLogger::ENTITY_MEMBER,
+                $memberId,
+                PersonalDataFields::POSITION_ROTATION,
+                $rotation !== '' ? 'Changed to ' . $rotation : 'Cleared'
+            );
+        }
+
+        if ($originalMember->isTwelfthStepper() !== $updatedMember->isTwelfthStepper()) {
+            $this->logger->log(
+                AuditLogger::ACTION_UPDATE,
+                AuditLogger::ENTITY_MEMBER,
+                $memberId,
+                PersonalDataFields::TWELFTH_STEPPER,
+                $updatedMember->isTwelfthStepper()
+                    ? 'Available for 12th-step calls'
+                    : 'No longer available for 12th-step calls'
+            );
+        }
+
+        if ($originalMember->isTelephoneResponder() !== $updatedMember->isTelephoneResponder()) {
+            $this->logger->log(
+                AuditLogger::ACTION_UPDATE,
+                AuditLogger::ENTITY_MEMBER,
+                $memberId,
+                PersonalDataFields::TELEPHONE_RESPONDER,
+                $updatedMember->isTelephoneResponder()
+                    ? 'Available as a telephone responder'
+                    : 'No longer available as a telephone responder'
+            );
+        }
+    }
+
+    /**
+     * Log changes to what the member shows publicly.
+     *
+     * Both entries name the new setting. A privacy toggle's value is a yes or
+     * a no and gives away nothing by being written down, while which way it
+     * was moved — and by whom — is the whole reason to audit it.
+     *
+     * @param int    $memberId       The member post ID
+     * @param Member $originalMember The member before changes
+     * @param Member $updatedMember  The member after changes
+     * @return void
+     */
+    private function logVisibilityChanges(int $memberId, Member $originalMember, Member $updatedMember): void
+    {
+        if ($originalMember->showAnonymousName() !== $updatedMember->showAnonymousName()) {
+            $this->logger->log(
+                AuditLogger::ACTION_UPDATE,
+                AuditLogger::ENTITY_MEMBER,
+                $memberId,
+                PersonalDataFields::SHOW_ANONYMOUS_NAME,
+                $updatedMember->showAnonymousName() ? 'Name shown publicly' : 'Name hidden'
+            );
+        }
+
+        if ($originalMember->showMemberProfile() !== $updatedMember->showMemberProfile()) {
+            $this->logger->log(
+                AuditLogger::ACTION_UPDATE,
+                AuditLogger::ENTITY_MEMBER,
+                $memberId,
+                PersonalDataFields::SHOW_MEMBER_PROFILE,
+                $updatedMember->showMemberProfile() ? 'Profile shown publicly' : 'Profile hidden'
+            );
+        }
+    }
+
+    /**
+     * Log changes to fields recorded without their values.
+     *
+     * These four are tracked so the trail is complete, but each is written as
+     * the bare "Value changed" the personal-data fields use. The area is
+     * coarse but it is still where a named individual is; the accepts
+     * selection is what Reach reads for gender matching; the profile is prose
+     * the member wrote about themselves and may hold anything; and the
+     * meeting PO reference is typed `mixed` and marked for removal in
+     * TsmlMember, so it has no value shape worth rendering.
+     *
+     * @param int    $memberId       The member post ID
+     * @param Member $originalMember The member before changes
+     * @param Member $updatedMember  The member after changes
+     * @return void
+     */
+    private function logOpaqueChanges(int $memberId, Member $originalMember, Member $updatedMember): void
+    {
+        if ($originalMember->getArea() !== $updatedMember->getArea()) {
+            $this->logger->log(
+                AuditLogger::ACTION_UPDATE,
+                AuditLogger::ENTITY_MEMBER,
+                $memberId,
+                PersonalDataFields::AREA,
+                'Value changed'
+            );
+        }
+
+        // Sorted before comparing: the backing field is an unordered checkbox
+        // selection, so a reordered-but-equal set is not a change. Unity's own
+        // change tracker does the same before firing the hook.
+        $originalAccepts = $originalMember->getAccepts();
+        $updatedAccepts = $updatedMember->getAccepts();
+        sort($originalAccepts);
+        sort($updatedAccepts);
+
+        if ($originalAccepts !== $updatedAccepts) {
+            $this->logger->log(
+                AuditLogger::ACTION_UPDATE,
+                AuditLogger::ENTITY_MEMBER,
+                $memberId,
+                PersonalDataFields::ACCEPTS,
+                'Value changed'
+            );
+        }
+
+        if ($originalMember->getAnonymousProfile() !== $updatedMember->getAnonymousProfile()) {
+            $this->logger->log(
+                AuditLogger::ACTION_UPDATE,
+                AuditLogger::ENTITY_MEMBER,
+                $memberId,
+                PersonalDataFields::ANONYMOUS_PROFILE,
+                'Value changed'
+            );
+        }
+
+        if ($originalMember->getMeetingPO() !== $updatedMember->getMeetingPO()) {
+            $this->logger->log(
+                AuditLogger::ACTION_UPDATE,
+                AuditLogger::ENTITY_MEMBER,
+                $memberId,
+                PersonalDataFields::MEETING_PO,
+                'Value changed'
+            );
+        }
     }
 
     /**
