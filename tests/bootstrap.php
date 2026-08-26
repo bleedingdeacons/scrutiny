@@ -49,6 +49,13 @@ if (!defined('SCRUTINY_PLUGIN_DIR')) {
     define('SCRUTINY_PLUGIN_DIR', dirname(__DIR__) . '/');
 }
 
+if (!defined('SCRUTINY_PLUGIN_URL')) {
+    // The GdprAuditHistory field builds its stylesheet URL from this. Only its
+    // presence matters here — the field bails out when it is undefined, which
+    // would leave the enqueue untestable.
+    define('SCRUTINY_PLUGIN_URL', 'https://example.test/wp-content/plugins/scrutiny/');
+}
+
 if (!defined('SCRUTINY_VERSION')) {
     define('SCRUTINY_VERSION', '0.0.0-test');
 }
@@ -688,6 +695,22 @@ if (!class_exists('WP_REST_Server')) {
         public const READABLE = 'GET';
     }
 }
+
+// ──────────────────────────────────────────────
+//  ACF field type stubs
+//
+//  GdprAuditHistory extends ACF's acf_field base class and calls three ACF
+//  functions. ACF is a third-party plugin, so none of that exists in an
+//  isolated unit run. tests/stubs/acf.php supplies a minimal stand-in for
+//  each — the same file PHPStan reads through scanFiles, so the two agree on
+//  the shape the field type is written against.
+// ──────────────────────────────────────────────
+
+$GLOBALS['scrutiny_test_acf_field_types']    = [];
+$GLOBALS['scrutiny_test_acf_field_settings'] = [];
+$GLOBALS['scrutiny_test_acf_form_data']      = [];
+
+require_once __DIR__ . '/stubs/acf.php';
 
 // The shared stub layer, loaded last, on purpose — the role WP_Mock's
 // bootstrap used to play here, for the same reason.

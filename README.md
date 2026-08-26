@@ -58,6 +58,9 @@ Scrutiny/
     ├── Plugin.php            # Service registration & lifecycle
     ├── Admin/
     │   └── AuditLogAdmin.php # Read-only admin UI for the audit trail
+    ├── Fields/
+    │   ├── AuditHistoryRenderer.php # Renders one record's trail as a table
+    │   └── GdprAuditHistory.php     # ACF field type wrapping that renderer
     ├── Audit/
     │   ├── AuditLogger.php       # Writes log entries (no raw PII)
     │   ├── AuditRepository.php   # Database CRUD for the audit table
@@ -81,6 +84,8 @@ Unity Container
     └── AuditTracker          (uses AuditLogger — hooks into Unity lifecycle)
     └── DataObscurer          (uses AuditLogger — hooks into ACF filters)
     └── AuditLogAdmin         (uses AuditRepository + AuditLogger — admin UI)
+    └── AuditHistoryRenderer  (uses AuditRepository — one record's trail as HTML)
+    └── GdprAuditHistory      (uses AuditHistoryRenderer — the ACF field type)
 ```
 
 All services are resolved from Unity's PSR-11 container and are available after the `scrutiny_loaded` action fires.
@@ -145,6 +150,40 @@ A read-only **Audit Log** submenu page is added under the Intergroup menu, acces
 - Filtering by action, entity type, user, field name, and date range.
 - Pagination (up to 200 entries per page).
 - A nonce-protected **Purge** action to delete entries older than a configurable number of days.
+
+---
+
+### GDPR Audit History Field
+
+Scrutiny registers a `gdpr_audit_history` field type with Advanced Custom
+Fields. Add it to the member CPT's field group and the member's own edit screen
+shows the audit trail recorded against that member — who viewed, created,
+updated or called them, and when — without leaving the record.
+
+It is display only. Like ACF's own layout fields it renders no input, so
+nothing is posted, nothing is written to postmeta, and it is excluded from
+REST. Requires ACF; with ACF inactive the field type is simply never
+registered.
+
+Four settings, in the field group editor:
+
+| Setting | Default | Effect |
+|---|---|---|
+| Record type | `member` | Which `entity_type` to match. The audit log records groups, meetings and positions against post IDs the same way, so the field works on those too. |
+| Entries to show | `20` | How many of the most recent entries to display, capped at 200 — the ceiling the repository enforces. The full total is always shown alongside. |
+| Limit to action | *(all)* | Show only `view` entries, only `update` entries, and so on. |
+| Show IP addresses | off | Adds the truncated IP each entry was recorded from. |
+
+The field requires `manage_options` — the same capability as the Audit Log
+page, since it is the same data. Sites that delegate member administration more
+widely can lower that:
+
+```php
+add_filter('scrutiny_audit_history_capability', fn() => 'edit_others_posts');
+```
+
+Users below the Audit Log page's own bar still see the table, but not the
+"View the full audit log" link that would only turn them away.
 
 ---
 
