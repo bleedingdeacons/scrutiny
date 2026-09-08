@@ -303,6 +303,7 @@ All field name constants live in `Scrutiny\Privacy\PersonalDataFields`:
 |---|---|
 | `PERSONAL_EMAIL` | `personal-email` |
 | `MOBILE_NUMBER` | `mobile-number` |
+| `LANDLINE_NUMBER` | `landline-number` |
 | `GROUP_CONTACT_NAME` | `group-contact-name` |
 | `GROUP_CONTACT_EMAIL` | `group-contact-email` |
 | `GROUP_CONTACT_PHONE` | `group-contact-phone` |

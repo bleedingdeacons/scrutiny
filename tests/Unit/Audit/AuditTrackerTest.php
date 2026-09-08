@@ -11,6 +11,7 @@ use Scrutiny\Privacy\PersonalDataFields;
 use Unity\Groups\Interfaces\Group;
 use Unity\Groups\Interfaces\GroupRepository;
 use Unity\Members\Interfaces\Member;
+use Unity\Members\PreferredContact;
 use Unity\Members\ResponderCertification;
 use Unity\Positions\Interfaces\Position;
 use Unity\Positions\Interfaces\PositionRepository;
@@ -114,6 +115,8 @@ class AuditTrackerTest extends TestCase
             'getId' => 42,
             'getPersonalEmail' => 'john@example.com',
             'getMobileNumber' => '07700 900123',
+            'getLandlineNumber' => '0117 496 0123',
+            'getPreferredContact' => PreferredContact::Mobile,
             'getResponderCertification' => ResponderCertification::None,
             'getHomeGroup' => 0,
             'getIntergroupPosition' => 0,
@@ -203,6 +206,99 @@ class AuditTrackerTest extends TestCase
 
         $original = $this->createMember(['getMobileNumber' => '07700 900123']);
         $updated = $this->createMember(['getMobileNumber' => '07700 900456']);
+
+        $tracker->onMemberChanged($updated, $original);
+    }
+
+    /** @test */
+    public function it_logs_when_the_landline_number_changes(): void
+    {
+        // A landline is personal data on the same footing as a mobile, so
+        // the entry records that it moved and nothing more.
+        $logger = Mockery::mock(AuditLogger::class);
+        $logger->shouldReceive('log')
+            ->once()
+            ->with(
+                AuditLogger::ACTION_UPDATE,
+                AuditLogger::ENTITY_MEMBER,
+                42,
+                PersonalDataFields::LANDLINE_NUMBER,
+                'Value changed'
+            );
+
+        $tracker = $this->createTracker($logger);
+
+        $original = $this->createMember(['getLandlineNumber' => '0117 496 0123']);
+        $updated = $this->createMember(['getLandlineNumber' => '0117 496 0456']);
+
+        $tracker->onMemberChanged($updated, $original);
+    }
+
+    /** @test */
+    public function it_names_the_new_choice_when_the_preferred_contact_changes(): void
+    {
+        // Unlike the two numbers it chooses between, this entry names its
+        // value: it identifies nobody, and which line the helpline was
+        // pointed at is the whole question an auditor would be asking.
+        $logger = Mockery::mock(AuditLogger::class);
+        $logger->shouldReceive('log')
+            ->once()
+            ->with(
+                AuditLogger::ACTION_UPDATE,
+                AuditLogger::ENTITY_MEMBER,
+                42,
+                PersonalDataFields::PREFERRED_CONTACT,
+                'Changed to Landline'
+            );
+
+        $tracker = $this->createTracker($logger);
+
+        $original = $this->createMember(['getPreferredContact' => PreferredContact::Mobile]);
+        $updated = $this->createMember(['getPreferredContact' => PreferredContact::Landline]);
+
+        $tracker->onMemberChanged($updated, $original);
+    }
+
+    /**
+     * Unity moves a member back to Mobile when their landline goes, rather
+     * than anyone touching the setting. Both entries should land: the log
+     * should say the helpline stopped ringing a number, whichever edit
+     * caused it.
+     *
+     * @test
+     */
+    public function clearing_a_landline_logs_both_the_number_and_the_preference(): void
+    {
+        $logger = Mockery::mock(AuditLogger::class);
+        $logger->shouldReceive('log')
+            ->once()
+            ->with(
+                AuditLogger::ACTION_UPDATE,
+                AuditLogger::ENTITY_MEMBER,
+                42,
+                PersonalDataFields::LANDLINE_NUMBER,
+                'Value changed'
+            );
+        $logger->shouldReceive('log')
+            ->once()
+            ->with(
+                AuditLogger::ACTION_UPDATE,
+                AuditLogger::ENTITY_MEMBER,
+                42,
+                PersonalDataFields::PREFERRED_CONTACT,
+                'Changed to Mobile'
+            );
+
+        $tracker = $this->createTracker($logger);
+
+        $original = $this->createMember([
+            'getLandlineNumber' => '0117 496 0123',
+            'getPreferredContact' => PreferredContact::Landline,
+        ]);
+        $updated = $this->createMember([
+            'getLandlineNumber' => '',
+            'getPreferredContact' => PreferredContact::Mobile,
+        ]);
 
         $tracker->onMemberChanged($updated, $original);
     }

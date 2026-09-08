@@ -106,6 +106,40 @@ class PersonalDataFieldsTest extends TestCase
     }
 
     /**
+     * The landline is a number reaching a named individual at home, so it
+     * belongs with the mobile in every set that drives obscuring and view
+     * tracking.
+     *
+     * @test
+     */
+    public function the_landline_is_treated_as_personal_data(): void
+    {
+        $this->assertContains(PersonalDataFields::LANDLINE_NUMBER, PersonalDataFields::ALL_FIELDS);
+        $this->assertContains(PersonalDataFields::LANDLINE_NUMBER, PersonalDataFields::CONFIG_KEY_MAP);
+        $this->assertContains(PersonalDataFields::LANDLINE_NUMBER, PersonalDataFields::CONFIG_ACF_KEY_MAP);
+        $this->assertArrayHasKey(PersonalDataFields::LANDLINE_NUMBER, PersonalDataFields::LABELS);
+    }
+
+    /**
+     * The preferred contact names one of two options rather than a number,
+     * so it stays out of the personal-data sets for the same reason the
+     * service roles do — while still carrying a label, because its audit
+     * entries name the choice outright.
+     *
+     * @test
+     */
+    public function the_preferred_contact_is_not_treated_as_personal_data(): void
+    {
+        $this->assertNotContains(PersonalDataFields::PREFERRED_CONTACT, PersonalDataFields::ALL_FIELDS);
+        $this->assertNotContains(PersonalDataFields::PREFERRED_CONTACT, PersonalDataFields::CONFIG_KEY_MAP);
+        $this->assertNotContains(
+            PersonalDataFields::PREFERRED_CONTACT,
+            PersonalDataFields::CONFIG_ACF_KEY_MAP
+        );
+        $this->assertArrayHasKey(PersonalDataFields::PREFERRED_CONTACT, PersonalDataFields::LABELS);
+    }
+
+    /**
      * @test
      */
     public function get_label_maps_legacy_underscore_names_to_canonical_labels(): void

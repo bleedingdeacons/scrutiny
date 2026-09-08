@@ -43,10 +43,16 @@ use function is_admin;
  * and the standing roles once more when the member is deleted.
  *
  * The remaining tracked member fields — position rotation, the two
- * availability flags, the two visibility toggles, area, accepts, the profile
- * and the meeting PO reference — are logged on change only. The first five
- * name their new value, being service or privacy settings that describe
- * nobody; the last four record only that they changed.
+ * availability flags, the preferred contact, the two visibility toggles,
+ * area, accepts, the profile and the meeting PO reference — are logged on
+ * change only. The first six name their new value, being service or privacy
+ * settings that describe nobody; the last four record only that they changed.
+ *
+ * The preferred contact is in that first set rather than with the numbers it
+ * chooses between: it names one of two options, not a number, so recording
+ * which way it went gives away nothing the audit log is protecting. Which
+ * number the helpline was pointed at, and by whom, is exactly what an
+ * auditor comes for.
  *
  * Two fields Unity's change tracker compares are deliberately never logged.
  * The anonymous name is one: renaming a member is not on its own an audit
@@ -383,6 +389,16 @@ class AuditTracker
             );
         }
 
+        if ($originalMember->getLandlineNumber() !== $updatedMember->getLandlineNumber()) {
+            $this->logger->log(
+                AuditLogger::ACTION_UPDATE,
+                AuditLogger::ENTITY_MEMBER,
+                $memberId,
+                PersonalDataFields::LANDLINE_NUMBER,
+                'Value changed'
+            );
+        }
+
         // The certification stage is a service status, not personal data, so
         // the new value is recorded outright rather than the opaque
         // "Value changed" used for the fields above. Who cleared a responder
@@ -412,9 +428,10 @@ class AuditTracker
     /**
      * Log changes to the member's service availability.
      *
-     * All three name their new value. None describes the person: a rotation
-     * date belongs to a service post, and the two flags say what work the
-     * member is available for. Who put someone on the helpline, and when, is
+     * All four name their new value. None describes the person: a rotation
+     * date belongs to a service post, the two flags say what work the member
+     * is available for, and the preferred contact names an option rather than
+     * a number. Who put someone on the helpline, on which line, and when, is
      * the entry an auditor comes looking for.
      *
      * @param int    $memberId       The member post ID
@@ -456,6 +473,21 @@ class AuditTracker
                 $updatedMember->isTelephoneResponder()
                     ? 'Available as a telephone responder'
                     : 'No longer available as a telephone responder'
+            );
+        }
+
+        // Names the new choice. A member losing their landline is moved back
+        // to Mobile by Unity rather than by anyone touching the setting, and
+        // that entry lands here too — the log should say the helpline stopped
+        // ringing a number, whichever edit caused it.
+        $preferredContact = $updatedMember->getPreferredContact();
+        if ($originalMember->getPreferredContact() !== $preferredContact) {
+            $this->logger->log(
+                AuditLogger::ACTION_UPDATE,
+                AuditLogger::ENTITY_MEMBER,
+                $memberId,
+                PersonalDataFields::PREFERRED_CONTACT,
+                'Changed to ' . $preferredContact->label()
             );
         }
     }

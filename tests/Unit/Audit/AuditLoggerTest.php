@@ -80,6 +80,7 @@ class AuditLoggerTest extends TestCase
         // the hyphenated form throughout.
         $this->assertSame('personal-email', PersonalDataFields::PERSONAL_EMAIL);
         $this->assertSame('mobile-number', PersonalDataFields::MOBILE_NUMBER);
+        $this->assertSame('landline-number', PersonalDataFields::LANDLINE_NUMBER);
     }
 
     /** @test */
@@ -87,7 +88,8 @@ class AuditLoggerTest extends TestCase
     {
         $this->assertContains(PersonalDataFields::PERSONAL_EMAIL, PersonalDataFields::ALL_FIELDS);
         $this->assertContains(PersonalDataFields::MOBILE_NUMBER, PersonalDataFields::ALL_FIELDS);
-        $this->assertCount(2, PersonalDataFields::ALL_FIELDS);
+        $this->assertContains(PersonalDataFields::LANDLINE_NUMBER, PersonalDataFields::ALL_FIELDS);
+        $this->assertCount(3, PersonalDataFields::ALL_FIELDS);
     }
 
     /** @test */
