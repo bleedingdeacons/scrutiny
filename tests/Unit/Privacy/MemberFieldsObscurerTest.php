@@ -34,6 +34,8 @@ class MemberFieldsObscurerTest extends TestCase
     private const FIELD_MOBILE_NUMBER  = 'about-layout-group_mobile-number';
     private const KEY_PERSONAL_EMAIL   = 'field_67d0eabc277cb';
     private const KEY_MOBILE_NUMBER    = 'field_67d0eaea7cdea';
+    private const FIELD_LANDLINE_NUMBER = 'about-layout-group_landline-number';
+    private const KEY_LANDLINE_NUMBER  = 'field_6a9d9c807e60f';
 
     protected function setUp(): void
     {
@@ -66,6 +68,8 @@ class MemberFieldsObscurerTest extends TestCase
                 'FIELD_MOBILE_NUMBER'  => self::FIELD_MOBILE_NUMBER,
                 'KEY_PERSONAL_EMAIL'   => self::KEY_PERSONAL_EMAIL,
                 'KEY_MOBILE_NUMBER'    => self::KEY_MOBILE_NUMBER,
+                'FIELD_LANDLINE_NUMBER' => self::FIELD_LANDLINE_NUMBER,
+                'KEY_LANDLINE_NUMBER'  => self::KEY_LANDLINE_NUMBER,
             ]);
 
         return new MemberFieldsObscurer($configuration, new PersonalDataPolicy());

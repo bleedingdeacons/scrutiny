@@ -46,6 +46,27 @@ final class PersonalDataFields
     public const MOBILE_NUMBER = 'mobile-number';
 
     /**
+     * Logical field name: member's landline phone number
+     */
+    public const LANDLINE_NUMBER = 'landline-number';
+
+    /**
+     * Logical field name: which of the member's two numbers to ring
+     *
+     * Deliberately not personal data, on the same reasoning as
+     * {@see self::RESPONDER_CERTIFICATION}: it names one of two options,
+     * not a number, and knowing that a member prefers their landline
+     * identifies nobody. It is therefore absent from
+     * {@see self::ALL_FIELDS}, {@see self::CONFIG_KEY_MAP} and
+     * {@see self::CONFIG_ACF_KEY_MAP}, so it is never obscured and never
+     * generates view entries — the numbers themselves are obscured, and
+     * that is where the protection belongs. Its audit entries name the
+     * new choice outright, because which number the helpline was pointed
+     * at is the whole question an auditor would be asking.
+     */
+    public const PREFERRED_CONTACT = 'preferred-contact';
+
+    /**
      * Logical field name: telephone-responder certification stage
      *
      * Deliberately not personal data — it is a service status, not something
@@ -242,6 +263,7 @@ final class PersonalDataFields
     public const ALL_FIELDS = [
         self::PERSONAL_EMAIL,
         self::MOBILE_NUMBER,
+        self::LANDLINE_NUMBER,
     ];
 
     /**
@@ -293,6 +315,7 @@ final class PersonalDataFields
     public const CONFIG_KEY_MAP = [
         'FIELD_PERSONAL_EMAIL'             => self::PERSONAL_EMAIL,
         'FIELD_MOBILE_NUMBER'              => self::MOBILE_NUMBER,
+        'FIELD_LANDLINE_NUMBER'            => self::LANDLINE_NUMBER,
         'FIELD_GDPR_ACCEPTED'              => self::GDPR_ACCEPTED,
         'FIELD_GDPR_ACCEPTED_AT'           => self::GDPR_ACCEPTED_AT,
         'FIELD_GDPR_ACCEPTANCE_VERSION'    => self::GDPR_ACCEPTANCE_VERSION,
@@ -311,6 +334,7 @@ final class PersonalDataFields
     public const CONFIG_ACF_KEY_MAP = [
         'KEY_PERSONAL_EMAIL'             => self::PERSONAL_EMAIL,
         'KEY_MOBILE_NUMBER'              => self::MOBILE_NUMBER,
+        'KEY_LANDLINE_NUMBER'            => self::LANDLINE_NUMBER,
         'KEY_GDPR_ACCEPTED'              => self::GDPR_ACCEPTED,
         'KEY_GDPR_ACCEPTED_AT'           => self::GDPR_ACCEPTED_AT,
         'KEY_GDPR_ACCEPTANCE_VERSION'    => self::GDPR_ACCEPTANCE_VERSION,
@@ -326,6 +350,8 @@ final class PersonalDataFields
     public const LABELS = [
         self::PERSONAL_EMAIL => 'Personal Email',
         self::MOBILE_NUMBER  => 'Mobile Number',
+        self::LANDLINE_NUMBER => 'Landline Number',
+        self::PREFERRED_CONTACT => 'Preferred Contact',
         self::RESPONDER_CERTIFICATION => 'Responder Certification',
         self::HOME_GROUP => 'Home Group',
         self::INTERGROUP_POSITION => 'Intergroup Position',

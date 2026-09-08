@@ -24,6 +24,8 @@ class MemberFieldsObscurerObscuringTest extends TestCase
     private const FIELD_MOBILE_NUMBER  = 'about-layout-group_mobile-number';
     private const KEY_PERSONAL_EMAIL   = 'field_aaa';
     private const KEY_MOBILE_NUMBER    = 'field_bbb';
+    private const FIELD_LANDLINE_NUMBER = 'about-layout-group_landline-number';
+    private const KEY_LANDLINE_NUMBER  = 'field_ccc';
 
     protected function setUp(): void
     {
@@ -47,6 +49,8 @@ class MemberFieldsObscurerObscuringTest extends TestCase
                 'FIELD_MOBILE_NUMBER'  => self::FIELD_MOBILE_NUMBER,
                 'KEY_PERSONAL_EMAIL'   => self::KEY_PERSONAL_EMAIL,
                 'KEY_MOBILE_NUMBER'    => self::KEY_MOBILE_NUMBER,
+                'FIELD_LANDLINE_NUMBER' => self::FIELD_LANDLINE_NUMBER,
+                'KEY_LANDLINE_NUMBER'  => self::KEY_LANDLINE_NUMBER,
             ]);
 
         return new MemberFieldsObscurer($configuration, new PersonalDataPolicy());
@@ -82,18 +86,22 @@ class MemberFieldsObscurerObscuringTest extends TestCase
         // format_value (frontend), priority 20.
         self::assertSame(20, Filters\has('acf/format_value/name=' . self::FIELD_PERSONAL_EMAIL, [$obscurer, 'obscureAcfPersonalEmail']));
         self::assertSame(20, Filters\has('acf/format_value/name=' . self::FIELD_MOBILE_NUMBER, [$obscurer, 'obscureAcfMobileNumber']));
+        self::assertSame(20, Filters\has('acf/format_value/name=' . self::FIELD_LANDLINE_NUMBER, [$obscurer, 'obscureAcfLandlineNumber']));
 
         // prepare_field (admin) on the short sub-field name, default priority.
         self::assertSame(10, Filters\has('acf/prepare_field/name=personal-email', [$obscurer, 'prepareAcfPersonalEmail']));
         self::assertSame(10, Filters\has('acf/prepare_field/name=mobile-number', [$obscurer, 'prepareAcfMobileNumber']));
+        self::assertSame(10, Filters\has('acf/prepare_field/name=landline-number', [$obscurer, 'prepareAcfLandlineNumber']));
 
         // …and again on the full name because the short name differs.
         self::assertSame(10, Filters\has('acf/prepare_field/name=' . self::FIELD_PERSONAL_EMAIL, [$obscurer, 'prepareAcfPersonalEmail']));
         self::assertSame(10, Filters\has('acf/prepare_field/name=' . self::FIELD_MOBILE_NUMBER, [$obscurer, 'prepareAcfMobileNumber']));
+        self::assertSame(10, Filters\has('acf/prepare_field/name=' . self::FIELD_LANDLINE_NUMBER, [$obscurer, 'prepareAcfLandlineNumber']));
 
         // update_value guards keyed by ACF field key, priority 10.
         self::assertSame(10, Filters\has('acf/update_value/key=' . self::KEY_PERSONAL_EMAIL, [$obscurer, 'preservePersonalEmail']));
         self::assertSame(10, Filters\has('acf/update_value/key=' . self::KEY_MOBILE_NUMBER, [$obscurer, 'preserveMobileNumber']));
+        self::assertSame(10, Filters\has('acf/update_value/key=' . self::KEY_LANDLINE_NUMBER, [$obscurer, 'preserveLandlineNumber']));
     }
 
     // ─── format_value (frontend) ────────────────────────────────────
@@ -140,6 +148,43 @@ class MemberFieldsObscurerObscuringTest extends TestCase
         $result = $this->makeObscurer()->obscureAcfMobileNumber('07700 900000', 1, []);
 
         $this->assertSame(PersonalDataPolicy::FIXED_PLACEHOLDER, $result);
+    }
+
+    /**
+     * A landline is obscured exactly as a mobile is — same placeholder, same
+     * capability gate. It is a number that reaches a named individual at
+     * home, so if anything the case is stronger.
+     *
+     * @test
+     */
+    public function format_value_obscures_the_landline_for_users_without_view(): void
+    {
+        $result = $this->makeObscurer()->obscureAcfLandlineNumber('0117 496 0000', 1, []);
+
+        $this->assertSame(PersonalDataPolicy::FIXED_PLACEHOLDER, $result);
+    }
+
+    /**
+     * @test
+     */
+    public function format_value_returns_the_landline_unchanged_for_viewers(): void
+    {
+        $this->grantView();
+
+        $result = $this->makeObscurer()->obscureAcfLandlineNumber('0117 496 0000', 1, []);
+
+        $this->assertSame('0117 496 0000', $result);
+    }
+
+    /**
+     * @test
+     */
+    public function format_value_leaves_an_empty_landline_untouched(): void
+    {
+        $obscurer = $this->makeObscurer();
+
+        $this->assertSame('', $obscurer->obscureAcfLandlineNumber('', 1, []));
+        $this->assertSame(null, $obscurer->obscureAcfLandlineNumber(null, 1, []));
     }
 
     // ─── prepare_field (admin) ──────────────────────────────────────
@@ -214,6 +259,46 @@ class MemberFieldsObscurerObscuringTest extends TestCase
         $this->assertSame(PersonalDataPolicy::FIXED_PLACEHOLDER, $result['placeholder']);
     }
 
+    /**
+     * @test
+     */
+    public function prepare_field_masks_the_landline_value_for_non_viewers(): void
+    {
+        $field = ['value' => '0117 496 0000', 'name' => 'landline-number'];
+
+        $result = $this->makeObscurer()->prepareAcfLandlineNumber($field);
+
+        $this->assertSame('', $result['value']);
+        $this->assertSame(PersonalDataPolicy::FIXED_PLACEHOLDER, $result['placeholder']);
+    }
+
+    /**
+     * @test
+     */
+    public function prepare_field_disables_the_landline_for_viewers_who_cannot_edit(): void
+    {
+        $this->grantView();
+
+        $result = $this->makeObscurer()->prepareAcfLandlineNumber(['value' => '0117 496 0000']);
+
+        $this->assertSame('0117 496 0000', $result['value']);
+        $this->assertSame(1, $result['disabled']);
+    }
+
+    /**
+     * @test
+     */
+    public function prepare_field_passes_through_a_false_or_empty_landline(): void
+    {
+        $obscurer = $this->makeObscurer();
+
+        $this->assertFalse($obscurer->prepareAcfLandlineNumber(false));
+        $this->assertSame(
+            ['value' => ''],
+            $obscurer->prepareAcfLandlineNumber(['value' => ''])
+        );
+    }
+
     // ─── update_value: the clear sentinel ───────────────────────────
 
     /**
@@ -267,5 +352,60 @@ class MemberFieldsObscurerObscuringTest extends TestCase
         );
 
         $this->assertSame('07700 900000', $result);
+    }
+
+    /**
+     * @test
+     */
+    public function update_value_rejects_a_landline_change_from_a_user_who_cannot_edit(): void
+    {
+        $GLOBALS['scrutiny_test_acf_fields'][23462][self::FIELD_LANDLINE_NUMBER] = '0117 496 0000';
+
+        $result = $this->makeObscurer()->preserveLandlineNumber(
+            '0117 496 9999',
+            23462,
+            ['name' => self::FIELD_LANDLINE_NUMBER, 'key' => self::KEY_LANDLINE_NUMBER]
+        );
+
+        $this->assertSame('0117 496 0000', $result);
+    }
+
+    /**
+     * @test
+     */
+    public function update_value_preserves_a_landline_when_a_non_viewer_editor_submits_blank(): void
+    {
+        $this->grantEdit();
+        $GLOBALS['scrutiny_test_acf_fields'][23462][self::FIELD_LANDLINE_NUMBER] = '0117 496 0000';
+
+        $result = $this->makeObscurer()->preserveLandlineNumber(
+            '',
+            23462,
+            ['name' => self::FIELD_LANDLINE_NUMBER, 'key' => self::KEY_LANDLINE_NUMBER]
+        );
+
+        $this->assertSame('0117 496 0000', $result);
+    }
+
+    /**
+     * The Clear button submits a sentinel rather than an empty string, so
+     * that an intentional clear is distinguishable from an untouched field
+     * — which for a landline also drops the member's preference back to
+     * Mobile downstream.
+     *
+     * @test
+     */
+    public function update_value_clears_a_landline_on_the_sentinel(): void
+    {
+        $this->grantEdit();
+        $GLOBALS['scrutiny_test_acf_fields'][23462][self::FIELD_LANDLINE_NUMBER] = '0117 496 0000';
+
+        $result = $this->makeObscurer()->preserveLandlineNumber(
+            PersonalDataPolicy::CLEAR_SENTINEL,
+            23462,
+            ['name' => self::FIELD_LANDLINE_NUMBER, 'key' => self::KEY_LANDLINE_NUMBER]
+        );
+
+        $this->assertSame('', $result);
     }
 }

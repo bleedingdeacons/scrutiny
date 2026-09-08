@@ -17,9 +17,9 @@ use function get_field;
 /**
  * Member Fields Obscurer
  *
- * Obscures the two ACF personal-data fields (personal email and mobile
- * number) on the Unity Member edit screen and anywhere those fields are
- * read via get_field().
+ * Obscures the three ACF personal-data fields (personal email, mobile
+ * number and landline number) on the Unity Member edit screen and anywhere
+ * those fields are read via get_field().
  *
  * Users with {@see PersonalDataPolicy::VIEW_CAPABILITY} see unobscured
  * values; all other users see the fixed-width placeholder.
@@ -55,6 +55,7 @@ final class MemberFieldsObscurer
 
         $emailFieldFull = $this->member_config['FIELD_PERSONAL_EMAIL'] ?? '';
         $mobileFieldFull = $this->member_config['FIELD_MOBILE_NUMBER'] ?? '';
+        $landlineFieldFull = $this->member_config['FIELD_LANDLINE_NUMBER'] ?? '';
 
         // Extract the sub-field _name (part after the group prefix separator "_")
         // e.g. "about-layout-group_personal-email" → "personal-email"
@@ -64,20 +65,26 @@ final class MemberFieldsObscurer
         $mobileFieldShort = str_contains($mobileFieldFull, '_')
             ? substr($mobileFieldFull, strpos($mobileFieldFull, '_') + 1)
             : $mobileFieldFull;
+        $landlineFieldShort = str_contains($landlineFieldFull, '_')
+            ? substr($landlineFieldFull, strpos($landlineFieldFull, '_') + 1)
+            : $landlineFieldFull;
 
         // Frontend: acf/format_value uses the full field name (as passed to get_field)
         add_filter('acf/format_value/name=' . $emailFieldFull, [$this, 'obscureAcfPersonalEmail'], 20, 3);
         add_filter('acf/format_value/name=' . $mobileFieldFull, [$this, 'obscureAcfMobileNumber'], 20, 3);
+        add_filter('acf/format_value/name=' . $landlineFieldFull, [$this, 'obscureAcfLandlineNumber'], 20, 3);
 
         // Admin edit forms: acf/prepare_field matches against _name (the sub-field
         // part only, without the group prefix). format_value does NOT fire in admin.
         add_filter('acf/prepare_field/name=' . $emailFieldShort, [$this, 'prepareAcfPersonalEmail']);
         add_filter('acf/prepare_field/name=' . $mobileFieldShort, [$this, 'prepareAcfMobileNumber']);
+        add_filter('acf/prepare_field/name=' . $landlineFieldShort, [$this, 'prepareAcfLandlineNumber']);
 
         // Also register with the full name in case _name includes the group prefix
         if ($emailFieldShort !== $emailFieldFull) {
             add_filter('acf/prepare_field/name=' . $emailFieldFull, [$this, 'prepareAcfPersonalEmail']);
             add_filter('acf/prepare_field/name=' . $mobileFieldFull, [$this, 'prepareAcfMobileNumber']);
+            add_filter('acf/prepare_field/name=' . $landlineFieldFull, [$this, 'prepareAcfLandlineNumber']);
         }
 
         // Prevent empty submissions from wiping obscured field data.
@@ -92,12 +99,16 @@ final class MemberFieldsObscurer
         // to fire exactly once per field with the correct value.
         $emailFieldKey = $this->member_config['KEY_PERSONAL_EMAIL'] ?? '';
         $mobileFieldKey = $this->member_config['KEY_MOBILE_NUMBER'] ?? '';
+        $landlineFieldKey = $this->member_config['KEY_LANDLINE_NUMBER'] ?? '';
 
         if ($emailFieldKey !== '') {
             add_filter('acf/update_value/key=' . $emailFieldKey, [$this, 'preservePersonalEmail'], 10, 3);
         }
         if ($mobileFieldKey !== '') {
             add_filter('acf/update_value/key=' . $mobileFieldKey, [$this, 'preserveMobileNumber'], 10, 3);
+        }
+        if ($landlineFieldKey !== '') {
+            add_filter('acf/update_value/key=' . $landlineFieldKey, [$this, 'preserveLandlineNumber'], 10, 3);
         }
     }
 
@@ -131,6 +142,27 @@ final class MemberFieldsObscurer
      * @return mixed The potentially obscured value
      */
     public function obscureAcfMobileNumber(mixed $value, mixed $postId, array $field): mixed
+    {
+        if (!is_string($value) || $value === '') {
+            return $value;
+        }
+
+        if ($this->policy->currentUserCanView()) {
+            return $value;
+        }
+
+        return $this->policy->obscurePhone($value);
+    }
+
+    /**
+     * ACF filter: obscure the landline number field value (frontend via format_value)
+     *
+     * @param mixed $value The field value
+     * @param mixed $postId The post ID
+     * @param array<string, mixed> $field The ACF field array
+     * @return mixed The potentially obscured value
+     */
+    public function obscureAcfLandlineNumber(mixed $value, mixed $postId, array $field): mixed
     {
         if (!is_string($value) || $value === '') {
             return $value;
@@ -213,6 +245,38 @@ final class MemberFieldsObscurer
     }
 
     /**
+     * ACF prepare_field: obscure landline number in admin edit forms
+     *
+     * @param array<string, mixed>|false $field The ACF field array, or false if already hidden
+     * @return array<string, mixed>|false The modified field array
+     */
+    public function prepareAcfLandlineNumber(array|false $field): array|false
+    {
+        if ($field === false) {
+            return $field;
+        }
+
+        $value = $field['value'] ?? '';
+
+        if (!is_string($value) || $value === '') {
+            return $field;
+        }
+
+        if ($this->policy->currentUserCanView()) {
+            // User can see the real value — disable the input if they cannot edit
+            if (!$this->policy->currentUserCanEdit()) {
+                $field['disabled'] = 1;
+            }
+            return $field;
+        }
+
+        $field['placeholder'] = $this->policy->obscurePhone($value);
+        $field['value'] = '';
+
+        return $field;
+    }
+
+    /**
      * ACF update_value: guard personal email updates behind the edit capability.
      *
      * Users with the edit capability may update the value freely.
@@ -253,7 +317,24 @@ final class MemberFieldsObscurer
     }
 
     /**
-     * Shared implementation for the email and mobile preserve filters.
+     * ACF update_value: guard landline number updates behind the edit capability.
+     *
+     * @param mixed $value The new value being saved
+     * @param mixed $postId The post ID
+     * @param array<string, mixed> $field The ACF field array
+     * @return mixed The value to save
+     */
+    public function preserveLandlineNumber(mixed $value, mixed $postId, array $field): mixed
+    {
+        return $this->preserveAcfValue(
+            $value,
+            $postId,
+            $this->member_config['FIELD_LANDLINE_NUMBER'] ?? ''
+        );
+    }
+
+    /**
+     * Shared implementation for the email, mobile and landline preserve filters.
      */
     private function preserveAcfValue(mixed $value, mixed $postId, string $fieldName): mixed
     {
@@ -263,8 +344,9 @@ final class MemberFieldsObscurer
         // capability gate below assumes a request with a current user
         // (admin form, acf_form()) and silently drops the value otherwise.
         //
-        // This is safe for the personal-email and mobile-number fields
-        // because the Member ACF field group is registered with
+        // This is safe for the personal-email, mobile-number and
+        // landline-number fields because the Member ACF field group is
+        // registered with
         // show_in_rest=0, so they are not exposed via core's
         // /wp/v2/{post_type} endpoints — Gutenberg cannot reach them.
         // Only programmatic REST callers (Integrity) hit this path.

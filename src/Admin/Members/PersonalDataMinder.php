@@ -22,8 +22,8 @@ use function wp_enqueue_script;
 use function wp_localize_script;
 
 /**
- * Manages the personal data fields (Personal Email and Mobile Number)
- * on the member edit screen. Adds "Clear / Undo" buttons, enforces
+ * Manages the personal data fields (Personal Email, Mobile Number and
+ * Landline Number) on the member edit screen. Adds "Clear / Undo" buttons, enforces
  * edit-capability restrictions, and prevents accidental data loss.
  */
 class PersonalDataMinder

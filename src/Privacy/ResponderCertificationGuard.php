@@ -29,7 +29,8 @@ use function wp_register_style;
  * is only changeable by users holding {@see self::EDIT_CAPABILITY}.
  *
  * This mirrors the edit-side protection {@see MemberFieldsObscurer} applies
- * to the personal-email and mobile-number fields, minus the view/obscuring
+ * to the personal-email, mobile-number and landline-number fields, minus the
+ * view/obscuring
  * tier: a certification stage is not personal data, so it is never masked —
  * it is simply read-only for users without the capability.
  *

@@ -180,5 +180,6 @@
     acf.addAction('ready', function () {
         attachClearButton('personal-email', 'personal-email-clear', 'This will clear the email permanently. Continue?');
         attachClearButton('mobile-number', 'mobile-number-clear', 'This will clear the mobile number permanently. Continue?');
+        attachClearButton('landline-number', 'landline-number-clear', 'This will clear the landline number permanently. Continue?');
     });
 })(jQuery);

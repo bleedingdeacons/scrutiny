@@ -16,6 +16,7 @@ use Unity\Groups\Interfaces\Group;
 use Unity\Groups\Interfaces\GroupRepository;
 use Unity\Meetings\Interfaces\Meeting;
 use Unity\Members\Interfaces\Member;
+use Unity\Members\PreferredContact;
 use Unity\Members\ResponderCertification;
 use Unity\Positions\Interfaces\PositionRepository;
 
@@ -276,6 +277,8 @@ class AuditTrackerCoverageTest extends TestCase
             'getId' => 42,
             'getPersonalEmail' => 'same@example.com',
             'getMobileNumber' => '07700 900000',
+            'getLandlineNumber' => '0117 496 0000',
+            'getPreferredContact' => PreferredContact::Mobile,
             'getResponderCertification' => ResponderCertification::None,
             'getHomeGroup' => 0,
             'getIntergroupPosition' => 0,
