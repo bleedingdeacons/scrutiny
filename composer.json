@@ -15,7 +15,8 @@
         }
     ],
     "require": {
-        "php": ">=8.4"
+        "php": ">=8.4",
+        "ext-mbstring": "*"
     },
     "require-dev": {
         "bleedingdeacons/wp-mocks": "^3.0",
