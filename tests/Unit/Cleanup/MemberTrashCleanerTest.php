@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Scrutiny\Tests\Unit\Cleanup;
 
+use PHPUnit\Framework\Attributes\Test;
 use DateTimeImmutable;
 use PHPUnit\Framework\TestCase;
 use Scrutiny\Cleanup\MemberTrashCleaner;
@@ -42,7 +43,7 @@ class MemberTrashCleanerTest extends TestCase
         unset($GLOBALS['scrutiny_test_delete_returns_false']);
     }
 
-    /** @test */
+    #[Test]
     public function it_deletes_a_trashed_member_past_the_retention_window(): void
     {
         // Trashed 14 days ago against a 7-day retention → eligible.
@@ -59,7 +60,7 @@ class MemberTrashCleanerTest extends TestCase
         $this->assertSame(TrashCleanResult::REASON_RETENTION_EXPIRED, $reasons[1] ?? null);
     }
 
-    /** @test */
+    #[Test]
     public function it_keeps_a_trashed_member_within_the_retention_window(): void
     {
         // Trashed 3 days ago against a 7-day retention → kept.
@@ -76,7 +77,7 @@ class MemberTrashCleanerTest extends TestCase
         $this->assertSame(TrashCleanResult::SKIP_RETENTION_NOT_REACHED, $skipReasons[2] ?? null);
     }
 
-    /** @test */
+    #[Test]
     public function it_skips_a_member_with_no_trash_meta_time(): void
     {
         // Without a parseable trash timestamp the cleaner refuses to
@@ -94,7 +95,7 @@ class MemberTrashCleanerTest extends TestCase
         $this->assertSame(TrashCleanResult::SKIP_MISSING_TRASH_TIME, $skipReasons[3] ?? null);
     }
 
-    /** @test */
+    #[Test]
     public function it_skips_a_member_when_trash_meta_time_is_zero(): void
     {
         // A "0" trash timestamp would be 1970, which can't be a
@@ -113,7 +114,7 @@ class MemberTrashCleanerTest extends TestCase
         $this->assertSame(TrashCleanResult::SKIP_MISSING_TRASH_TIME, $skipReasons[4] ?? null);
     }
 
-    /** @test */
+    #[Test]
     public function it_records_skip_when_wp_delete_post_fails(): void
     {
         // Simulate WP returning false from wp_delete_post — the
@@ -139,7 +140,7 @@ class MemberTrashCleanerTest extends TestCase
         $this->assertSame(TrashCleanResult::SKIP_DELETE_FAILED, $skipReasons[5] ?? null);
     }
 
-    /** @test */
+    #[Test]
     public function negative_retention_is_clamped_to_zero(): void
     {
         // Defence in depth: a misconfigured caller passing negative
@@ -157,7 +158,7 @@ class MemberTrashCleanerTest extends TestCase
         $this->assertSame([6], $cleaner->getDeletedIds());
     }
 
-    /** @test */
+    #[Test]
     public function zero_retention_deletes_everything_currently_in_trash(): void
     {
         // An admin who deliberately sets retention to zero is asking
@@ -176,7 +177,7 @@ class MemberTrashCleanerTest extends TestCase
         $this->assertSame([7, 8], $deleted);
     }
 
-    /** @test */
+    #[Test]
     public function empty_member_list_completes_cleanly(): void
     {
         // No work to do → result is empty, no errors, considered
@@ -189,7 +190,7 @@ class MemberTrashCleanerTest extends TestCase
         $this->assertSame(0, $result->getConsidered());
     }
 
-    /** @test */
+    #[Test]
     public function it_logs_a_summary_entry_at_info_level(): void
     {
         // Mirrors MemberPruner's logging contract: a single closing
@@ -214,7 +215,7 @@ class MemberTrashCleanerTest extends TestCase
         $this->assertSame(7, $entry['context']['retention_days']);
     }
 
-    /** @test */
+    #[Test]
     public function it_logs_per_deletion_at_info_and_per_failure_at_warning(): void
     {
         // Two trashed members; the second has missing meta so

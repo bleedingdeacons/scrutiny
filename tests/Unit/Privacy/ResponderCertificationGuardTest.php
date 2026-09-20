@@ -4,9 +4,12 @@ declare(strict_types=1);
 
 namespace Scrutiny\Tests\Unit\Privacy;
 
+use PHPUnit\Framework\Attributes\Test;
+use PHPUnit\Framework\Attributes\PreserveGlobalState;
+use PHPUnit\Framework\Attributes\RunInSeparateProcess;
+use function Brain\Monkey\Filters\has;
+use function Brain\Monkey\Functions\expect;
 use BleedingDeacons\WpMocks\WpState;
-use Brain\Monkey\Filters;
-use Brain\Monkey\Functions;
 use Scrutiny\Privacy\ResponderCertificationGuard;
 use Scrutiny\Tests\TestCase;
 use Unity\Core\Interfaces\Configuration;
@@ -88,7 +91,7 @@ class ResponderCertificationGuardTest extends TestCase
         ];
     }
 
-    /** @test */
+    #[Test]
     public function it_disables_every_radio_choice_for_users_without_the_capability(): void
     {
         // ACF radio reads $field['disabled'] as a list of choice values to
@@ -109,7 +112,7 @@ class ResponderCertificationGuardTest extends TestCase
         );
     }
 
-    /** @test */
+    #[Test]
     public function it_leaves_the_field_editable_for_users_with_the_capability(): void
     {
         $GLOBALS['scrutiny_test_capabilities'] = [
@@ -122,7 +125,7 @@ class ResponderCertificationGuardTest extends TestCase
         $this->assertArrayNotHasKey('disabled', $field);
     }
 
-    /** @test */
+    #[Test]
     public function it_passes_through_a_hidden_field_untouched(): void
     {
         // ACF passes false when the field is already hidden (e.g. by
@@ -130,7 +133,7 @@ class ResponderCertificationGuardTest extends TestCase
         $this->assertFalse($this->makeGuard()->disableForReadOnlyUser(false));
     }
 
-    /** @test */
+    #[Test]
     public function it_preserves_the_stored_value_when_user_cannot_edit(): void
     {
         // REST_REQUEST is intentionally not defined — admin form saves go
@@ -150,7 +153,7 @@ class ResponderCertificationGuardTest extends TestCase
         );
     }
 
-    /** @test */
+    #[Test]
     public function it_lets_the_change_through_when_user_can_edit(): void
     {
         $GLOBALS['scrutiny_test_capabilities'] = [
@@ -167,7 +170,7 @@ class ResponderCertificationGuardTest extends TestCase
         $this->assertSame('Pending', $result);
     }
 
-    /** @test */
+    #[Test]
     public function it_lets_the_initial_value_through_when_nothing_is_stored(): void
     {
         // No stored value and no capability: a create-time assignment by the
@@ -181,11 +184,9 @@ class ResponderCertificationGuardTest extends TestCase
         $this->assertSame('Applied', $result);
     }
 
-    /**
-     * @test
-     * @runInSeparateProcess
-     * @preserveGlobalState disabled
-     */
+    #[PreserveGlobalState(false)]
+    #[Test]
+    #[RunInSeparateProcess]
     public function it_lets_writes_through_during_rest_requests(): void
     {
         define('REST_REQUEST', true);
@@ -204,7 +205,7 @@ class ResponderCertificationGuardTest extends TestCase
         $this->assertSame('Pending', $result);
     }
 
-    /** @test */
+    #[Test]
     public function register_wires_the_prepare_save_and_style_hooks_when_the_key_is_set(): void
     {
         $guard = $this->makeGuard();
@@ -214,8 +215,8 @@ class ResponderCertificationGuardTest extends TestCase
         // prepare_field + update_value are filters, so Brain Monkey holds
         // them; the enqueue hook is an action, recorded by the bootstrap's own
         // add_action stub, which this file's tests read directly.
-        self::assertSame(10, Filters\has('acf/prepare_field/key=' . self::KEY_RESPONDER_CERTIFICATION, [$guard, 'disableForReadOnlyUser']));
-        self::assertSame(10, Filters\has('acf/update_value/key=' . self::KEY_RESPONDER_CERTIFICATION, [$guard, 'preserveCertification']));
+        self::assertSame(10, has('acf/prepare_field/key=' . self::KEY_RESPONDER_CERTIFICATION, [$guard, 'disableForReadOnlyUser']));
+        self::assertSame(10, has('acf/update_value/key=' . self::KEY_RESPONDER_CERTIFICATION, [$guard, 'preserveCertification']));
 
         $this->assertContains(
             'acf/input/admin_enqueue_scripts',
@@ -223,7 +224,7 @@ class ResponderCertificationGuardTest extends TestCase
         );
     }
 
-    /** @test */
+    #[Test]
     public function register_is_a_noop_when_the_certification_key_is_absent(): void
     {
         // Without a configured field key there is nothing to hook: register()
@@ -234,7 +235,7 @@ class ResponderCertificationGuardTest extends TestCase
         $this->assertSame([], $GLOBALS['scrutiny_test_actions']);
     }
 
-    /** @test */
+    #[Test]
     public function it_falls_back_to_a_boolean_disabled_for_a_non_radio_field(): void
     {
         // A field that is neither radio nor checkbox has no per-choice
@@ -250,14 +251,14 @@ class ResponderCertificationGuardTest extends TestCase
         $this->assertStringContainsString('scrutiny-cert-readonly', $field['wrapper']['class']);
     }
 
-    /** @test */
+    #[Test]
     public function it_enqueues_the_readonly_style_on_the_member_screen_for_locked_users(): void
     {
-        Functions\expect('get_current_screen')
+        expect('get_current_screen')
             ->andReturn((object) ['post_type' => self::POST_TYPE]);
-        Functions\expect('wp_register_style')->once();
-        Functions\expect('wp_enqueue_style')->once()->with('scrutiny-cert-readonly');
-        Functions\expect('wp_add_inline_style')
+        expect('wp_register_style')->once();
+        expect('wp_enqueue_style')->once()->with('scrutiny-cert-readonly');
+        expect('wp_add_inline_style')
             ->once()
             ->with('scrutiny-cert-readonly', \Mockery::pattern('/scrutiny-cert-readonly/'));
 
@@ -268,30 +269,30 @@ class ResponderCertificationGuardTest extends TestCase
         $this->assertTrue(true);
     }
 
-    /** @test */
+    #[Test]
     public function it_does_not_enqueue_the_style_for_users_who_can_edit(): void
     {
         $GLOBALS['scrutiny_test_capabilities'][ResponderCertificationGuard::EDIT_CAPABILITY] = true;
 
         // Returns before touching the screen or the style functions.
-        Functions\expect('wp_enqueue_style')->never();
+        expect('wp_enqueue_style')->never();
 
         $this->makeGuard()->enqueueReadOnlyStyle();
 
         $this->assertTrue(true);
     }
 
-    /** @test */
+    #[Test]
     public function it_does_not_enqueue_the_style_off_the_member_screen(): void
     {
-        Functions\expect('wp_enqueue_style')->never();
+        expect('wp_enqueue_style')->never();
 
         // No screen resolved…
         WpState::$screen = null;
         $this->makeGuard()->enqueueReadOnlyStyle();
 
         // …and a different post type.
-        Functions\expect('get_current_screen')->andReturn((object) ['post_type' => 'post']);
+        expect('get_current_screen')->andReturn((object) ['post_type' => 'post']);
         $this->makeGuard()->enqueueReadOnlyStyle();
 
         $this->assertTrue(true);

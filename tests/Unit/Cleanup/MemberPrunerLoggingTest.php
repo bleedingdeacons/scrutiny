@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Scrutiny\Tests\Unit\Cleanup;
 
+use PHPUnit\Framework\Attributes\Test;
 use DateTimeImmutable;
 use PHPUnit\Framework\TestCase;
 use Scrutiny\Cleanup\PruneResult;
@@ -41,7 +42,7 @@ class MemberPrunerLoggingTest extends TestCase
         $GLOBALS['scrutiny_test_options'] = [];
     }
 
-    /** @test */
+    #[Test]
     public function it_logs_one_info_entry_per_trashed_member(): void
     {
         // Two trashable members in two different categories so we
@@ -77,7 +78,7 @@ class MemberPrunerLoggingTest extends TestCase
         $this->assertSame(PruneResult::REASON_ORPHAN_INACTIVE, $byMemberId[3]['context']['reason']);
     }
 
-    /** @test */
+    #[Test]
     public function trashed_log_entries_carry_the_detail_string_from_the_result(): void
     {
         // The detail string is what the pruner already stores on the
@@ -98,7 +99,7 @@ class MemberPrunerLoggingTest extends TestCase
         $this->assertStringContainsString('rotation=2024-01-01', $detail);
     }
 
-    /** @test */
+    #[Test]
     public function it_logs_a_warning_when_wp_trash_post_fails(): void
     {
         // Failures get WARNING rather than INFO so they surface in
@@ -126,7 +127,7 @@ class MemberPrunerLoggingTest extends TestCase
         $this->assertCount(0, $trashedInfos);
     }
 
-    /** @test */
+    #[Test]
     public function routine_skips_are_not_logged_per_member(): void
     {
         // "Officer not due" / "home-group recent" skips can run into
@@ -153,7 +154,7 @@ class MemberPrunerLoggingTest extends TestCase
         $this->assertCount(0, $perMemberWarnings);
     }
 
-    /** @test */
+    #[Test]
     public function it_emits_a_summary_entry_at_the_end_with_counters(): void
     {
         // Build a mixed scenario so all the counters carry non-zero
@@ -198,7 +199,7 @@ class MemberPrunerLoggingTest extends TestCase
         );
     }
 
-    /** @test */
+    #[Test]
     public function the_summary_entry_is_emitted_after_the_per_member_entries(): void
     {
         // Order matters: the summary is meant to *close* the run, so
@@ -225,7 +226,7 @@ class MemberPrunerLoggingTest extends TestCase
         $this->assertGreaterThan($trashedIndex, $summaryIndex);
     }
 
-    /** @test */
+    #[Test]
     public function disabled_short_circuit_emits_only_the_disabled_log_entry(): void
     {
         // When the pruner is disabled, prune() returns immediately
@@ -253,7 +254,7 @@ class MemberPrunerLoggingTest extends TestCase
         $this->assertNotContains('Member prune complete', $messages);
     }
 
-    /** @test */
+    #[Test]
     public function all_log_entries_use_the_scrutiny_channel(): void
     {
         // Every entry the pruner emits must land on the 'scrutiny'

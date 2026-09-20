@@ -4,8 +4,12 @@ declare(strict_types=1);
 
 namespace Scrutiny\Tests\Unit\Fields;
 
-use Brain\Monkey\Filters;
-use Brain\Monkey\Functions;
+use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\Test;
+use PHPUnit\Framework\Attributes\DataProvider;
+use PHPUnit\Framework\MockObject\MockObject;
+use function Brain\Monkey\Filters\expectApplied;
+use function Brain\Monkey\Functions\when;
 use Scrutiny\Admin\AuditLogAdmin;
 use Scrutiny\Audit\Interfaces\AuditRepository;
 use Scrutiny\Fields\AuditHistoryRenderer;
@@ -25,12 +29,11 @@ use stdClass;
  *     would show one member's trail on another member's screen.
  *   - The count/page split behind "showing N of M".
  *   - Escaping, on every column that carries stored text.
- *
- * @covers \Scrutiny\Fields\AuditHistoryRenderer
  */
+#[CoversClass(\Scrutiny\Fields\AuditHistoryRenderer::class)]
 class AuditHistoryRendererTest extends TestCase
 {
-    /** @var AuditRepository&\PHPUnit\Framework\MockObject\MockObject */
+    /** @var AuditRepository&MockObject */
     private $repository;
 
     private AuditHistoryRenderer $renderer;
@@ -92,8 +95,7 @@ class AuditHistoryRendererTest extends TestCase
     // ──────────────────────────────────────────────
     //  Capability gate
     // ──────────────────────────────────────────────
-
-    /** @test */
+    #[Test]
     public function it_refuses_to_render_without_the_capability(): void
     {
         $GLOBALS['scrutiny_test_capabilities'] = [];
@@ -109,12 +111,12 @@ class AuditHistoryRendererTest extends TestCase
         $this->assertStringNotContainsString('<table', $html);
     }
 
-    /** @test */
+    #[Test]
     public function it_honours_a_capability_lowered_by_the_filter(): void
     {
         $GLOBALS['scrutiny_test_capabilities'] = ['edit_others_posts' => true];
 
-        Filters\expectApplied(AuditHistoryRenderer::CAPABILITY_FILTER)
+        expectApplied(AuditHistoryRenderer::CAPABILITY_FILTER)
             ->once()
             ->andReturn('edit_others_posts');
 
@@ -126,8 +128,7 @@ class AuditHistoryRendererTest extends TestCase
     // ──────────────────────────────────────────────
     //  Empty states
     // ──────────────────────────────────────────────
-
-    /** @test */
+    #[Test]
     public function it_explains_itself_on_an_unsaved_record(): void
     {
         // entity_id 0 is what an unsaved post resolves to. Querying it would
@@ -140,7 +141,7 @@ class AuditHistoryRendererTest extends TestCase
         $this->assertStringContainsString('once this record has been saved', $html);
     }
 
-    /** @test */
+    #[Test]
     public function it_says_so_when_the_record_has_no_entries(): void
     {
         $this->expectEntries([]);
@@ -154,8 +155,7 @@ class AuditHistoryRendererTest extends TestCase
     // ──────────────────────────────────────────────
     //  Query criteria
     // ──────────────────────────────────────────────
-
-    /** @test */
+    #[Test]
     public function it_queries_the_record_it_was_asked_for(): void
     {
         $captured = null;
@@ -178,7 +178,7 @@ class AuditHistoryRendererTest extends TestCase
         $this->assertArrayNotHasKey('action', $captured);
     }
 
-    /** @test */
+    #[Test]
     public function it_passes_a_chosen_action_through_as_a_filter(): void
     {
         $captured = null;
@@ -195,7 +195,7 @@ class AuditHistoryRendererTest extends TestCase
         $this->assertSame('view', $captured['action']);
     }
 
-    /** @test */
+    #[Test]
     public function it_falls_back_to_the_member_entity_type(): void
     {
         $captured = null;
@@ -212,10 +212,8 @@ class AuditHistoryRendererTest extends TestCase
         $this->assertSame(AuditHistoryRenderer::DEFAULT_ENTITY_TYPE, $captured['entity_type']);
     }
 
-    /**
-     * @test
-     * @dataProvider clampedEntryCounts
-     */
+    #[DataProvider('clampedEntryCounts')]
+    #[Test]
     public function it_clamps_the_page_size_to_what_the_repository_will_serve(int $asked, int $expected): void
     {
         $captured = null;
@@ -253,8 +251,7 @@ class AuditHistoryRendererTest extends TestCase
     // ──────────────────────────────────────────────
     //  Table output
     // ──────────────────────────────────────────────
-
-    /** @test */
+    #[Test]
     public function it_renders_a_row_per_entry(): void
     {
         $this->expectEntries([
@@ -274,7 +271,7 @@ class AuditHistoryRendererTest extends TestCase
         $this->assertStringContainsString('scrutiny-badge--update', $html);
     }
 
-    /** @test */
+    #[Test]
     public function it_labels_the_field_rather_than_naming_the_meta_key(): void
     {
         $this->expectEntries([$this->entry(['field_name' => PersonalDataFields::PERSONAL_EMAIL])]);
@@ -282,7 +279,7 @@ class AuditHistoryRendererTest extends TestCase
         $this->assertStringContainsString('Personal Email', $this->renderer->render(42));
     }
 
-    /** @test */
+    #[Test]
     public function it_hides_ip_addresses_unless_asked_for_them(): void
     {
         $this->expectEntries([$this->entry(['ip_address' => '203.0.113.0'])]);
@@ -290,7 +287,7 @@ class AuditHistoryRendererTest extends TestCase
         $this->assertStringNotContainsString('203.0.113.0', $this->renderer->render(42));
     }
 
-    /** @test */
+    #[Test]
     public function it_shows_ip_addresses_when_the_setting_is_on(): void
     {
         $this->expectEntries([$this->entry(['ip_address' => '203.0.113.0'])]);
@@ -298,13 +295,13 @@ class AuditHistoryRendererTest extends TestCase
         $this->assertStringContainsString('203.0.113.0', $this->renderer->render(42, ['show_ip' => true]));
     }
 
-    /** @test */
+    #[Test]
     public function it_renders_reach_caller_details_as_a_named_requester(): void
     {
         // Reach's structured detail strings are the reason this field exists
         // on a member: they record who was shown that member's contact
         // details. Raw `caller:John D.#7` would be unreadable.
-        Functions\when('get_edit_post_link')->justReturn('https://example.test/edit');
+        when('get_edit_post_link')->justReturn('https://example.test/edit');
 
         $this->expectEntries([
             $this->entry(['action' => 'view', 'detail' => 'caller:John D.#7']),
@@ -319,8 +316,7 @@ class AuditHistoryRendererTest extends TestCase
     // ──────────────────────────────────────────────
     //  Summary and full-log link
     // ──────────────────────────────────────────────
-
-    /** @test */
+    #[Test]
     public function it_reports_the_full_total_not_the_page_size(): void
     {
         // count() is asked separately for exactly this reason: a member with
@@ -332,10 +328,10 @@ class AuditHistoryRendererTest extends TestCase
         $this->assertStringContainsString('2 most recent of 137', $html);
     }
 
-    /** @test */
+    #[Test]
     public function it_links_to_the_full_log_filtered_to_this_record(): void
     {
-        Functions\when('get_the_title')->justReturn('John D.');
+        when('get_the_title')->justReturn('John D.');
         $this->expectEntries([$this->entry()]);
 
         $html = $this->renderer->render(42);
@@ -345,7 +341,7 @@ class AuditHistoryRendererTest extends TestCase
         $this->assertStringContainsString('View the full audit log', $html);
     }
 
-    /** @test */
+    #[Test]
     public function it_omits_the_link_for_users_who_cannot_open_the_audit_log(): void
     {
         // The gate was lowered by the filter, so the table renders — but the
@@ -353,7 +349,7 @@ class AuditHistoryRendererTest extends TestCase
         // on "You do not have permission" is worse than no link.
         $GLOBALS['scrutiny_test_capabilities'] = ['edit_others_posts' => true];
 
-        Filters\expectApplied(AuditHistoryRenderer::CAPABILITY_FILTER)
+        expectApplied(AuditHistoryRenderer::CAPABILITY_FILTER)
             ->andReturn('edit_others_posts');
 
         $this->expectEntries([$this->entry()]);
@@ -367,8 +363,7 @@ class AuditHistoryRendererTest extends TestCase
     // ──────────────────────────────────────────────
     //  Escaping
     // ──────────────────────────────────────────────
-
-    /** @test */
+    #[Test]
     public function it_escapes_every_stored_value_it_prints(): void
     {
         $this->expectEntries([

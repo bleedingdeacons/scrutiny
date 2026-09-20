@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace Scrutiny\Tests\Unit\Audit;
 
-use Brain\Monkey\Functions;
+use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\Test;
+use function Brain\Monkey\Functions\when;
 use Scrutiny\Audit\AuditTimestamp;
 use Scrutiny\Tests\TestCase;
 
@@ -21,9 +23,8 @@ use Scrutiny\Tests\TestCase;
  * `wp_date(...): string`, so a stub cannot return the false the WordPress
  * function is documented to return. The guard stays because PHPStan types it
  * string|false; only the test for it is missing.
- *
- * @covers \Scrutiny\Audit\AuditTimestamp
  */
+#[CoversClass(\Scrutiny\Audit\AuditTimestamp::class)]
 class AuditTimestampTest extends TestCase
 {
     protected function setUp(): void
@@ -42,7 +43,7 @@ class AuditTimestampTest extends TestCase
         parent::tearDown();
     }
 
-    /** @test */
+    #[Test]
     public function it_reads_the_stored_value_as_utc(): void
     {
         // The column is UTC (GdprAuditLogger writes gmdate()). Parsing it in
@@ -51,8 +52,8 @@ class AuditTimestampTest extends TestCase
         // questioned.
         $captured = null;
 
-        Functions\when('wp_timezone')->justReturn(new \DateTimeZone('Europe/London'));
-        Functions\when('wp_date')->alias(
+        when('wp_timezone')->justReturn(new \DateTimeZone('Europe/London'));
+        when('wp_date')->alias(
             static function (string $format, ?int $ts = null) use (&$captured): string {
                 $captured = $ts;
                 return 'formatted';
@@ -63,7 +64,7 @@ class AuditTimestampTest extends TestCase
         $this->assertSame(strtotime('2026-03-01 09:30:00 UTC'), $captured);
     }
 
-    /** @test */
+    #[Test]
     public function it_formats_with_the_sites_own_date_and_time_settings(): void
     {
         // Two separate options, joined with a space — not a hardcoded format.
@@ -71,8 +72,8 @@ class AuditTimestampTest extends TestCase
 
         $GLOBALS['scrutiny_test_options'] = ['date_format' => 'j M Y', 'time_format' => 'g:ia'];
 
-        Functions\when('wp_timezone')->justReturn(new \DateTimeZone('UTC'));
-        Functions\when('wp_date')->alias(
+        when('wp_timezone')->justReturn(new \DateTimeZone('UTC'));
+        when('wp_date')->alias(
             static function (string $format) use (&$captured): string {
                 $captured = $format;
                 return 'formatted';
@@ -84,10 +85,10 @@ class AuditTimestampTest extends TestCase
         $this->assertSame('j M Y g:ia', $captured);
     }
 
-    /** @test */
+    #[Test]
     public function it_returns_an_unparseable_value_unchanged(): void
     {
-        Functions\when('wp_timezone')->justReturn(new \DateTimeZone('UTC'));
+        when('wp_timezone')->justReturn(new \DateTimeZone('UTC'));
 
         $this->assertSame('not a date at all', AuditTimestamp::forDisplay('not a date at all'));
     }

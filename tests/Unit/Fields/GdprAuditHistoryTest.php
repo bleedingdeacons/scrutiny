@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace Scrutiny\Tests\Unit\Fields;
 
+use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\Test;
+use function Brain\Monkey\Functions\when;
 use BleedingDeacons\WpMocks\WpState;
-use Brain\Monkey\Functions;
 use Scrutiny\Admin\AuditLogAdmin;
 use Scrutiny\Audit\Interfaces\AuditRepository;
 use Scrutiny\Fields\AuditHistoryRenderer;
@@ -22,9 +24,8 @@ use Scrutiny\Tests\TestCase;
  *
  * The base class and the three ACF functions come from tests/stubs/acf.php —
  * the same file PHPStan reads — so this suite runs with no ACF installed.
- *
- * @covers \Scrutiny\Fields\GdprAuditHistory
  */
+#[CoversClass(\Scrutiny\Fields\GdprAuditHistory::class)]
 class GdprAuditHistoryTest extends TestCase
 {
     private GdprAuditHistory $field;
@@ -54,8 +55,7 @@ class GdprAuditHistoryTest extends TestCase
     // ──────────────────────────────────────────────
     //  Type definition
     // ──────────────────────────────────────────────
-
-    /** @test */
+    #[Test]
     public function it_registers_under_the_documented_type_slug(): void
     {
         // The slug is written into every field group that uses the field.
@@ -65,7 +65,7 @@ class GdprAuditHistoryTest extends TestCase
         $this->assertSame('gdpr_audit_history', $this->field->name);
     }
 
-    /** @test */
+    #[Test]
     public function it_declares_itself_a_layout_field_that_stores_nothing(): void
     {
         // Display-only, exactly like ACF's own message/tab fields: nothing to
@@ -76,7 +76,7 @@ class GdprAuditHistoryTest extends TestCase
         $this->assertFalse($this->field->show_in_rest);
     }
 
-    /** @test */
+    #[Test]
     public function it_defaults_to_the_member_record_type(): void
     {
         $this->assertSame(
@@ -93,8 +93,7 @@ class GdprAuditHistoryTest extends TestCase
     // ──────────────────────────────────────────────
     //  Settings UI
     // ──────────────────────────────────────────────
-
-    /** @test */
+    #[Test]
     public function it_offers_a_setting_for_each_default(): void
     {
         $this->field->render_field_settings($this->field->defaults);
@@ -109,7 +108,7 @@ class GdprAuditHistoryTest extends TestCase
         );
     }
 
-    /** @test */
+    #[Test]
     public function its_record_type_choices_match_the_audit_log_page(): void
     {
         $this->field->render_field_settings($this->field->defaults);
@@ -119,7 +118,7 @@ class GdprAuditHistoryTest extends TestCase
         $this->assertSame(AuditLogAdmin::ENTITY_TYPES, $settings['entity_type']['choices']);
     }
 
-    /** @test */
+    #[Test]
     public function its_action_choices_cover_every_action_the_log_records(): void
     {
         $this->field->render_field_settings($this->field->defaults);
@@ -132,7 +131,7 @@ class GdprAuditHistoryTest extends TestCase
         $this->assertSame(1, $settings['audit_action']['allow_null']);
     }
 
-    /** @test */
+    #[Test]
     public function its_entry_count_setting_stops_at_the_renderers_ceiling(): void
     {
         $this->field->render_field_settings($this->field->defaults);
@@ -146,8 +145,7 @@ class GdprAuditHistoryTest extends TestCase
     // ──────────────────────────────────────────────
     //  Assets
     // ──────────────────────────────────────────────
-
-    /** @test */
+    #[Test]
     public function it_enqueues_its_own_stylesheet(): void
     {
         // Hooked by the parent constructor onto acf/input/admin_enqueue_scripts.
@@ -164,8 +162,7 @@ class GdprAuditHistoryTest extends TestCase
     // ──────────────────────────────────────────────
     //  Rendering
     // ──────────────────────────────────────────────
-
-    /** @test */
+    #[Test]
     public function it_renders_the_history_for_the_post_being_edited(): void
     {
         $GLOBALS['scrutiny_test_acf_form_data'] = ['post_id' => 42];
@@ -177,14 +174,14 @@ class GdprAuditHistoryTest extends TestCase
         $this->assertStringContainsString('scrutiny-audit-history', $html);
     }
 
-    /** @test */
+    #[Test]
     public function it_falls_back_to_the_current_post_when_form_data_is_not_a_post_id(): void
     {
         // ACF puts 'options', 'user_3' and the like in post_id for options
         // pages and user forms. Casting those to int would silently render
         // post 0's history — or worse, post 3's.
         $GLOBALS['scrutiny_test_acf_form_data'] = ['post_id' => 'options'];
-        Functions\when('get_the_ID')->justReturn(99);
+        when('get_the_ID')->justReturn(99);
 
         $resolved = (new \ReflectionMethod(GdprAuditHistory::class, 'resolvePostId'))
             ->invoke($this->field);
@@ -192,11 +189,11 @@ class GdprAuditHistoryTest extends TestCase
         $this->assertSame(99, $resolved);
     }
 
-    /** @test */
+    #[Test]
     public function it_resolves_to_zero_when_there_is_no_post_at_all(): void
     {
         $GLOBALS['scrutiny_test_acf_form_data'] = [];
-        Functions\when('get_the_ID')->justReturn(false);
+        when('get_the_ID')->justReturn(false);
 
         $resolved = (new \ReflectionMethod(GdprAuditHistory::class, 'resolvePostId'))
             ->invoke($this->field);

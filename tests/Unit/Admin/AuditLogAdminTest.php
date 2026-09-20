@@ -4,10 +4,13 @@ declare(strict_types=1);
 
 namespace Scrutiny\Tests\Unit\Admin;
 
+use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\Test;
+use PHPUnit\Framework\Attributes\DataProvider;
+use function Brain\Monkey\Functions\when;
 use BleedingDeacons\WpMocks\Doubles\FakeWpdb;
 use BleedingDeacons\WpMocks\Exceptions\WpDieException;
 use BleedingDeacons\WpMocks\WpState;
-use Brain\Monkey\Functions;
 use Mockery;
 use ReflectionMethod;
 use Scrutiny\Admin\AuditLogAdmin;
@@ -42,9 +45,8 @@ use Scrutiny\Tests\TestCase;
  * The logger is Scrutiny's own SpyAuditLogger rather than a mock: the purge
  * writes an audit entry recording what it deleted, and that entry's contents
  * are the assertion.
- *
- * @covers \Scrutiny\Admin\AuditLogAdmin
  */
+#[CoversClass(\Scrutiny\Admin\AuditLogAdmin::class)]
 final class AuditLogAdminTest extends TestCase
 {
     /** @var AuditRepository&Mockery\MockInterface */
@@ -71,10 +73,10 @@ final class AuditLogAdminTest extends TestCase
         $this->page       = new AuditLogAdmin($this->repository, $this->logger);
 
         // Neither is in the shared stub set.
-        Functions\when('wp_nonce_url')->alias(
+        when('wp_nonce_url')->alias(
             static fn (string $url, string $action = '-1'): string => $url . '&_wpnonce=nonce-' . $action
         );
-        Functions\when('get_userdata')->justReturn(false);
+        when('get_userdata')->justReturn(false);
     }
 
     protected function tearDown(): void
@@ -164,8 +166,7 @@ final class AuditLogAdminTest extends TestCase
     }
 
     // ── registration ──────────────────────────────────────────────────
-
-    /** @test */
+    #[Test]
     public function it_hooks_the_menu_and_the_purge_handler_on_construction(): void
     {
         $hooks = [];
@@ -181,9 +182,8 @@ final class AuditLogAdminTest extends TestCase
     /**
      * This screen deliberately sits under Intergroup rather than the Scrutiny
      * menu: it is a working tool, not a configuration page.
-     *
-     * @test
      */
+    #[Test]
     public function it_registers_a_submenu_under_the_intergroup_menu(): void
     {
         $this->page->registerMenu();
@@ -198,13 +198,11 @@ final class AuditLogAdminTest extends TestCase
     }
 
     // ── purge ─────────────────────────────────────────────────────────
-
     /**
      * admin_init fires on every admin request, so an ordinary page load must
      * not reach the repository.
-     *
-     * @test
      */
+    #[Test]
     public function the_purge_handler_ignores_a_request_that_did_not_ask_for_it(): void
     {
         $this->grantCapability();
@@ -218,9 +216,8 @@ final class AuditLogAdminTest extends TestCase
     /**
      * The purge is a destructive GET, so the capability is checked before the
      * nonce — a user without it gets nothing at all, not a nonce failure.
-     *
-     * @test
      */
+    #[Test]
     public function the_purge_handler_ignores_a_user_without_the_capability(): void
     {
         $_GET['scrutiny_purge'] = '1';
@@ -231,7 +228,7 @@ final class AuditLogAdminTest extends TestCase
         $this->assertSame([], $this->logger->entries);
     }
 
-    /** @test */
+    #[Test]
     public function a_purge_deletes_using_the_requested_retention_window(): void
     {
         $this->grantCapability();
@@ -251,9 +248,8 @@ final class AuditLogAdminTest extends TestCase
     /**
      * The button on the screen only offers 365 days, but the window arrives in
      * the query string, so the handler needs its own default.
-     *
-     * @test
      */
+    #[Test]
     public function a_purge_without_an_explicit_window_falls_back_to_a_year(): void
     {
         $this->grantCapability();
@@ -272,9 +268,8 @@ final class AuditLogAdminTest extends TestCase
     /**
      * Deleting audit entries is itself an auditable act — otherwise the one
      * action a bad actor would most want to hide is the one the log forgets.
-     *
-     * @test
      */
+    #[Test]
     public function a_purge_writes_its_own_audit_entry(): void
     {
         $this->grantCapability();
@@ -295,7 +290,7 @@ final class AuditLogAdminTest extends TestCase
         ], $this->logger->entries[0]);
     }
 
-    /** @test */
+    #[Test]
     public function a_purge_queues_an_admin_notice_reporting_what_it_removed(): void
     {
         $this->grantCapability();
@@ -324,8 +319,7 @@ final class AuditLogAdminTest extends TestCase
     }
 
     // ── render: guard ─────────────────────────────────────────────────
-
-    /** @test */
+    #[Test]
     public function the_screen_refuses_a_user_without_the_capability(): void
     {
         $this->expectException(WpDieException::class);
@@ -333,8 +327,7 @@ final class AuditLogAdminTest extends TestCase
     }
 
     // ── render: chrome ────────────────────────────────────────────────
-
-    /** @test */
+    #[Test]
     public function an_empty_log_renders_the_table_with_a_placeholder_row(): void
     {
         $html = $this->render();
@@ -349,9 +342,8 @@ final class AuditLogAdminTest extends TestCase
      * only cancels that navigation once window.open() has returned a window.
      * A popup blocker refusing it returns null, and an unconditional
      * preventDefault() would leave the link doing nothing at all.
-     *
-     * @test
      */
+    #[Test]
     public function the_help_link_survives_a_blocked_popup(): void
     {
         $html = $this->render();
@@ -362,7 +354,7 @@ final class AuditLogAdminTest extends TestCase
         $this->assertStringNotContainsString('href="#"', $html);
     }
 
-    /** @test */
+    #[Test]
     public function the_filter_form_offers_every_entity_action_and_field(): void
     {
         $html = $this->render();
@@ -373,7 +365,7 @@ final class AuditLogAdminTest extends TestCase
         $this->assertStringContainsString('<option value="' . PersonalDataFields::MOBILE_NUMBER . '"', $html);
     }
 
-    /** @test */
+    #[Test]
     public function the_purge_button_carries_a_nonce_and_the_one_year_window(): void
     {
         $html = $this->render();
@@ -386,9 +378,8 @@ final class AuditLogAdminTest extends TestCase
     /**
      * The dropdown is built from whoever actually appears in the log, so an
      * intergroup with three admins does not get a list of every WP user.
-     *
-     * @test
      */
+    #[Test]
     public function the_user_filter_lists_only_users_who_appear_in_the_log(): void
     {
         $this->wpdb->results = [
@@ -404,8 +395,7 @@ final class AuditLogAdminTest extends TestCase
     }
 
     // ── render: rows ──────────────────────────────────────────────────
-
-    /** @test */
+    #[Test]
     public function a_row_renders_its_user_action_field_and_ip(): void
     {
         $html = $this->render([$this->entry()]);
@@ -422,9 +412,8 @@ final class AuditLogAdminTest extends TestCase
     /**
      * The entity_id is a post ID and the post title is the member's anonymous
      * name, which is what an administrator recognises — a bare number is not.
-     *
-     * @test
      */
+    #[Test]
     public function a_member_row_links_to_the_member_using_their_anonymous_name(): void
     {
         WpState::addPost(42, ['post_title' => 'John D.']);
@@ -439,9 +428,8 @@ final class AuditLogAdminTest extends TestCase
     /**
      * `user` rows store a WP user ID in entity_id, not a post ID, so there is
      * no title to find and the raw reference is shown instead.
-     *
-     * @test
      */
+    #[Test]
     public function a_row_with_no_post_title_falls_back_to_the_raw_id(): void
     {
         $html = $this->render([$this->entry(['entity_type' => 'user', 'entity_id' => 99])]);
@@ -449,7 +437,7 @@ final class AuditLogAdminTest extends TestCase
         $this->assertStringContainsString('#99', $html);
     }
 
-    /** @test */
+    #[Test]
     public function a_row_with_no_entity_renders_a_dash_rather_than_a_broken_link(): void
     {
         $html = $this->render([$this->entry(['entity_id' => 0])]);
@@ -461,9 +449,8 @@ final class AuditLogAdminTest extends TestCase
     /**
      * Timestamps are stored in UTC; the screen shows them in the site's
      * timezone using the site's own date and time formats.
-     *
-     * @test
      */
+    #[Test]
     public function a_timestamp_is_rendered_in_the_sites_configured_format(): void
     {
         $GLOBALS['scrutiny_test_options']['date_format'] = 'Y-m-d';
@@ -477,9 +464,8 @@ final class AuditLogAdminTest extends TestCase
     /**
      * An unparseable stored value is shown as-is rather than swallowed — a
      * corrupt row should be visible, not invisible.
-     *
-     * @test
      */
+    #[Test]
     public function an_unparseable_timestamp_is_rendered_verbatim(): void
     {
         $html = $this->render([$this->entry(['logged_at' => 'not a date at all'])]);
@@ -487,7 +473,7 @@ final class AuditLogAdminTest extends TestCase
         $this->assertStringContainsString('not a date at all', $html);
     }
 
-    /** @test */
+    #[Test]
     public function an_unrecognised_entity_type_is_rendered_rather_than_dropped(): void
     {
         $html = $this->render([$this->entry(['entity_type' => 'sponsorship'])]);
@@ -496,8 +482,7 @@ final class AuditLogAdminTest extends TestCase
     }
 
     // ── render: filters ───────────────────────────────────────────────
-
-    /** @test */
+    #[Test]
     public function an_unfiltered_screen_asks_only_for_the_first_page(): void
     {
         $args = $this->captureQueryArgs();
@@ -505,7 +490,7 @@ final class AuditLogAdminTest extends TestCase
         $this->assertSame(['per_page' => 50, 'page' => 1], $args);
     }
 
-    /** @test */
+    #[Test]
     public function the_dropdown_filters_are_passed_through_to_the_repository(): void
     {
         $_GET = [
@@ -531,9 +516,8 @@ final class AuditLogAdminTest extends TestCase
      * Empty query-string values mean "no filter", not "filter on the empty
      * string" — otherwise submitting the form with everything blank would
      * return nothing.
-     *
-     * @test
      */
+    #[Test]
     public function blank_filter_fields_are_dropped_rather_than_queried_on(): void
     {
         $_GET = [
@@ -548,7 +532,7 @@ final class AuditLogAdminTest extends TestCase
         $this->assertSame(['per_page' => 50, 'page' => 1], $this->captureQueryArgs());
     }
 
-    /** @test */
+    #[Test]
     public function the_page_number_is_read_from_the_query_string(): void
     {
         $_GET['paged'] = '4';
@@ -556,7 +540,7 @@ final class AuditLogAdminTest extends TestCase
         $this->assertSame(4, $this->captureQueryArgs()['page']);
     }
 
-    /** @test */
+    #[Test]
     public function a_zero_or_negative_page_is_clamped_to_the_first_page(): void
     {
         $_GET['paged'] = '-3';
@@ -567,9 +551,8 @@ final class AuditLogAdminTest extends TestCase
     /**
      * The Member box takes either an ID or a name fragment. A numeric entry is
      * an exact ID match; anything else is resolved to post titles first.
-     *
-     * @test
      */
+    #[Test]
     public function a_numeric_member_filter_becomes_an_exact_id_match(): void
     {
         $_GET['entity_query'] = '42';
@@ -581,7 +564,7 @@ final class AuditLogAdminTest extends TestCase
         $this->assertArrayNotHasKey('entity_query', $args, 'the raw box value is not a repository argument');
     }
 
-    /** @test */
+    #[Test]
     public function a_name_member_filter_is_resolved_to_matching_post_ids(): void
     {
         $_GET['entity_query'] = 'John';
@@ -597,9 +580,8 @@ final class AuditLogAdminTest extends TestCase
     /**
      * A name matching nothing has to produce an empty result rather than
      * silently dropping the filter and showing the whole log.
-     *
-     * @test
      */
+    #[Test]
     public function a_name_filter_matching_nothing_forces_an_empty_result(): void
     {
         $_GET['entity_query'] = 'Nobody';
@@ -608,7 +590,7 @@ final class AuditLogAdminTest extends TestCase
         $this->assertSame([0], $this->captureQueryArgs()['entity_ids']);
     }
 
-    /** @test */
+    #[Test]
     public function the_active_filter_summary_names_each_filter_in_force(): void
     {
         $_GET = [
@@ -636,9 +618,8 @@ final class AuditLogAdminTest extends TestCase
     /**
      * get_userdata() returns false for a deleted user, and the summary has to
      * stay readable rather than rendering an empty "User: ".
-     *
-     * @test
      */
+    #[Test]
     public function a_filter_on_a_deleted_user_falls_back_to_their_id(): void
     {
         $_GET['user_id'] = '7';
@@ -646,16 +627,16 @@ final class AuditLogAdminTest extends TestCase
         $this->assertStringContainsString('User: ID #7', $this->render());
     }
 
-    /** @test */
+    #[Test]
     public function a_filter_on_a_known_user_names_them(): void
     {
-        Functions\when('get_userdata')->justReturn((object) ['user_login' => 'chair']);
+        when('get_userdata')->justReturn((object) ['user_login' => 'chair']);
         $_GET['user_id'] = '3';
 
         $this->assertStringContainsString('User: chair', $this->render());
     }
 
-    /** @test */
+    #[Test]
     public function a_numeric_member_filter_is_summarised_as_an_id(): void
     {
         $_GET['entity_query'] = '42';
@@ -663,15 +644,14 @@ final class AuditLogAdminTest extends TestCase
         $this->assertStringContainsString('Member ID: #42', $this->render());
     }
 
-    /** @test */
+    #[Test]
     public function no_summary_is_shown_when_nothing_is_filtered(): void
     {
         $this->assertStringNotContainsString('Active Filters:', $this->render());
     }
 
     // ── render: pagination ────────────────────────────────────────────
-
-    /** @test */
+    #[Test]
     public function a_single_page_of_results_has_no_pagination(): void
     {
         $html = $this->render([$this->entry()], 20);
@@ -683,9 +663,8 @@ final class AuditLogAdminTest extends TestCase
     /**
      * 50 rows per page, so 120 entries is three pages, and the page the admin
      * is on is rendered as plain text rather than a link to itself.
-     *
-     * @test
      */
+    #[Test]
     public function multiple_pages_are_linked_with_the_current_one_marked(): void
     {
         $_GET['paged'] = '2';
@@ -700,9 +679,8 @@ final class AuditLogAdminTest extends TestCase
 
     /**
      * Paging must not silently drop the filters the admin applied.
-     *
-     * @test
      */
+    #[Test]
     public function pagination_links_carry_the_active_filters_forward(): void
     {
         $_GET = ['entity_type' => 'member', 'filter_action' => 'view', 'paged' => '1'];
@@ -728,9 +706,8 @@ final class AuditLogAdminTest extends TestCase
      * Reach writes a structured detail string for the view and call steps.
      * Everything else — legacy rows, other plugins, earlier versions — has to
      * survive as escaped plain text.
-     *
-     * @test
      */
+    #[Test]
     public function a_non_reach_action_renders_its_detail_as_plain_text(): void
     {
         $html = $this->detailCell($this->entry([
@@ -742,7 +719,7 @@ final class AuditLogAdminTest extends TestCase
         $this->assertStringNotContainsString('<a', $html);
     }
 
-    /** @test */
+    #[Test]
     public function a_detail_string_is_escaped_when_it_is_rendered_as_text(): void
     {
         $html = $this->detailCell($this->entry([
@@ -753,7 +730,7 @@ final class AuditLogAdminTest extends TestCase
         $this->assertStringNotContainsString('<script>', $html);
     }
 
-    /** @test */
+    #[Test]
     public function a_view_row_names_the_requester_and_links_to_them(): void
     {
         $html = $this->detailCell($this->entry([
@@ -769,9 +746,8 @@ final class AuditLogAdminTest extends TestCase
     /**
      * The same detail format serves both actions, but a call is placed by a
      * "caller" while a view is run by a "requester".
-     *
-     * @test
      */
+    #[Test]
     public function a_call_row_names_the_caller_and_its_result(): void
     {
         $html = $this->detailCell($this->entry([
@@ -784,7 +760,7 @@ final class AuditLogAdminTest extends TestCase
         $this->assertStringContainsString('Result: No answer', $html);
     }
 
-    /** @test */
+    #[Test]
     public function an_unknown_caller_is_named_but_not_linked(): void
     {
         $html = $this->detailCell($this->entry([
@@ -800,12 +776,11 @@ final class AuditLogAdminTest extends TestCase
     /**
      * get_edit_post_link() returns null for a post the current user cannot
      * edit; the name still has to render, just without the link.
-     *
-     * @test
      */
+    #[Test]
     public function a_caller_with_no_editable_post_renders_unlinked(): void
     {
-        Functions\when('get_edit_post_link')->justReturn(null);
+        when('get_edit_post_link')->justReturn(null);
 
         $html = $this->detailCell($this->entry([
             'action' => AuditLogger::ACTION_VIEW,
@@ -816,10 +791,8 @@ final class AuditLogAdminTest extends TestCase
         $this->assertStringNotContainsString('<a', $html);
     }
 
-    /**
-     * @test
-     * @dataProvider unparseableDetails
-     */
+    #[DataProvider('unparseableDetails')]
+    #[Test]
     public function a_malformed_reach_detail_falls_back_to_plain_text(string $detail): void
     {
         $html = $this->detailCell($this->entry([
@@ -847,9 +820,8 @@ final class AuditLogAdminTest extends TestCase
     /**
      * An anonymous name containing a '#' is unusual but legal, so the id is
      * split off the last '#' rather than the first.
-     *
-     * @test
      */
+    #[Test]
     public function a_name_containing_a_hash_is_split_on_the_last_one(): void
     {
         $html = $this->detailCell($this->entry([
@@ -861,20 +833,18 @@ final class AuditLogAdminTest extends TestCase
         $this->assertStringContainsString('post=11', $html);
     }
 
-    /** @test */
+    #[Test]
     public function a_missing_detail_property_is_treated_as_empty(): void
     {
         $this->assertSame('', $this->detailCell((object) ['action' => 'update']));
     }
 
     // ── title lookup (reflection: private static) ─────────────────────
-
     /**
      * An empty search would otherwise LIKE '%%' and match every post in the
      * site, so it short-circuits to the no-match sentinel instead.
-     *
-     * @test
      */
+    #[Test]
     public function an_empty_title_search_matches_nothing_without_querying(): void
     {
         /** @var int[] $ids */
@@ -885,7 +855,7 @@ final class AuditLogAdminTest extends TestCase
         $this->assertSame([], $this->wpdb->queries, 'no query should have been run');
     }
 
-    /** @test */
+    #[Test]
     public function a_title_search_excludes_revisions_and_trashed_posts(): void
     {
         $this->wpdb->col = ['5'];

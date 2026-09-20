@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace Scrutiny\Tests\Unit\Privacy;
 
-use Brain\Monkey\Filters;
+use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\Test;
+use function Brain\Monkey\Filters\has;
 use Scrutiny\Privacy\MemberFieldsObscurer;
 use Scrutiny\Privacy\PersonalDataPolicy;
 use Scrutiny\Tests\TestCase;
@@ -15,9 +17,8 @@ use Unity\Members\Interfaces\Member;
  * Tests for MemberFieldsObscurer's read-side obscuring: the format_value
  * filters (frontend) and prepare_field filters (admin edit form), plus the
  * filter registration wiring.
- *
- * @covers \Scrutiny\Privacy\MemberFieldsObscurer
  */
+#[CoversClass(\Scrutiny\Privacy\MemberFieldsObscurer::class)]
 class MemberFieldsObscurerObscuringTest extends TestCase
 {
     private const FIELD_PERSONAL_EMAIL = 'about-layout-group_personal-email';
@@ -67,10 +68,7 @@ class MemberFieldsObscurerObscuringTest extends TestCase
     }
 
     // ─── register ───────────────────────────────────────────────────
-
-    /**
-     * @test
-     */
+    #[Test]
     public function register_wires_format_prepare_and_update_filters(): void
     {
         $obscurer = $this->makeObscurer();
@@ -84,31 +82,28 @@ class MemberFieldsObscurerObscuringTest extends TestCase
         // 3-arg expectations the WP_Mock version carried are not reproduced.
 
         // format_value (frontend), priority 20.
-        self::assertSame(20, Filters\has('acf/format_value/name=' . self::FIELD_PERSONAL_EMAIL, [$obscurer, 'obscureAcfPersonalEmail']));
-        self::assertSame(20, Filters\has('acf/format_value/name=' . self::FIELD_MOBILE_NUMBER, [$obscurer, 'obscureAcfMobileNumber']));
-        self::assertSame(20, Filters\has('acf/format_value/name=' . self::FIELD_LANDLINE_NUMBER, [$obscurer, 'obscureAcfLandlineNumber']));
+        self::assertSame(20, has('acf/format_value/name=' . self::FIELD_PERSONAL_EMAIL, [$obscurer, 'obscureAcfPersonalEmail']));
+        self::assertSame(20, has('acf/format_value/name=' . self::FIELD_MOBILE_NUMBER, [$obscurer, 'obscureAcfMobileNumber']));
+        self::assertSame(20, has('acf/format_value/name=' . self::FIELD_LANDLINE_NUMBER, [$obscurer, 'obscureAcfLandlineNumber']));
 
         // prepare_field (admin) on the short sub-field name, default priority.
-        self::assertSame(10, Filters\has('acf/prepare_field/name=personal-email', [$obscurer, 'prepareAcfPersonalEmail']));
-        self::assertSame(10, Filters\has('acf/prepare_field/name=mobile-number', [$obscurer, 'prepareAcfMobileNumber']));
-        self::assertSame(10, Filters\has('acf/prepare_field/name=landline-number', [$obscurer, 'prepareAcfLandlineNumber']));
+        self::assertSame(10, has('acf/prepare_field/name=personal-email', [$obscurer, 'prepareAcfPersonalEmail']));
+        self::assertSame(10, has('acf/prepare_field/name=mobile-number', [$obscurer, 'prepareAcfMobileNumber']));
+        self::assertSame(10, has('acf/prepare_field/name=landline-number', [$obscurer, 'prepareAcfLandlineNumber']));
 
         // …and again on the full name because the short name differs.
-        self::assertSame(10, Filters\has('acf/prepare_field/name=' . self::FIELD_PERSONAL_EMAIL, [$obscurer, 'prepareAcfPersonalEmail']));
-        self::assertSame(10, Filters\has('acf/prepare_field/name=' . self::FIELD_MOBILE_NUMBER, [$obscurer, 'prepareAcfMobileNumber']));
-        self::assertSame(10, Filters\has('acf/prepare_field/name=' . self::FIELD_LANDLINE_NUMBER, [$obscurer, 'prepareAcfLandlineNumber']));
+        self::assertSame(10, has('acf/prepare_field/name=' . self::FIELD_PERSONAL_EMAIL, [$obscurer, 'prepareAcfPersonalEmail']));
+        self::assertSame(10, has('acf/prepare_field/name=' . self::FIELD_MOBILE_NUMBER, [$obscurer, 'prepareAcfMobileNumber']));
+        self::assertSame(10, has('acf/prepare_field/name=' . self::FIELD_LANDLINE_NUMBER, [$obscurer, 'prepareAcfLandlineNumber']));
 
         // update_value guards keyed by ACF field key, priority 10.
-        self::assertSame(10, Filters\has('acf/update_value/key=' . self::KEY_PERSONAL_EMAIL, [$obscurer, 'preservePersonalEmail']));
-        self::assertSame(10, Filters\has('acf/update_value/key=' . self::KEY_MOBILE_NUMBER, [$obscurer, 'preserveMobileNumber']));
-        self::assertSame(10, Filters\has('acf/update_value/key=' . self::KEY_LANDLINE_NUMBER, [$obscurer, 'preserveLandlineNumber']));
+        self::assertSame(10, has('acf/update_value/key=' . self::KEY_PERSONAL_EMAIL, [$obscurer, 'preservePersonalEmail']));
+        self::assertSame(10, has('acf/update_value/key=' . self::KEY_MOBILE_NUMBER, [$obscurer, 'preserveMobileNumber']));
+        self::assertSame(10, has('acf/update_value/key=' . self::KEY_LANDLINE_NUMBER, [$obscurer, 'preserveLandlineNumber']));
     }
 
     // ─── format_value (frontend) ────────────────────────────────────
-
-    /**
-     * @test
-     */
+    #[Test]
     public function format_value_obscures_email_for_users_without_view(): void
     {
         $result = $this->makeObscurer()->obscureAcfPersonalEmail('a@example.com', 1, []);
@@ -116,9 +111,7 @@ class MemberFieldsObscurerObscuringTest extends TestCase
         $this->assertSame(PersonalDataPolicy::FIXED_PLACEHOLDER, $result);
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function format_value_returns_the_real_email_for_viewers(): void
     {
         $this->grantView();
@@ -128,9 +121,7 @@ class MemberFieldsObscurerObscuringTest extends TestCase
         $this->assertSame('a@example.com', $result);
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function format_value_leaves_empty_and_non_string_values_untouched(): void
     {
         $obscurer = $this->makeObscurer();
@@ -140,9 +131,7 @@ class MemberFieldsObscurerObscuringTest extends TestCase
         $this->assertSame(42, $obscurer->obscureAcfMobileNumber(42, 1, []));
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function format_value_obscures_mobile_for_users_without_view(): void
     {
         $result = $this->makeObscurer()->obscureAcfMobileNumber('07700 900000', 1, []);
@@ -154,9 +143,8 @@ class MemberFieldsObscurerObscuringTest extends TestCase
      * A landline is obscured exactly as a mobile is — same placeholder, same
      * capability gate. It is a number that reaches a named individual at
      * home, so if anything the case is stronger.
-     *
-     * @test
      */
+    #[Test]
     public function format_value_obscures_the_landline_for_users_without_view(): void
     {
         $result = $this->makeObscurer()->obscureAcfLandlineNumber('0117 496 0000', 1, []);
@@ -164,9 +152,7 @@ class MemberFieldsObscurerObscuringTest extends TestCase
         $this->assertSame(PersonalDataPolicy::FIXED_PLACEHOLDER, $result);
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function format_value_returns_the_landline_unchanged_for_viewers(): void
     {
         $this->grantView();
@@ -176,9 +162,7 @@ class MemberFieldsObscurerObscuringTest extends TestCase
         $this->assertSame('0117 496 0000', $result);
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function format_value_leaves_an_empty_landline_untouched(): void
     {
         $obscurer = $this->makeObscurer();
@@ -188,10 +172,7 @@ class MemberFieldsObscurerObscuringTest extends TestCase
     }
 
     // ─── prepare_field (admin) ──────────────────────────────────────
-
-    /**
-     * @test
-     */
+    #[Test]
     public function prepare_field_masks_the_value_as_a_placeholder_for_non_viewers(): void
     {
         $field = ['value' => 'a@example.com', 'name' => 'personal-email'];
@@ -202,9 +183,7 @@ class MemberFieldsObscurerObscuringTest extends TestCase
         $this->assertSame(PersonalDataPolicy::FIXED_PLACEHOLDER, $result['placeholder']);
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function prepare_field_disables_the_input_for_viewers_who_cannot_edit(): void
     {
         $this->grantView();
@@ -217,9 +196,7 @@ class MemberFieldsObscurerObscuringTest extends TestCase
         $this->assertSame(1, $result['disabled']);
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function prepare_field_leaves_the_input_editable_for_editors(): void
     {
         $this->grantView();
@@ -232,9 +209,7 @@ class MemberFieldsObscurerObscuringTest extends TestCase
         $this->assertArrayNotHasKey('disabled', $result);
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function prepare_field_passes_through_false_and_empty_values(): void
     {
         $obscurer = $this->makeObscurer();
@@ -246,9 +221,7 @@ class MemberFieldsObscurerObscuringTest extends TestCase
         );
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function prepare_field_masks_the_mobile_value_for_non_viewers(): void
     {
         $field = ['value' => '07700 900000', 'name' => 'mobile-number'];
@@ -259,9 +232,7 @@ class MemberFieldsObscurerObscuringTest extends TestCase
         $this->assertSame(PersonalDataPolicy::FIXED_PLACEHOLDER, $result['placeholder']);
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function prepare_field_masks_the_landline_value_for_non_viewers(): void
     {
         $field = ['value' => '0117 496 0000', 'name' => 'landline-number'];
@@ -272,9 +243,7 @@ class MemberFieldsObscurerObscuringTest extends TestCase
         $this->assertSame(PersonalDataPolicy::FIXED_PLACEHOLDER, $result['placeholder']);
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function prepare_field_disables_the_landline_for_viewers_who_cannot_edit(): void
     {
         $this->grantView();
@@ -285,9 +254,7 @@ class MemberFieldsObscurerObscuringTest extends TestCase
         $this->assertSame(1, $result['disabled']);
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function prepare_field_passes_through_a_false_or_empty_landline(): void
     {
         $obscurer = $this->makeObscurer();
@@ -300,10 +267,7 @@ class MemberFieldsObscurerObscuringTest extends TestCase
     }
 
     // ─── update_value: the clear sentinel ───────────────────────────
-
-    /**
-     * @test
-     */
+    #[Test]
     public function update_value_converts_the_clear_sentinel_to_an_empty_string(): void
     {
         $this->grantEdit();
@@ -317,9 +281,7 @@ class MemberFieldsObscurerObscuringTest extends TestCase
         $this->assertSame('', $result);
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function update_value_preserves_the_existing_value_when_a_non_viewer_editor_submits_blank(): void
     {
         // Editor who cannot view sees a placeholder; submitting blank must
@@ -336,9 +298,7 @@ class MemberFieldsObscurerObscuringTest extends TestCase
         $this->assertSame('keep@example.com', $result);
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function update_value_rejects_a_mobile_change_from_a_user_who_cannot_edit(): void
     {
         // No edit capability: the stored mobile number must be preserved
@@ -354,9 +314,7 @@ class MemberFieldsObscurerObscuringTest extends TestCase
         $this->assertSame('07700 900000', $result);
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function update_value_rejects_a_landline_change_from_a_user_who_cannot_edit(): void
     {
         $GLOBALS['scrutiny_test_acf_fields'][23462][self::FIELD_LANDLINE_NUMBER] = '0117 496 0000';
@@ -370,9 +328,7 @@ class MemberFieldsObscurerObscuringTest extends TestCase
         $this->assertSame('0117 496 0000', $result);
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function update_value_preserves_a_landline_when_a_non_viewer_editor_submits_blank(): void
     {
         $this->grantEdit();
@@ -392,9 +348,8 @@ class MemberFieldsObscurerObscuringTest extends TestCase
      * that an intentional clear is distinguishable from an untouched field
      * — which for a landline also drops the member's preference back to
      * Mobile downstream.
-     *
-     * @test
      */
+    #[Test]
     public function update_value_clears_a_landline_on_the_sentinel(): void
     {
         $this->grantEdit();

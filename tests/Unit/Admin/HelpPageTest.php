@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Scrutiny\Tests\Unit\Admin;
 
+use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\Test;
 use BleedingDeacons\WpMocks\WpState;
 use Scrutiny\Admin\HelpPage;
 use Scrutiny\Admin\ScrutinyMenu;
@@ -21,9 +23,8 @@ use Scrutiny\Tests\TestCase;
  * render() is the no-JavaScript fallback, and enqueueHelpTabScript() prints an
  * inline <script> whose selectors and window names are the contract that lets
  * the guide's back button refocus the admin tab instead of reloading it.
- *
- * @covers \Scrutiny\Admin\HelpPage
  */
+#[CoversClass(\Scrutiny\Admin\HelpPage::class)]
 final class HelpPageTest extends TestCase
 {
     private HelpPage $page;
@@ -51,8 +52,7 @@ final class HelpPageTest extends TestCase
     }
 
     // ── registration ──────────────────────────────────────────────────
-
-    /** @test */
+    #[Test]
     public function it_registers_a_help_submenu_under_the_scrutiny_menu(): void
     {
         $this->page->register();
@@ -70,9 +70,8 @@ final class HelpPageTest extends TestCase
     /**
      * Help documents both screens, so it must not be visible to anyone who
      * cannot reach them — and must not be hidden from anyone who can.
-     *
-     * @test
      */
+    #[Test]
     public function the_submenu_sits_behind_the_same_capability_as_the_rest_of_the_menu(): void
     {
         $this->assertSame(ScrutinyMenu::CAPABILITY, HelpPage::CAPABILITY);
@@ -82,9 +81,8 @@ final class HelpPageTest extends TestCase
      * The click interceptor has to be printed on every admin screen, not just
      * this one — the Help link lives in the sidebar and is clicked from
      * wherever the user happens to be.
-     *
-     * @test
      */
+    #[Test]
     public function registering_also_hooks_the_footer_script(): void
     {
         $this->page->register();
@@ -99,8 +97,7 @@ final class HelpPageTest extends TestCase
     }
 
     // ── the no-JavaScript fallback ────────────────────────────────────
-
-    /** @test */
+    #[Test]
     public function the_fallback_page_links_straight_to_the_bundled_guide(): void
     {
         $html = $this->capture(fn () => $this->page->render());
@@ -113,9 +110,8 @@ final class HelpPageTest extends TestCase
     /**
      * The fallback opens a new tab, so it needs rel="noopener" — without it
      * the guide gets a handle on wp-admin through window.opener.
-     *
-     * @test
      */
+    #[Test]
     public function the_fallback_link_opens_safely_in_a_new_tab(): void
     {
         $html = $this->capture(fn () => $this->page->render());
@@ -125,8 +121,7 @@ final class HelpPageTest extends TestCase
     }
 
     // ── the click interceptor ─────────────────────────────────────────
-
-    /** @test */
+    #[Test]
     public function the_footer_script_is_emitted_as_an_inline_script_block(): void
     {
         $html = $this->capture(fn () => $this->page->enqueueHelpTabScript());
@@ -139,9 +134,8 @@ final class HelpPageTest extends TestCase
      * The script finds the Help link by its exact admin URL and falls back to
      * a slug match if WordPress rendered the href differently — both selectors
      * are load-bearing.
-     *
-     * @test
      */
+    #[Test]
     public function the_script_matches_the_help_link_by_url_and_by_slug(): void
     {
         $html = $this->capture(fn () => $this->page->enqueueHelpTabScript());
@@ -154,9 +148,8 @@ final class HelpPageTest extends TestCase
      * The window names are how the guide gets back, and they are the same two
      * the Audit Log heading button already uses — so both routes share one
      * guide tab rather than opening a second.
-     *
-     * @test
      */
+    #[Test]
     public function the_script_reuses_the_window_names_the_audit_log_button_uses(): void
     {
         $html = $this->capture(fn () => $this->page->enqueueHelpTabScript());
@@ -172,9 +165,8 @@ final class HelpPageTest extends TestCase
      * the window. preventDefault() has already run by then, so without an
      * explicit fallback the Help link would be inert — and the next line would
      * throw on the null handle rather than failing quietly.
-     *
-     * @test
      */
+    #[Test]
     public function the_script_falls_back_to_the_current_tab_when_the_window_is_blocked(): void
     {
         $html = $this->capture(fn () => $this->page->enqueueHelpTabScript());
@@ -186,9 +178,8 @@ final class HelpPageTest extends TestCase
     /**
      * preventDefault() is what stops WordPress navigating to the fallback page;
      * without it the named-tab trick never runs.
-     *
-     * @test
      */
+    #[Test]
     public function the_script_suppresses_the_default_navigation(): void
     {
         $html = $this->capture(fn () => $this->page->enqueueHelpTabScript());

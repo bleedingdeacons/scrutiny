@@ -4,13 +4,15 @@ declare(strict_types=1);
 
 namespace Scrutiny\Tests\Unit\Cleanup;
 
+use PHPUnit\Framework\Attributes\Test;
+use Scrutiny\Cleanup\PruneResult;
+use Scrutiny\Cleanup\TrashCleanResult;
 use DateTimeImmutable;
 use PHPUnit\Framework\TestCase;
 use Scrutiny\Cleanup\MemberPruner;
 use Scrutiny\Cleanup\MemberTrashCleaner;
 use Scrutiny\Cleanup\PrunerCron;
 use Scrutiny\Cleanup\PrunerSettings;
-use Unity\Members\Interfaces\MemberRepository;
 use Unity\Testing\Doubles\InMemoryMemberRepository;
 
 /**
@@ -49,8 +51,7 @@ class PrunerCronTest extends TestCase
     // ──────────────────────────────────────────────
     //  Scheduling
     // ──────────────────────────────────────────────
-
-    /** @test */
+    #[Test]
     public function schedule_adds_a_weekly_event_when_none_is_queued(): void
     {
         PrunerCron::schedule();
@@ -70,7 +71,7 @@ class PrunerCronTest extends TestCase
         $this->assertGreaterThan(time(), $entry['timestamp']);
     }
 
-    /** @test */
+    #[Test]
     public function schedule_is_idempotent(): void
     {
         // Calling schedule() twice in a row must not produce
@@ -89,7 +90,7 @@ class PrunerCronTest extends TestCase
         $this->assertSame($firstTimestamp, $secondTimestamp);
     }
 
-    /** @test */
+    #[Test]
     public function unschedule_clears_the_event(): void
     {
         // Schedule, then unschedule. The cron queue must end up
@@ -104,7 +105,7 @@ class PrunerCronTest extends TestCase
         $this->assertFalse(wp_next_scheduled(PrunerCron::HOOK));
     }
 
-    /** @test */
+    #[Test]
     public function ensure_scheduled_re_adds_the_event_when_missing(): void
     {
         // Simulate a state where activation didn't run cleanly: the
@@ -120,8 +121,7 @@ class PrunerCronTest extends TestCase
     // ──────────────────────────────────────────────
     //  Hook registration
     // ──────────────────────────────────────────────
-
-    /** @test */
+    #[Test]
     public function register_wires_the_cron_action_handler(): void
     {
         $cron = $this->makeCron();
@@ -131,7 +131,7 @@ class PrunerCronTest extends TestCase
         $this->assertContains(PrunerCron::HOOK, $hooks);
     }
 
-    /** @test */
+    #[Test]
     public function register_wires_the_defensive_init_re_scheduler(): void
     {
         // ensureScheduled is wired on 'init' so a missing event in
@@ -151,8 +151,7 @@ class PrunerCronTest extends TestCase
     // ──────────────────────────────────────────────
     //  Run handler
     // ──────────────────────────────────────────────
-
-    /** @test */
+    #[Test]
     public function runScheduledPrune_invokes_the_pruner_with_settings_values(): void
     {
         // Settings configured to non-default values so the test can
@@ -174,7 +173,7 @@ class PrunerCronTest extends TestCase
         $this->assertSame(15, $pruner->lastInactivity);
     }
 
-    /** @test */
+    #[Test]
     public function runScheduledPrune_invokes_the_trash_cleaner_with_settings_value(): void
     {
         // After a successful prune, the cleaner runs with the
@@ -194,7 +193,7 @@ class PrunerCronTest extends TestCase
         $this->assertSame(14, $trashCleaner->lastRetention);
     }
 
-    /** @test */
+    #[Test]
     public function runScheduledPrune_invokes_the_pruner_even_when_disabled(): void
     {
         // The pruner's own short-circuit lives inside prune(), so
@@ -213,7 +212,7 @@ class PrunerCronTest extends TestCase
         $this->assertSame(1, $pruner->callCount);
     }
 
-    /** @test */
+    #[Test]
     public function runScheduledPrune_skips_the_trash_cleaner_when_disabled(): void
     {
         // Permanent deletion is the most destructive action in the
@@ -235,7 +234,7 @@ class PrunerCronTest extends TestCase
         $this->assertSame(0, $trashCleaner->callCount, 'cleaner must not run when disabled');
     }
 
-    /** @test */
+    #[Test]
     public function runScheduledPrune_uses_default_thresholds_for_a_fresh_install(): void
     {
         // No options set → PrunerSettings returns the documented
@@ -300,12 +299,12 @@ final class SpyPruner extends MemberPruner
         );
     }
 
-    public function prune(int $rotationGraceMonths, int $inactivityMonths): \Scrutiny\Cleanup\PruneResult
+    public function prune(int $rotationGraceMonths, int $inactivityMonths): PruneResult
     {
         $this->callCount++;
         $this->lastRotationGrace = $rotationGraceMonths;
         $this->lastInactivity    = $inactivityMonths;
-        return new \Scrutiny\Cleanup\PruneResult();
+        return new PruneResult();
     }
 }
 
@@ -327,10 +326,10 @@ final class SpyTrashCleaner extends MemberTrashCleaner
         );
     }
 
-    public function clean(int $retentionDays): \Scrutiny\Cleanup\TrashCleanResult
+    public function clean(int $retentionDays): TrashCleanResult
     {
         $this->callCount++;
         $this->lastRetention = $retentionDays;
-        return new \Scrutiny\Cleanup\TrashCleanResult();
+        return new TrashCleanResult();
     }
 }

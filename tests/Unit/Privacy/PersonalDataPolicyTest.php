@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Scrutiny\Tests\Unit\Privacy;
 
+use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 use Scrutiny\Privacy\PersonalDataPolicy;
 
@@ -27,8 +28,7 @@ class PersonalDataPolicyTest extends TestCase
     }
 
     // ─── Email Obscuring ─────────────────────────────────────────────
-
-    /** @test */
+    #[Test]
     public function it_obscures_any_non_empty_email_to_fixed_placeholder(): void
     {
         $this->assertSame(
@@ -37,7 +37,7 @@ class PersonalDataPolicyTest extends TestCase
         );
     }
 
-    /** @test */
+    #[Test]
     public function it_leaks_no_characters_from_the_original_email(): void
     {
         // No first letter, no TLD, no length signal — the output must be
@@ -53,13 +53,13 @@ class PersonalDataPolicyTest extends TestCase
         $this->assertStringNotContainsString('uk', $long);
     }
 
-    /** @test */
+    #[Test]
     public function it_returns_empty_for_empty_email(): void
     {
         $this->assertSame('', $this->policy->obscureEmail(''));
     }
 
-    /** @test */
+    #[Test]
     public function it_still_obscures_values_that_are_not_well_formed_emails(): void
     {
         // A stored value that doesn't contain an "@" still counts as data
@@ -71,8 +71,7 @@ class PersonalDataPolicyTest extends TestCase
     }
 
     // ─── Phone Obscuring ─────────────────────────────────────────────
-
-    /** @test */
+    #[Test]
     public function it_obscures_any_non_empty_phone_to_fixed_placeholder(): void
     {
         $this->assertSame(
@@ -81,7 +80,7 @@ class PersonalDataPolicyTest extends TestCase
         );
     }
 
-    /** @test */
+    #[Test]
     public function it_leaks_no_digits_or_formatting_from_the_original_phone(): void
     {
         $short = $this->policy->obscurePhone('123');
@@ -95,13 +94,13 @@ class PersonalDataPolicyTest extends TestCase
         $this->assertStringNotContainsString('123', $long);
     }
 
-    /** @test */
+    #[Test]
     public function it_returns_empty_for_empty_phone(): void
     {
         $this->assertSame('', $this->policy->obscurePhone(''));
     }
 
-    /** @test */
+    #[Test]
     public function it_obscures_short_phone_numbers_the_same_as_long_ones(): void
     {
         // Previously, short numbers (≤3 digits) were returned unchanged —
@@ -112,14 +111,13 @@ class PersonalDataPolicyTest extends TestCase
     }
 
     // ─── Contact-field Masking ───────────────────────────────────────
-
-    /** @test */
+    #[Test]
     public function mask_contact_field_returns_empty_for_empty_input(): void
     {
         $this->assertSame('', $this->policy->maskContactField(''));
     }
 
-    /** @test */
+    #[Test]
     public function mask_contact_field_returns_fixed_placeholder_for_any_non_empty_value(): void
     {
         $this->assertSame(
@@ -136,7 +134,7 @@ class PersonalDataPolicyTest extends TestCase
         );
     }
 
-    /** @test */
+    #[Test]
     public function mask_contact_field_leaks_nothing_about_the_original_value(): void
     {
         // Output must be identical regardless of input content or length —
@@ -150,7 +148,7 @@ class PersonalDataPolicyTest extends TestCase
         $this->assertStringNotContainsString('uk', $long);
     }
 
-    /** @test */
+    #[Test]
     public function mask_contact_field_treats_a_single_whitespace_character_as_a_real_value(): void
     {
         // Only the empty string counts as "no value", by design — a field

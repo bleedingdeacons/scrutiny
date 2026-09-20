@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Scrutiny\Tests\Unit\Audit;
 
+use PHPUnit\Framework\Attributes\Test;
 use Scrutiny\Tests\TestCase;
 use Scrutiny\Audit\AuditTracker;
 use Scrutiny\Audit\Interfaces\AuditLogger;
@@ -36,7 +37,7 @@ class AuditTrackerConstructionTest extends TestCase
         parent::tearDown();
     }
 
-    /** @test */
+    #[Test]
     public function it_builds_the_field_map_and_registers_every_hook(): void
     {
         $configuration = $this->createMock(Configuration::class);

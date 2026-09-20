@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Scrutiny\Tests\Unit\Audit;
 
+use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 use Scrutiny\Audit\AuditTracker;
 use Scrutiny\Audit\Interfaces\AuditLogger;
@@ -147,7 +148,7 @@ class AuditTrackerTest extends TestCase
         return $member;
     }
 
-    /** @test */
+    #[Test]
     public function it_does_not_log_when_only_the_anonymous_name_changes(): void
     {
         // The anonymous name is not personal data as this plugin defines it:
@@ -166,7 +167,7 @@ class AuditTrackerTest extends TestCase
         self::assertTrue(true, 'onMemberChanged completed without logging');
     }
 
-    /** @test */
+    #[Test]
     public function it_logs_when_personal_email_changes(): void
     {
         $logger = Mockery::mock(AuditLogger::class);
@@ -188,7 +189,7 @@ class AuditTrackerTest extends TestCase
         $tracker->onMemberChanged($updated, $original);
     }
 
-    /** @test */
+    #[Test]
     public function it_logs_when_mobile_number_changes(): void
     {
         $logger = Mockery::mock(AuditLogger::class);
@@ -210,7 +211,7 @@ class AuditTrackerTest extends TestCase
         $tracker->onMemberChanged($updated, $original);
     }
 
-    /** @test */
+    #[Test]
     public function it_logs_when_the_landline_number_changes(): void
     {
         // A landline is personal data on the same footing as a mobile, so
@@ -234,7 +235,7 @@ class AuditTrackerTest extends TestCase
         $tracker->onMemberChanged($updated, $original);
     }
 
-    /** @test */
+    #[Test]
     public function it_names_the_new_choice_when_the_preferred_contact_changes(): void
     {
         // Unlike the two numbers it chooses between, this entry names its
@@ -264,9 +265,8 @@ class AuditTrackerTest extends TestCase
      * than anyone touching the setting. Both entries should land: the log
      * should say the helpline stopped ringing a number, whichever edit
      * caused it.
-     *
-     * @test
      */
+    #[Test]
     public function clearing_a_landline_logs_both_the_number_and_the_preference(): void
     {
         $logger = Mockery::mock(AuditLogger::class);
@@ -303,7 +303,7 @@ class AuditTrackerTest extends TestCase
         $tracker->onMemberChanged($updated, $original);
     }
 
-    /** @test */
+    #[Test]
     public function it_logs_the_new_value_when_responder_certification_changes(): void
     {
         // Unlike the personal-data fields, the certification entry names the
@@ -327,7 +327,7 @@ class AuditTrackerTest extends TestCase
         $tracker->onMemberChanged($updated, $original);
     }
 
-    /** @test */
+    #[Test]
     public function it_does_not_log_when_responder_certification_is_unchanged(): void
     {
         $logger = Mockery::mock(AuditLogger::class);
@@ -343,7 +343,7 @@ class AuditTrackerTest extends TestCase
         self::assertTrue(true, 'onMemberChanged completed without logging');
     }
 
-    /** @test */
+    #[Test]
     public function it_logs_both_tracked_fields_when_they_change_together(): void
     {
         // Two, not three: the anonymous name changes here as well, and is
@@ -366,7 +366,7 @@ class AuditTrackerTest extends TestCase
         $tracker->onMemberChanged($updated, $original);
     }
 
-    /** @test */
+    #[Test]
     public function it_does_not_log_when_no_personal_data_changes(): void
     {
         $logger = Mockery::mock(AuditLogger::class);
@@ -380,7 +380,7 @@ class AuditTrackerTest extends TestCase
         $tracker->onMemberChanged($updated, $original);
     }
 
-    /** @test */
+    #[Test]
     public function it_logs_consent_recorded_when_gdpr_accepted_flips_to_true(): void
     {
         $logger = Mockery::mock(AuditLogger::class);
@@ -402,7 +402,7 @@ class AuditTrackerTest extends TestCase
         $tracker->onMemberChanged($updated, $original);
     }
 
-    /** @test */
+    #[Test]
     public function it_logs_consent_revoked_when_gdpr_accepted_flips_to_false(): void
     {
         $logger = Mockery::mock(AuditLogger::class);
@@ -424,7 +424,7 @@ class AuditTrackerTest extends TestCase
         $tracker->onMemberChanged($updated, $original);
     }
 
-    /** @test */
+    #[Test]
     public function it_logs_consent_once_when_a_full_acceptance_is_recorded(): void
     {
         // One event, not five. AuditTracker::logGdprChanges() deliberately
@@ -457,7 +457,7 @@ class AuditTrackerTest extends TestCase
         $tracker->onMemberChanged($updated, $original);
     }
 
-    /** @test */
+    #[Test]
     public function it_does_not_log_gdpr_fields_when_unchanged(): void
     {
         $logger = Mockery::mock(AuditLogger::class);
@@ -480,8 +480,7 @@ class AuditTrackerTest extends TestCase
     }
 
     // ─── Member creation ───────────────────────────────────────────────
-
-    /** @test */
+    #[Test]
     public function it_logs_a_single_create_entry_when_a_member_is_created(): void
     {
         $logger = Mockery::mock(AuditLogger::class);
@@ -501,7 +500,7 @@ class AuditTrackerTest extends TestCase
         $tracker->onMemberCreated($this->createMember());
     }
 
-    /** @test */
+    #[Test]
     public function it_uses_the_members_own_id_when_logging_a_creation(): void
     {
         $logger = Mockery::mock(AuditLogger::class);
@@ -520,7 +519,7 @@ class AuditTrackerTest extends TestCase
         $tracker->onMemberCreated($this->createMember(['getId' => 999]));
     }
 
-    /** @test */
+    #[Test]
     public function it_does_not_emit_per_field_log_calls_when_a_member_is_created(): void
     {
         $logger = Mockery::mock(AuditLogger::class);
@@ -533,8 +532,7 @@ class AuditTrackerTest extends TestCase
     }
 
     // ─── Member deletion ───────────────────────────────────────────────
-
-    /** @test */
+    #[Test]
     public function it_logs_a_batch_delete_entry_when_a_member_is_deleted(): void
     {
         $logger = Mockery::mock(AuditLogger::class);
@@ -553,7 +551,7 @@ class AuditTrackerTest extends TestCase
         $tracker->onMemberDeleted(42, $this->createMember());
     }
 
-    /** @test */
+    #[Test]
     public function it_logs_member_deletion_even_when_the_member_object_is_null(): void
     {
         $logger = Mockery::mock(AuditLogger::class);
@@ -572,7 +570,7 @@ class AuditTrackerTest extends TestCase
         $tracker->onMemberDeleted(42, null);
     }
 
-    /** @test */
+    #[Test]
     public function it_uses_the_supplied_post_id_when_logging_a_deletion(): void
     {
         $logger = Mockery::mock(AuditLogger::class);
@@ -591,7 +589,7 @@ class AuditTrackerTest extends TestCase
         $tracker->onMemberDeleted(7777, null);
     }
 
-    /** @test */
+    #[Test]
     public function it_does_not_emit_per_field_log_calls_when_a_member_is_deleted(): void
     {
         // The member here holds neither a home group nor a position, so the
@@ -606,8 +604,7 @@ class AuditTrackerTest extends TestCase
     }
 
     // ─── Home group ────────────────────────────────────────────────────
-
-    /** @test */
+    #[Test]
     public function it_names_the_group_when_a_home_group_is_assigned(): void
     {
         // Home group is a service role, not personal data, so the entry says
@@ -634,7 +631,7 @@ class AuditTrackerTest extends TestCase
         $tracker->onMemberChanged($updated, $original);
     }
 
-    /** @test */
+    #[Test]
     public function it_names_the_group_left_behind_when_a_home_group_is_cleared(): void
     {
         $logger = Mockery::mock(AuditLogger::class);
@@ -659,7 +656,7 @@ class AuditTrackerTest extends TestCase
         $tracker->onMemberChanged($updated, $original);
     }
 
-    /** @test */
+    #[Test]
     public function it_names_both_groups_when_a_home_group_moves(): void
     {
         $logger = Mockery::mock(AuditLogger::class);
@@ -684,7 +681,7 @@ class AuditTrackerTest extends TestCase
         $tracker->onMemberChanged($updated, $original);
     }
 
-    /** @test */
+    #[Test]
     public function it_falls_back_to_the_id_when_a_group_no_longer_resolves(): void
     {
         // A group deleted since the assignment still has to be traceable —
@@ -708,7 +705,7 @@ class AuditTrackerTest extends TestCase
         $tracker->onMemberChanged($updated, $original);
     }
 
-    /** @test */
+    #[Test]
     public function it_does_not_log_a_home_group_that_did_not_change(): void
     {
         $logger = Mockery::mock(AuditLogger::class);
@@ -725,8 +722,7 @@ class AuditTrackerTest extends TestCase
     }
 
     // ─── Intergroup position ───────────────────────────────────────────
-
-    /** @test */
+    #[Test]
     public function it_names_the_position_when_an_intergroup_position_is_assigned(): void
     {
         $logger = Mockery::mock(AuditLogger::class);
@@ -752,7 +748,7 @@ class AuditTrackerTest extends TestCase
         $tracker->onMemberChanged($updated, $original);
     }
 
-    /** @test */
+    #[Test]
     public function it_names_the_position_vacated_when_an_intergroup_position_is_removed(): void
     {
         $logger = Mockery::mock(AuditLogger::class);
@@ -778,7 +774,7 @@ class AuditTrackerTest extends TestCase
         $tracker->onMemberChanged($updated, $original);
     }
 
-    /** @test */
+    #[Test]
     public function it_logs_a_home_group_and_a_position_that_change_together(): void
     {
         $logger = Mockery::mock(AuditLogger::class);
@@ -814,8 +810,7 @@ class AuditTrackerTest extends TestCase
     }
 
     // ─── Service roles at creation and deletion ────────────────────────
-
-    /** @test */
+    #[Test]
     public function it_records_the_service_roles_a_member_is_created_holding(): void
     {
         $logger = Mockery::mock(AuditLogger::class);
@@ -859,7 +854,7 @@ class AuditTrackerTest extends TestCase
         ]));
     }
 
-    /** @test */
+    #[Test]
     public function it_records_a_member_created_as_a_gsr(): void
     {
         $logger = Mockery::mock(AuditLogger::class);
@@ -902,7 +897,7 @@ class AuditTrackerTest extends TestCase
         ]));
     }
 
-    /** @test */
+    #[Test]
     public function it_records_the_service_roles_a_deleted_member_still_held(): void
     {
         // Phrased exactly as an ordinary removal: the entry's own action
@@ -941,8 +936,7 @@ class AuditTrackerTest extends TestCase
     }
 
     // ─── Service availability ──────────────────────────────────────────
-
-    /** @test */
+    #[Test]
     public function it_logs_the_new_rotation_date_when_it_changes(): void
     {
         $logger = Mockery::mock(AuditLogger::class);
@@ -964,7 +958,7 @@ class AuditTrackerTest extends TestCase
         $tracker->onMemberChanged($updated, $original);
     }
 
-    /** @test */
+    #[Test]
     public function it_says_cleared_when_a_rotation_date_is_emptied(): void
     {
         // 'Changed to ' with nothing after it would read as a truncated cell.
@@ -987,7 +981,7 @@ class AuditTrackerTest extends TestCase
         $tracker->onMemberChanged($updated, $original);
     }
 
-    /** @test */
+    #[Test]
     public function it_logs_both_directions_of_the_twelfth_step_flag(): void
     {
         $logger = Mockery::mock(AuditLogger::class);
@@ -1025,7 +1019,7 @@ class AuditTrackerTest extends TestCase
         );
     }
 
-    /** @test */
+    #[Test]
     public function it_logs_the_telephone_responder_flag(): void
     {
         $logger = Mockery::mock(AuditLogger::class);
@@ -1048,8 +1042,7 @@ class AuditTrackerTest extends TestCase
     }
 
     // ─── Visibility toggles ────────────────────────────────────────────
-
-    /** @test */
+    #[Test]
     public function it_names_the_new_setting_when_name_visibility_changes(): void
     {
         // A privacy toggle's value is a yes or a no and identifies nobody, so
@@ -1073,7 +1066,7 @@ class AuditTrackerTest extends TestCase
         );
     }
 
-    /** @test */
+    #[Test]
     public function it_names_the_new_setting_when_profile_visibility_changes(): void
     {
         $logger = Mockery::mock(AuditLogger::class);
@@ -1096,8 +1089,7 @@ class AuditTrackerTest extends TestCase
     }
 
     // ─── Fields recorded without their values ──────────────────────────
-
-    /** @test */
+    #[Test]
     public function it_records_an_area_change_without_the_area(): void
     {
         // Coarse, but still where a named individual is.
@@ -1120,7 +1112,7 @@ class AuditTrackerTest extends TestCase
         );
     }
 
-    /** @test */
+    #[Test]
     public function it_records_an_accepts_change_without_the_selection(): void
     {
         $logger = Mockery::mock(AuditLogger::class);
@@ -1142,7 +1134,7 @@ class AuditTrackerTest extends TestCase
         );
     }
 
-    /** @test */
+    #[Test]
     public function it_ignores_a_reordered_accepts_selection(): void
     {
         // An unordered checkbox set: same selection, different order, so
@@ -1160,7 +1152,7 @@ class AuditTrackerTest extends TestCase
         self::assertTrue(true, 'onMemberChanged completed without logging');
     }
 
-    /** @test */
+    #[Test]
     public function it_records_a_profile_change_without_the_prose(): void
     {
         $logger = Mockery::mock(AuditLogger::class);
@@ -1182,7 +1174,7 @@ class AuditTrackerTest extends TestCase
         );
     }
 
-    /** @test */
+    #[Test]
     public function it_records_a_meeting_po_change_without_the_value(): void
     {
         $logger = Mockery::mock(AuditLogger::class);
@@ -1204,7 +1196,7 @@ class AuditTrackerTest extends TestCase
         );
     }
 
-    /** @test */
+    #[Test]
     public function it_still_does_not_log_the_updated_timestamp(): void
     {
         // getUpdated() moves on every save. Auditing it would put a second,
@@ -1223,8 +1215,7 @@ class AuditTrackerTest extends TestCase
     }
 
     // ─── GSR ───────────────────────────────────────────────────────────
-
-    /** @test */
+    #[Test]
     public function it_names_the_group_when_a_member_becomes_its_gsr(): void
     {
         // "GSR" alone would not say what the member is GSR for, so the entry
@@ -1251,7 +1242,7 @@ class AuditTrackerTest extends TestCase
         $tracker->onMemberChanged($updated, $original);
     }
 
-    /** @test */
+    #[Test]
     public function it_names_the_group_when_a_member_stops_being_its_gsr(): void
     {
         $logger = Mockery::mock(AuditLogger::class);
@@ -1276,7 +1267,7 @@ class AuditTrackerTest extends TestCase
         $tracker->onMemberChanged($updated, $original);
     }
 
-    /** @test */
+    #[Test]
     public function it_logs_a_gsr_who_carries_the_role_to_a_new_home_group(): void
     {
         // The flag does not change here, so comparing isGSR() alone would log
@@ -1312,7 +1303,7 @@ class AuditTrackerTest extends TestCase
         $tracker->onMemberChanged($updated, $original);
     }
 
-    /** @test */
+    #[Test]
     public function it_does_not_log_a_gsr_flag_that_did_not_change(): void
     {
         $logger = Mockery::mock(AuditLogger::class);
@@ -1331,7 +1322,7 @@ class AuditTrackerTest extends TestCase
         self::assertTrue(true, 'onMemberChanged completed without logging');
     }
 
-    /** @test */
+    #[Test]
     public function it_records_a_gsr_flag_set_without_a_home_group_behind_it(): void
     {
         // Meaningless data — the role is held on behalf of a group — but it
@@ -1356,7 +1347,7 @@ class AuditTrackerTest extends TestCase
         $tracker->onMemberChanged($updated, $original);
     }
 
-    /** @test */
+    #[Test]
     public function it_records_the_gsr_role_a_deleted_member_still_held(): void
     {
         $logger = Mockery::mock(AuditLogger::class);
@@ -1391,7 +1382,7 @@ class AuditTrackerTest extends TestCase
         ]));
     }
 
-    /** @test */
+    #[Test]
     public function it_truncates_a_name_too_long_for_the_detail_column(): void
     {
         // The detail column is VARCHAR(255) and a move holds two names at

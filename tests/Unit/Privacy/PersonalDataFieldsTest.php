@@ -4,16 +4,17 @@ declare(strict_types=1);
 
 namespace Scrutiny\Tests\Unit\Privacy;
 
-use Brain\Monkey\Filters;
+use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\Test;
+use function Brain\Monkey\Filters\expectApplied;
 use Scrutiny\Privacy\PersonalDataFields;
 use Scrutiny\Tests\TestCase;
 
 /**
  * Tests for PersonalDataFields label lookup and the filterable
  * protected-contact-field list.
- *
- * @covers \Scrutiny\Privacy\PersonalDataFields
  */
+#[CoversClass(\Scrutiny\Privacy\PersonalDataFields::class)]
 class PersonalDataFieldsTest extends TestCase
 {
     protected function setUp(): void
@@ -26,9 +27,7 @@ class PersonalDataFieldsTest extends TestCase
         parent::tearDown();
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function get_label_returns_the_mapped_label(): void
     {
         $this->assertSame('Personal Email', PersonalDataFields::getLabel(PersonalDataFields::PERSONAL_EMAIL));
@@ -37,9 +36,7 @@ class PersonalDataFieldsTest extends TestCase
         $this->assertSame('GDPR Accepted', PersonalDataFields::getLabel(PersonalDataFields::GDPR_ACCEPTED));
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function get_label_covers_the_service_role_fields(): void
     {
         // Home group and intergroup position are not personal data, but they
@@ -60,9 +57,7 @@ class PersonalDataFieldsTest extends TestCase
         $this->assertSame('Meeting PO', PersonalDataFields::getLabel(PersonalDataFields::MEETING_PO));
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function every_logical_field_name_has_a_label(): void
     {
         // The Audit Log page builds its field filter by iterating LABELS, so a
@@ -83,9 +78,7 @@ class PersonalDataFieldsTest extends TestCase
         }
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function service_role_fields_are_not_treated_as_personal_data(): void
     {
         // They must stay out of ALL_FIELDS and the two config maps, or the
@@ -109,9 +102,8 @@ class PersonalDataFieldsTest extends TestCase
      * The landline is a number reaching a named individual at home, so it
      * belongs with the mobile in every set that drives obscuring and view
      * tracking.
-     *
-     * @test
      */
+    #[Test]
     public function the_landline_is_treated_as_personal_data(): void
     {
         $this->assertContains(PersonalDataFields::LANDLINE_NUMBER, PersonalDataFields::ALL_FIELDS);
@@ -125,9 +117,8 @@ class PersonalDataFieldsTest extends TestCase
      * so it stays out of the personal-data sets for the same reason the
      * service roles do — while still carrying a label, because its audit
      * entries name the choice outright.
-     *
-     * @test
      */
+    #[Test]
     public function the_preferred_contact_is_not_treated_as_personal_data(): void
     {
         $this->assertNotContains(PersonalDataFields::PREFERRED_CONTACT, PersonalDataFields::ALL_FIELDS);
@@ -139,26 +130,20 @@ class PersonalDataFieldsTest extends TestCase
         $this->assertArrayHasKey(PersonalDataFields::PREFERRED_CONTACT, PersonalDataFields::LABELS);
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function get_label_maps_legacy_underscore_names_to_canonical_labels(): void
     {
         $this->assertSame('Personal Email', PersonalDataFields::getLabel('personal_email'));
         $this->assertSame('Mobile Number', PersonalDataFields::getLabel('mobile_number'));
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function get_label_returns_the_field_name_verbatim_when_unknown(): void
     {
         $this->assertSame('something-else', PersonalDataFields::getLabel('something-else'));
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function protected_contact_fields_returns_the_default_set_unfiltered(): void
     {
         // With no expectation registered, Brain Monkey's apply_filters returns
@@ -172,9 +157,7 @@ class PersonalDataFieldsTest extends TestCase
         ], $fields);
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function protected_contact_fields_honours_a_filter_override_and_normalises_it(): void
     {
         $default = [
@@ -185,7 +168,7 @@ class PersonalDataFieldsTest extends TestCase
 
         // The filter narrows the list; non-string/empty entries are then
         // dropped and the keys reindexed by the method.
-        Filters\expectApplied('scrutiny_tsml_protected_fields')
+        expectApplied('scrutiny_tsml_protected_fields')
             ->once()
             ->with($default)
             ->andReturn(['contact_1_email', '', 'contact_2_phone']);

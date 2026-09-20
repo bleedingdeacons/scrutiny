@@ -4,7 +4,8 @@ declare(strict_types=1);
 
 namespace Scrutiny\Tests\Unit;
 
-use Brain\Monkey\Functions;
+use PHPUnit\Framework\Attributes\Test;
+use function Brain\Monkey\Functions\when;
 use Mockery;
 use RuntimeException;
 use Scrutiny\Audit\AuditTracker;
@@ -25,7 +26,6 @@ use Scrutiny\Privacy\PrivacyPolicyFormatter;
 use Scrutiny\Privacy\ResponderCertificationGuard;
 use Scrutiny\Tests\TestCase;
 use Unity\Core\Interfaces\Configuration;
-use Unity\Core\Interfaces\Container;
 use Unity\Groups\Interfaces\GroupRepository;
 use Unity\Members\Interfaces\MemberRepository;
 use Unity\Positions\Interfaces\PositionRepository;
@@ -57,7 +57,7 @@ class PluginWiringTest extends TestCase
         parent::tearDown();
     }
 
-    /** @test */
+    #[Test]
     public function register_services_binds_and_resolves_every_scrutiny_service(): void
     {
         // AuditTracker's constructor wires an acf/load_value filter, which
@@ -104,7 +104,7 @@ class PluginWiringTest extends TestCase
         }
     }
 
-    /** @test */
+    #[Test]
     public function ensure_capabilities_grants_each_missing_capability(): void
     {
         $role = Mockery::mock();
@@ -113,24 +113,24 @@ class PluginWiringTest extends TestCase
             ->times(3)
             ->with(Mockery::type('string'));
 
-        Functions\when('get_role')->justReturn($role);
+        when('get_role')->justReturn($role);
 
         (new \ReflectionMethod(Plugin::class, 'ensureCapabilities'))->invoke(null);
 
         $this->assertTrue(true); // Mockery expectations verified on tearDown.
     }
 
-    /** @test */
+    #[Test]
     public function ensure_capabilities_bails_when_there_is_no_admin_role(): void
     {
-        Functions\when('get_role')->justReturn(null);
+        when('get_role')->justReturn(null);
 
         (new \ReflectionMethod(Plugin::class, 'ensureCapabilities'))->invoke(null);
 
         $this->assertTrue(true);
     }
 
-    /** @test */
+    #[Test]
     public function get_container_throws_before_init(): void
     {
         $this->expectException(RuntimeException::class);

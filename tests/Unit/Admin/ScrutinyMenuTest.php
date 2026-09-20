@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Scrutiny\Tests\Unit\Admin;
 
+use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\Test;
 use BleedingDeacons\WpMocks\WpState;
 use Scrutiny\Admin\ScrutinyMenu;
 use Scrutiny\Tests\TestCase;
@@ -20,12 +22,11 @@ use Scrutiny\Tests\TestCase;
  * nowhere — removeDefaultSubmenu() strips it. If the slug constant were ever
  * changed on one side only, the removal would silently stop matching and the
  * dead item would come back; the last test here pins the two together.
- *
- * @covers \Scrutiny\Admin\ScrutinyMenu
  */
+#[CoversClass(\Scrutiny\Admin\ScrutinyMenu::class)]
 final class ScrutinyMenuTest extends TestCase
 {
-    /** @test */
+    #[Test]
     public function it_registers_one_top_level_menu(): void
     {
         ScrutinyMenu::registerMenu();
@@ -39,9 +40,8 @@ final class ScrutinyMenuTest extends TestCase
     /**
      * The parent menu has to be visible to exactly the audience its child
      * pages are, or an admin sees a menu whose every page refuses them.
-     *
-     * @test
      */
+    #[Test]
     public function the_menu_capability_matches_the_pages_beneath_it(): void
     {
         ScrutinyMenu::registerMenu();
@@ -50,7 +50,7 @@ final class ScrutinyMenuTest extends TestCase
         $this->assertSame(ScrutinyMenu::CAPABILITY, WpState::$menus[0]['cap']);
     }
 
-    /** @test */
+    #[Test]
     public function it_removes_the_auto_generated_default_submenu(): void
     {
         ScrutinyMenu::removeDefaultSubmenu();
@@ -64,9 +64,8 @@ final class ScrutinyMenuTest extends TestCase
     /**
      * WordPress keys the auto-generated item on the parent slug, so the
      * removal only matches while both halves name the same slug.
-     *
-     * @test
      */
+    #[Test]
     public function the_removal_targets_the_menu_that_was_registered(): void
     {
         ScrutinyMenu::registerMenu();

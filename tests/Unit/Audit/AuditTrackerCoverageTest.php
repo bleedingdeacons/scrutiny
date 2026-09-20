@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Scrutiny\Tests\Unit\Audit;
 
+use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\Test;
 use BleedingDeacons\WpMocks\WpState;
 use Mockery;
 use Scrutiny\Audit\AuditTracker;
@@ -23,9 +25,8 @@ use Unity\Positions\Interfaces\PositionRepository;
 /**
  * Broad coverage for AuditTracker's view-tracking, group/contact change,
  * deletion, hide and import/export logging paths.
- *
- * @covers \Scrutiny\Audit\AuditTracker
  */
+#[CoversClass(\Scrutiny\Audit\AuditTracker::class)]
 class AuditTrackerCoverageTest extends TestCase
 {
     protected function setUp(): void
@@ -93,10 +94,7 @@ class AuditTrackerCoverageTest extends TestCase
     }
 
     // ─── import / export ────────────────────────────────────────────
-
-    /**
-     * @test
-     */
+    #[Test]
     public function import_export_hooks_log_one_entry_each(): void
     {
         $logger = Mockery::mock(AuditLogger::class);
@@ -125,10 +123,7 @@ class AuditTrackerCoverageTest extends TestCase
     }
 
     // ─── deletion / hide ────────────────────────────────────────────
-
-    /**
-     * @test
-     */
+    #[Test]
     public function member_deletion_batches_every_personal_and_gdpr_field(): void
     {
         $expectedFields = array_merge(PersonalDataFields::ALL_FIELDS, PersonalDataFields::GDPR_FIELDS);
@@ -140,9 +135,7 @@ class AuditTrackerCoverageTest extends TestCase
         $this->tracker($logger)->onMemberDeleted(99, null);
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function group_deletion_and_hide_batch_the_group_contact_fields(): void
     {
         $logger = Mockery::mock(AuditLogger::class);
@@ -157,10 +150,7 @@ class AuditTrackerCoverageTest extends TestCase
     }
 
     // ─── group / contact change ─────────────────────────────────────
-
-    /**
-     * @test
-     */
+    #[Test]
     public function group_change_logs_each_differing_contact_field(): void
     {
         $logger = Mockery::mock(AuditLogger::class);
@@ -187,9 +177,7 @@ class AuditTrackerCoverageTest extends TestCase
         $this->tracker($logger)->onGroupChanged($updated, $original);
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function group_change_logs_meeting_contact_changes_too(): void
     {
         $logger = Mockery::mock(AuditLogger::class);
@@ -221,10 +209,7 @@ class AuditTrackerCoverageTest extends TestCase
     }
 
     // ─── GDPR consent change ────────────────────────────────────────
-
-    /**
-     * @test
-     */
+    #[Test]
     public function member_change_logs_a_consent_recorded_transition(): void
     {
         $logger = Mockery::mock(AuditLogger::class);
@@ -237,9 +222,7 @@ class AuditTrackerCoverageTest extends TestCase
         $this->tracker($logger)->onMemberChanged($updated, $original);
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function member_change_logs_email_and_mobile_updates(): void
     {
         $logger = Mockery::mock(AuditLogger::class);
@@ -254,9 +237,7 @@ class AuditTrackerCoverageTest extends TestCase
         $this->tracker($logger)->onMemberChanged($updated, $original);
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function member_change_with_no_personal_data_diff_logs_nothing(): void
     {
         $logger = Mockery::mock(AuditLogger::class);
@@ -304,10 +285,7 @@ class AuditTrackerCoverageTest extends TestCase
     }
 
     // ─── admin form view tracking ───────────────────────────────────
-
-    /**
-     * @test
-     */
+    #[Test]
     public function admin_form_view_is_logged_for_a_viewer_editing_a_member(): void
     {
         $this->grantView();
@@ -325,9 +303,7 @@ class AuditTrackerCoverageTest extends TestCase
         $tracker->onMemberAdminFormDisplayed($screen);
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function admin_form_view_is_skipped_for_a_non_viewer(): void
     {
         $logger = Mockery::mock(AuditLogger::class);
@@ -340,9 +316,7 @@ class AuditTrackerCoverageTest extends TestCase
             ->onMemberAdminFormDisplayed($screen);
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function admin_form_view_ignores_the_new_post_screen_and_other_screens(): void
     {
         $this->grantView();
@@ -362,10 +336,7 @@ class AuditTrackerCoverageTest extends TestCase
     }
 
     // ─── frontend ACF view tracking ─────────────────────────────────
-
-    /**
-     * @test
-     */
+    #[Test]
     public function frontend_field_load_logs_a_personal_data_view(): void
     {
         $this->grantView();
@@ -389,9 +360,7 @@ class AuditTrackerCoverageTest extends TestCase
         $this->assertSame('val', $tracker->onPersonalDataFieldLoaded('val', 50, $field));
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function frontend_field_load_skips_non_member_admin_and_unmapped_fields(): void
     {
         $this->grantView();
@@ -418,9 +387,7 @@ class AuditTrackerCoverageTest extends TestCase
         $this->assertSame('v', $tracker->onPersonalDataFieldLoaded('v', 51, ['key' => 'field_email_key']));
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function frontend_field_load_skips_a_user_who_cannot_view_and_unmapped_keys(): void
     {
         // View capability withheld this time.

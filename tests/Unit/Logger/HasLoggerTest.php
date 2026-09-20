@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Scrutiny\Tests\Unit\Logger;
 
+use PHPUnit\Framework\Attributes\CoversTrait;
+use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 use Scrutiny\Logger\HasLogger;
 
@@ -22,9 +24,8 @@ class HasLoggerFixture
  * The test bootstrap stubs wp_log() and Sentinel_Log_Channel, recording
  * every emitted entry in $GLOBALS['scrutiny_test_log_entries'], so the
  * trait's resolve-and-forward behaviour is fully observable.
- *
- * @covers \Scrutiny\Logger\HasLogger
  */
+#[CoversTrait(\Scrutiny\Logger\HasLogger::class)]
 class HasLoggerTest extends TestCase
 {
     protected function setUp(): void
@@ -46,9 +47,7 @@ class HasLoggerTest extends TestCase
         $prop->setValue(null, null);
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function it_resolves_a_channel_named_after_the_short_class_name(): void
     {
         $channel = HasLoggerFixture::log();
@@ -60,9 +59,7 @@ class HasLoggerTest extends TestCase
         $this->assertSame($channel, HasLoggerFixture::log());
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function every_level_forwards_to_the_channel(): void
     {
         HasLoggerFixture::logEmergency('a');
@@ -85,9 +82,7 @@ class HasLoggerTest extends TestCase
         $this->assertSame(['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'], $messages);
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function context_is_passed_through(): void
     {
         HasLoggerFixture::logError('boom', ['id' => 42]);

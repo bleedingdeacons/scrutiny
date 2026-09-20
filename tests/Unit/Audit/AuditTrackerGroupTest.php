@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Scrutiny\Tests\Unit\Audit;
 
+use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 use Scrutiny\Audit\AuditTracker;
 use Scrutiny\Audit\Interfaces\AuditLogger;
@@ -82,8 +83,7 @@ class AuditTrackerGroupTest extends TestCase
     // ---------------------------------------------------------------
     // Group contact changes
     // ---------------------------------------------------------------
-
-    /** @test */
+    #[Test]
     public function it_logs_when_group_contact_email_changes(): void
     {
         $logger = Mockery::mock(AuditLogger::class);
@@ -109,7 +109,7 @@ class AuditTrackerGroupTest extends TestCase
         $tracker->onGroupChanged($updated, $original);
     }
 
-    /** @test */
+    #[Test]
     public function it_logs_when_group_contact_name_changes(): void
     {
         $logger = Mockery::mock(AuditLogger::class);
@@ -135,7 +135,7 @@ class AuditTrackerGroupTest extends TestCase
         $tracker->onGroupChanged($updated, $original);
     }
 
-    /** @test */
+    #[Test]
     public function it_logs_when_group_contact_phone_changes(): void
     {
         $logger = Mockery::mock(AuditLogger::class);
@@ -161,7 +161,7 @@ class AuditTrackerGroupTest extends TestCase
         $tracker->onGroupChanged($updated, $original);
     }
 
-    /** @test */
+    #[Test]
     public function it_logs_all_group_contact_fields_when_all_change(): void
     {
         $logger = Mockery::mock(AuditLogger::class);
@@ -179,7 +179,7 @@ class AuditTrackerGroupTest extends TestCase
         $tracker->onGroupChanged($updated, $original);
     }
 
-    /** @test */
+    #[Test]
     public function it_does_not_log_when_group_contacts_are_unchanged(): void
     {
         $logger = Mockery::mock(AuditLogger::class);
@@ -197,7 +197,7 @@ class AuditTrackerGroupTest extends TestCase
         $tracker->onGroupChanged($updated, $original);
     }
 
-    /** @test */
+    #[Test]
     public function it_logs_when_a_group_contact_is_added(): void
     {
         $logger = Mockery::mock(AuditLogger::class);
@@ -214,7 +214,7 @@ class AuditTrackerGroupTest extends TestCase
         $tracker->onGroupChanged($updated, $original);
     }
 
-    /** @test */
+    #[Test]
     public function it_logs_when_a_group_contact_is_removed(): void
     {
         $logger = Mockery::mock(AuditLogger::class);
@@ -233,8 +233,7 @@ class AuditTrackerGroupTest extends TestCase
     // ---------------------------------------------------------------
     // Meeting contact changes
     // ---------------------------------------------------------------
-
-    /** @test */
+    #[Test]
     public function it_logs_when_meeting_contact_email_changes(): void
     {
         $logger = Mockery::mock(AuditLogger::class);
@@ -263,7 +262,7 @@ class AuditTrackerGroupTest extends TestCase
         $tracker->onGroupChanged($updated, $original);
     }
 
-    /** @test */
+    #[Test]
     public function it_logs_when_meeting_contact_name_changes(): void
     {
         $logger = Mockery::mock(AuditLogger::class);
@@ -292,7 +291,7 @@ class AuditTrackerGroupTest extends TestCase
         $tracker->onGroupChanged($updated, $original);
     }
 
-    /** @test */
+    #[Test]
     public function it_logs_when_meeting_contact_phone_changes(): void
     {
         $logger = Mockery::mock(AuditLogger::class);
@@ -321,7 +320,7 @@ class AuditTrackerGroupTest extends TestCase
         $tracker->onGroupChanged($updated, $original);
     }
 
-    /** @test */
+    #[Test]
     public function it_does_not_log_when_meeting_contacts_are_unchanged(): void
     {
         $logger = Mockery::mock(AuditLogger::class);
@@ -342,7 +341,7 @@ class AuditTrackerGroupTest extends TestCase
         $tracker->onGroupChanged($updated, $original);
     }
 
-    /** @test */
+    #[Test]
     public function it_logs_contacts_for_newly_added_meeting_with_contacts(): void
     {
         $logger = Mockery::mock(AuditLogger::class);
@@ -372,8 +371,7 @@ class AuditTrackerGroupTest extends TestCase
     // ---------------------------------------------------------------
     // Combined group + meeting contact changes
     // ---------------------------------------------------------------
-
-    /** @test */
+    #[Test]
     public function it_logs_both_group_and_meeting_contact_changes(): void
     {
         $logger = Mockery::mock(AuditLogger::class);
@@ -419,7 +417,7 @@ class AuditTrackerGroupTest extends TestCase
         $tracker->onGroupChanged($updated, $original);
     }
 
-    /** @test */
+    #[Test]
     public function it_handles_multiple_meetings_independently(): void
     {
         $logger = Mockery::mock(AuditLogger::class);
@@ -459,7 +457,7 @@ class AuditTrackerGroupTest extends TestCase
         $tracker->onGroupChanged($updated, $original);
     }
 
-    /** @test */
+    #[Test]
     public function it_does_not_log_when_contacts_are_reordered(): void
     {
         $logger = Mockery::mock(AuditLogger::class);

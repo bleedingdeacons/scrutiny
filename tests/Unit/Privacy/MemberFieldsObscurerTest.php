@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace Scrutiny\Tests\Unit\Privacy;
 
+use PHPUnit\Framework\Attributes\PreserveGlobalState;
+use PHPUnit\Framework\Attributes\Test;
+use PHPUnit\Framework\Attributes\RunInSeparateProcess;
 use PHPUnit\Framework\TestCase;
 use Scrutiny\Privacy\MemberFieldsObscurer;
 use Scrutiny\Privacy\PersonalDataPolicy;
@@ -75,11 +78,9 @@ class MemberFieldsObscurerTest extends TestCase
         return new MemberFieldsObscurer($configuration, new PersonalDataPolicy());
     }
 
-    /**
-     * @test
-     * @runInSeparateProcess
-     * @preserveGlobalState disabled
-     */
+    #[PreserveGlobalState(false)]
+    #[Test]
+    #[RunInSeparateProcess]
     public function it_lets_email_writes_through_during_rest_requests(): void
     {
         define('REST_REQUEST', true);
@@ -99,11 +100,9 @@ class MemberFieldsObscurerTest extends TestCase
         $this->assertSame('new@example.com', $result);
     }
 
-    /**
-     * @test
-     * @runInSeparateProcess
-     * @preserveGlobalState disabled
-     */
+    #[PreserveGlobalState(false)]
+    #[Test]
+    #[RunInSeparateProcess]
     public function it_lets_mobile_writes_through_during_rest_requests(): void
     {
         define('REST_REQUEST', true);
@@ -119,11 +118,9 @@ class MemberFieldsObscurerTest extends TestCase
         $this->assertSame('07700 900999', $result);
     }
 
-    /**
-     * @test
-     * @runInSeparateProcess
-     * @preserveGlobalState disabled
-     */
+    #[PreserveGlobalState(false)]
+    #[Test]
+    #[RunInSeparateProcess]
     public function it_preserves_the_existing_value_for_admin_form_saves_when_user_cannot_edit(): void
     {
         // REST_REQUEST is intentionally not defined here — admin form
@@ -145,11 +142,9 @@ class MemberFieldsObscurerTest extends TestCase
         );
     }
 
-    /**
-     * @test
-     * @runInSeparateProcess
-     * @preserveGlobalState disabled
-     */
+    #[PreserveGlobalState(false)]
+    #[Test]
+    #[RunInSeparateProcess]
     public function it_lets_admin_form_saves_through_when_user_can_edit(): void
     {
         // REST_REQUEST is intentionally not defined.

@@ -4,7 +4,10 @@ declare(strict_types=1);
 
 namespace Scrutiny\Tests\Unit\Audit;
 
-use Brain\Monkey\Functions;
+use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\Test;
+use PHPUnit\Framework\Attributes\DataProvider;
+use function Brain\Monkey\Functions\when;
 use Scrutiny\Audit\AuditDetail;
 use Scrutiny\Tests\TestCase;
 use stdClass;
@@ -18,9 +21,8 @@ use stdClass;
  * plugins, anything malformed — has to survive as plain escaped text rather
  * than disappearing or half-parsing, so the fallback path gets as much
  * attention here as the happy one.
- *
- * @covers \Scrutiny\Audit\AuditDetail
  */
+#[CoversClass(\Scrutiny\Audit\AuditDetail::class)]
 class AuditDetailTest extends TestCase
 {
     private function entry(string $action, string $detail): stdClass
@@ -35,8 +37,7 @@ class AuditDetailTest extends TestCase
     // ──────────────────────────────────────────────
     //  Plain-text fallback
     // ──────────────────────────────────────────────
-
-    /** @test */
+    #[Test]
     public function it_renders_other_actions_as_plain_text(): void
     {
         $this->assertSame(
@@ -45,7 +46,7 @@ class AuditDetailTest extends TestCase
         );
     }
 
-    /** @test */
+    #[Test]
     public function it_escapes_the_plain_text_it_falls_back_to(): void
     {
         $html = AuditDetail::render($this->entry('update', '<script>alert(1)</script>'));
@@ -53,10 +54,8 @@ class AuditDetailTest extends TestCase
         $this->assertStringNotContainsString('<script', $html);
     }
 
-    /**
-     * @test
-     * @dataProvider unparseableDetails
-     */
+    #[DataProvider('unparseableDetails')]
+    #[Test]
     public function it_falls_back_when_the_caller_string_does_not_parse(string $detail): void
     {
         // A half-parsed caller string would put a wrong name against a member's
@@ -82,11 +81,10 @@ class AuditDetailTest extends TestCase
     // ──────────────────────────────────────────────
     //  Structured caller strings
     // ──────────────────────────────────────────────
-
-    /** @test */
+    #[Test]
     public function it_labels_a_view_row_as_a_requester_and_links_them(): void
     {
-        Functions\when('get_edit_post_link')->justReturn('https://example.test/edit-7');
+        when('get_edit_post_link')->justReturn('https://example.test/edit-7');
 
         $html = AuditDetail::render($this->entry('view', 'caller:John D.#7'));
 
@@ -95,10 +93,10 @@ class AuditDetailTest extends TestCase
         $this->assertStringContainsString('>John D.</a>', $html);
     }
 
-    /** @test */
+    #[Test]
     public function it_labels_a_call_row_as_a_caller_and_shows_the_result(): void
     {
-        Functions\when('get_edit_post_link')->justReturn('https://example.test/edit-7');
+        when('get_edit_post_link')->justReturn('https://example.test/edit-7');
 
         $html = AuditDetail::render($this->entry('call', 'caller:John D.#7;result:No answer'));
 
@@ -106,12 +104,12 @@ class AuditDetailTest extends TestCase
         $this->assertStringContainsString('Result: No answer', $html);
     }
 
-    /** @test */
+    #[Test]
     public function it_drops_the_link_when_the_caller_has_no_edit_screen(): void
     {
         // get_edit_post_link() returns null for a post the current user cannot
         // edit, or one that no longer exists. The name still has to render.
-        Functions\when('get_edit_post_link')->justReturn(null);
+        when('get_edit_post_link')->justReturn(null);
 
         $html = AuditDetail::render($this->entry('view', 'caller:John D.#7'));
 
@@ -119,7 +117,7 @@ class AuditDetailTest extends TestCase
         $this->assertStringNotContainsString('<a ', $html);
     }
 
-    /** @test */
+    #[Test]
     public function it_renders_the_unknown_sentinel_without_a_link(): void
     {
         $html = AuditDetail::render($this->entry('view', 'caller:unknown'));
@@ -127,7 +125,7 @@ class AuditDetailTest extends TestCase
         $this->assertSame('Requester: unknown', $html);
     }
 
-    /** @test */
+    #[Test]
     public function it_renders_the_unknown_sentinel_with_a_call_result(): void
     {
         $html = AuditDetail::render($this->entry('call', 'caller:unknown;result:Engaged'));
@@ -136,10 +134,10 @@ class AuditDetailTest extends TestCase
         $this->assertStringContainsString('Result: Engaged', $html);
     }
 
-    /** @test */
+    #[Test]
     public function it_splits_on_the_last_hash_so_names_containing_one_survive(): void
     {
-        Functions\when('get_edit_post_link')->justReturn('https://example.test/edit-7');
+        when('get_edit_post_link')->justReturn('https://example.test/edit-7');
 
         $html = AuditDetail::render($this->entry('view', 'caller:John #2 D.#7'));
 
@@ -147,10 +145,10 @@ class AuditDetailTest extends TestCase
         $this->assertStringContainsString('edit-7', $html);
     }
 
-    /** @test */
+    #[Test]
     public function it_escapes_a_name_and_result_taken_from_the_detail_string(): void
     {
-        Functions\when('get_edit_post_link')->justReturn(null);
+        when('get_edit_post_link')->justReturn(null);
 
         $html = AuditDetail::render(
             $this->entry('call', 'caller:<b>John</b>#7;result:<script>alert(1)</script>')
@@ -160,7 +158,7 @@ class AuditDetailTest extends TestCase
         $this->assertStringNotContainsString('<script', $html);
     }
 
-    /** @test */
+    #[Test]
     public function it_tolerates_a_row_with_no_detail_or_action_at_all(): void
     {
         // $wpdb rows are NOT NULL in the schema, but the renderer is handed
