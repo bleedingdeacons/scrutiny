@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Scrutiny\Tests\Unit\Testing;
 
+use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\TestCase;
 use Scrutiny\Audit\Interfaces\AuditLogger;
 use Scrutiny\Testing\Doubles\SpyAuditLogger;
@@ -17,9 +18,12 @@ use Scrutiny\Testing\Doubles\SpyAuditLogger;
  * the behaviour those consumers lean on and a signature check would not catch:
  * that logBatch() is recorded both raw and fanned out, so the four doubles this
  * replaces are all satisfied by one class.
- *
- * @covers \Scrutiny\Testing\Doubles\SpyAuditLogger
  */
+// src/Testing is excluded from coverage in phpunit.xml, so naming that
+// class as a covered target attributes nothing and PHPUnit 13 rejects it
+// outright. The @covers this replaces had the same problem; it was simply
+// never validated.
+#[CoversNothing]
 final class SpyAuditLoggerTest extends TestCase
 {
     public function testItSatisfiesTheContractAndStartsEmpty(): void

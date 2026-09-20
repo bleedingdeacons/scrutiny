@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Scrutiny\Tests\Unit\Shortcodes;
 
+use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 use Scrutiny\Privacy\PrivacyPolicyFormatter;
 use Scrutiny\Rest\PrivacyPolicyController;
@@ -60,8 +61,7 @@ class PrivacyPolicyShortcodeTest extends TestCase
     // ──────────────────────────────────────────────
     //  Registration
     // ──────────────────────────────────────────────
-
-    /** @test */
+    #[Test]
     public function it_registers_the_documented_shortcode_tag(): void
     {
         // Regression guard: the class docblock and any user-facing
@@ -80,7 +80,7 @@ class PrivacyPolicyShortcodeTest extends TestCase
         );
     }
 
-    /** @test */
+    #[Test]
     public function the_registered_callback_is_the_render_method(): void
     {
         // The handler must be the bound render() method, not a
@@ -100,8 +100,7 @@ class PrivacyPolicyShortcodeTest extends TestCase
     // ──────────────────────────────────────────────
     //  Selection rule (which policy wins)
     // ──────────────────────────────────────────────
-
-    /** @test */
+    #[Test]
     public function it_renders_the_active_policy_when_one_is_published(): void
     {
         $this->seedPolicy(1, '2026-01-01 00:00:00', active: true);
@@ -117,7 +116,7 @@ class PrivacyPolicyShortcodeTest extends TestCase
         $this->assertStringContainsString('Policy 1 body', $output);
     }
 
-    /** @test */
+    #[Test]
     public function it_emits_an_empty_string_when_no_policy_is_active(): void
     {
         // An admin who has installed the plugin but not yet
@@ -130,7 +129,7 @@ class PrivacyPolicyShortcodeTest extends TestCase
         $this->assertSame('', $this->makeShortcode()->render());
     }
 
-    /** @test */
+    #[Test]
     public function it_emits_an_empty_string_when_no_policies_exist_at_all(): void
     {
         // The first-deploy state: the CPT is registered but no
@@ -139,7 +138,7 @@ class PrivacyPolicyShortcodeTest extends TestCase
         $this->assertSame('', $this->makeShortcode()->render());
     }
 
-    /** @test */
+    #[Test]
     public function the_newest_active_policy_wins_when_multiple_are_flagged(): void
     {
         // The schema doesn't strictly prevent two policies from
@@ -156,7 +155,7 @@ class PrivacyPolicyShortcodeTest extends TestCase
         $this->assertStringNotContainsString('1.0-old', $output);
     }
 
-    /** @test */
+    #[Test]
     public function it_skips_unpublished_policies_even_when_they_are_flagged_active(): void
     {
         // A draft or trashed policy that still has the active flag
@@ -184,8 +183,7 @@ class PrivacyPolicyShortcodeTest extends TestCase
     // ──────────────────────────────────────────────
     //  Output shape and escaping
     // ──────────────────────────────────────────────
-
-    /** @test */
+    #[Test]
     public function it_renders_both_metadata_fields_with_their_labels(): void
     {
         // The two metadata fields the shortcode surfaces — version
@@ -224,7 +222,7 @@ class PrivacyPolicyShortcodeTest extends TestCase
         $this->assertStringNotContainsString('<dt>Contact Email</dt>', $output);
     }
 
-    /** @test */
+    #[Test]
     public function it_renders_the_policy_body_in_full(): void
     {
         // The WYSIWYG body must reach the rendered output intact —
@@ -254,8 +252,7 @@ class PrivacyPolicyShortcodeTest extends TestCase
     // ──────────────────────────────────────────────
     //  Metadata placement
     // ──────────────────────────────────────────────
-
-    /** @test */
+    #[Test]
     public function it_appends_the_metadata_after_the_policy_body(): void
     {
         // The metadata is the small-print tail of the policy —
@@ -295,7 +292,7 @@ class PrivacyPolicyShortcodeTest extends TestCase
         $this->assertLessThan($metaPos, $lastBodyPos);
     }
 
-    /** @test */
+    #[Test]
     public function it_appends_the_metadata_when_the_body_has_no_headings(): void
     {
         // The degenerate case: a single block of prose with no
@@ -318,7 +315,7 @@ class PrivacyPolicyShortcodeTest extends TestCase
         $this->assertLessThan($metaPos, $bodyPos);
     }
 
-    /** @test */
+    #[Test]
     public function the_metadata_block_appears_exactly_once(): void
     {
         // Defence in depth: the append is a single string
@@ -343,7 +340,7 @@ class PrivacyPolicyShortcodeTest extends TestCase
         $this->assertSame(1, $occurrences);
     }
 
-    /** @test */
+    #[Test]
     public function it_html_escapes_the_scalar_metadata_fields(): void
     {
         // Defence in depth: ACF should never store HTML in these
@@ -365,7 +362,7 @@ class PrivacyPolicyShortcodeTest extends TestCase
         $this->assertStringContainsString('1.0 &amp; 2.0 &lt;script&gt;', $output);
     }
 
-    /** @test */
+    #[Test]
     public function it_preserves_safe_wysiwyg_markup_in_the_policy_body(): void
     {
         // The whole point of the policy field being a WYSIWYG is
@@ -388,7 +385,7 @@ class PrivacyPolicyShortcodeTest extends TestCase
         );
     }
 
-    /** @test */
+    #[Test]
     public function it_strips_dangerous_markup_from_the_policy_body(): void
     {
         // The policy body is stored as-authored and rendered as
@@ -413,7 +410,7 @@ class PrivacyPolicyShortcodeTest extends TestCase
         $this->assertStringContainsString('Click', $output);
     }
 
-    /** @test */
+    #[Test]
     public function it_strips_style_blocks_from_the_policy_body(): void
     {
         // Regression guard: an early version rendered <style>
@@ -443,7 +440,7 @@ class PrivacyPolicyShortcodeTest extends TestCase
         $this->assertStringContainsString('<p>Section two.</p>', $output);
     }
 
-    /** @test */
+    #[Test]
     public function it_accepts_the_atts_argument_wordpress_always_supplies(): void
     {
         // WordPress invokes shortcode handlers with the parsed

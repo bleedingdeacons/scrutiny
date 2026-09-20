@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Scrutiny\Tests\Unit\Audit;
 
+use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\Test;
 use Scrutiny\Tests\TestCase;
 use Scrutiny\Audit\GdprAuditRepository;
 
@@ -14,9 +16,8 @@ use Scrutiny\Audit\GdprAuditRepository;
  * WHERE-clause assembly, pagination and IN-list handling can be asserted
  * without a live database. createTable() is not exercised because it
  * require()s a WordPress core file absent from the unit environment.
- *
- * @covers \Scrutiny\Audit\GdprAuditRepository
  */
+#[CoversClass(\Scrutiny\Audit\GdprAuditRepository::class)]
 class GdprAuditRepositoryTest extends TestCase
 {
     /** @var object The previous global $wpdb, restored in tearDown. */
@@ -107,10 +108,7 @@ class GdprAuditRepositoryTest extends TestCase
     }
 
     // ─── insert ─────────────────────────────────────────────────────
-
-    /**
-     * @test
-     */
+    #[Test]
     public function insert_returns_the_new_row_id_on_success(): void
     {
         $this->wpdb->insertReturn = 1;
@@ -125,9 +123,7 @@ class GdprAuditRepositoryTest extends TestCase
         $this->assertSame('', $data['detail']);
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function insert_logs_and_returns_false_on_failure(): void
     {
         $this->wpdb->insertReturn = false;
@@ -141,10 +137,7 @@ class GdprAuditRepositoryTest extends TestCase
     }
 
     // ─── find ───────────────────────────────────────────────────────
-
-    /**
-     * @test
-     */
+    #[Test]
     public function find_appends_pagination_params_even_with_no_filters(): void
     {
         $rows = [(object) ['id' => 1]];
@@ -156,9 +149,7 @@ class GdprAuditRepositoryTest extends TestCase
         $this->assertSame([50, 0], $this->wpdb->lastPrepareValues);
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function find_builds_where_values_in_declaration_order(): void
     {
         $this->repository->find([
@@ -173,9 +164,7 @@ class GdprAuditRepositoryTest extends TestCase
         $this->assertSame(['member', 42, 'update', 10, 20], $this->wpdb->lastPrepareValues);
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function find_caps_per_page_at_two_hundred(): void
     {
         $this->repository->find(['per_page' => 5000]);
@@ -183,9 +172,7 @@ class GdprAuditRepositoryTest extends TestCase
         $this->assertSame([200, 0], $this->wpdb->lastPrepareValues);
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function find_expands_entity_ids_into_an_in_list(): void
     {
         // Duplicates and non-positives are dropped and de-duped.
@@ -194,9 +181,7 @@ class GdprAuditRepositoryTest extends TestCase
         $this->assertSame([5, 8, 50, 0], $this->wpdb->lastPrepareValues);
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function find_forces_an_impossible_id_when_no_valid_entity_ids_remain(): void
     {
         // A name search that matched no posts must return nothing, not
@@ -207,10 +192,7 @@ class GdprAuditRepositoryTest extends TestCase
     }
 
     // ─── count ──────────────────────────────────────────────────────
-
-    /**
-     * @test
-     */
+    #[Test]
     public function count_with_no_filters_skips_prepare(): void
     {
         $this->wpdb->getVarReturn = 12;
@@ -221,9 +203,7 @@ class GdprAuditRepositoryTest extends TestCase
         $this->assertSame([], $this->wpdb->lastPrepareValues);
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function count_builds_where_values_for_supplied_filters(): void
     {
         $this->wpdb->getVarReturn = 3;
@@ -241,9 +221,7 @@ class GdprAuditRepositoryTest extends TestCase
         );
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function find_builds_the_user_field_and_date_where_clauses(): void
     {
         // These four filters are the ones the declaration-order test above
@@ -262,9 +240,7 @@ class GdprAuditRepositoryTest extends TestCase
         );
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function count_builds_the_entity_and_action_where_clauses(): void
     {
         $this->wpdb->getVarReturn = 4;
@@ -278,9 +254,7 @@ class GdprAuditRepositoryTest extends TestCase
         $this->assertSame(['member', 42, 'update'], $this->wpdb->lastPrepareValues);
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function count_expands_entity_ids_into_an_in_list(): void
     {
         $this->wpdb->getVarReturn = 2;
@@ -291,9 +265,7 @@ class GdprAuditRepositoryTest extends TestCase
         $this->assertSame([5, 8], $this->wpdb->lastPrepareValues);
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function count_forces_an_impossible_id_when_no_valid_entity_ids_remain(): void
     {
         $this->repository->count(['entity_ids' => [0, -1]]);
@@ -302,10 +274,7 @@ class GdprAuditRepositoryTest extends TestCase
     }
 
     // ─── purge ──────────────────────────────────────────────────────
-
-    /**
-     * @test
-     */
+    #[Test]
     public function purge_deletes_rows_older_than_the_cutoff(): void
     {
         $this->wpdb->queryReturn = 9;

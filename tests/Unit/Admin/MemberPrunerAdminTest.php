@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace Scrutiny\Tests\Unit\Admin;
 
+use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\Test;
+use PHPUnit\Framework\Attributes\DataProvider;
 use BleedingDeacons\WpMocks\Exceptions\WpDieException;
 use BleedingDeacons\WpMocks\WpState;
 use ReflectionMethod;
@@ -40,9 +43,8 @@ use Scrutiny\Tests\TestCase;
  * are covered here; the work behind them is reached through reflection on
  * persistPostedSettings() and savedRedirectUrl(), which were split out of
  * handleSave() for exactly that reason.
- *
- * @covers \Scrutiny\Admin\MemberPrunerAdmin
  */
+#[CoversClass(\Scrutiny\Admin\MemberPrunerAdmin::class)]
 final class MemberPrunerAdminTest extends TestCase
 {
     private PrunerSettings $settings;
@@ -97,8 +99,7 @@ final class MemberPrunerAdminTest extends TestCase
     }
 
     // ── registration ──────────────────────────────────────────────────
-
-    /** @test */
+    #[Test]
     public function it_hooks_the_menu_and_the_save_handler_on_construction(): void
     {
         $hooks = [];
@@ -114,9 +115,8 @@ final class MemberPrunerAdminTest extends TestCase
      * ScrutinyMenu registers the parent at the default priority 10 and strips
      * the auto-generated child at 999. This page has to land between the two,
      * or it attaches to a menu that does not exist yet.
-     *
-     * @test
      */
+    #[Test]
     public function the_menu_registration_runs_after_the_parent_menu_is_created(): void
     {
         $priorities = [];
@@ -127,7 +127,7 @@ final class MemberPrunerAdminTest extends TestCase
         $this->assertSame(20, $priorities['admin_menu']);
     }
 
-    /** @test */
+    #[Test]
     public function it_registers_a_submenu_under_the_scrutiny_menu(): void
     {
         $this->page->registerMenu();
@@ -143,14 +143,12 @@ final class MemberPrunerAdminTest extends TestCase
     }
 
     // ── save: guards ──────────────────────────────────────────────────
-
     /**
      * admin_init fires on every admin request, so the handler has to leave
      * unrelated screens alone rather than consuming their nonces or reading
      * their POST values.
-     *
-     * @test
      */
+    #[Test]
     public function the_save_handler_ignores_a_request_that_is_not_its_own_form(): void
     {
         $_POST = ['rotation_grace_months' => '99', 'enabled' => '1'];
@@ -165,9 +163,8 @@ final class MemberPrunerAdminTest extends TestCase
      * The nonce proves the request came from the form; it does not prove the
      * submitter is allowed to change the settings, so the capability is
      * checked separately.
-     *
-     * @test
      */
+    #[Test]
     public function the_save_handler_refuses_a_user_without_the_capability(): void
     {
         $_POST = [MemberPrunerAdmin::NONCE_FIELD => 'nonce-' . MemberPrunerAdmin::NONCE_ACTION];
@@ -176,7 +173,7 @@ final class MemberPrunerAdminTest extends TestCase
         $this->page->handleSave();
     }
 
-    /** @test */
+    #[Test]
     public function nothing_is_written_when_the_capability_check_fails(): void
     {
         $_POST = [
@@ -203,7 +200,7 @@ final class MemberPrunerAdminTest extends TestCase
             ->invoke($this->page);
     }
 
-    /** @test */
+    #[Test]
     public function a_full_submission_is_written_through_to_the_settings(): void
     {
         $this->persist([
@@ -222,9 +219,8 @@ final class MemberPrunerAdminTest extends TestCase
     /**
      * An unticked checkbox is not posted at all, so "field absent" has to mean
      * disabled — otherwise the pruner could never be turned off from the form.
-     *
-     * @test
      */
+    #[Test]
     public function an_absent_checkbox_disables_the_pruner(): void
     {
         $this->settings->setEnabled(true);
@@ -234,7 +230,7 @@ final class MemberPrunerAdminTest extends TestCase
         $this->assertFalse($this->settings->isEnabled());
     }
 
-    /** @test */
+    #[Test]
     public function a_checkbox_posted_as_zero_also_disables_the_pruner(): void
     {
         $this->settings->setEnabled(true);
@@ -247,10 +243,9 @@ final class MemberPrunerAdminTest extends TestCase
     /**
      * Every field runs through the same clamp, so the boundaries are asserted
      * once per field rather than once per case.
-     *
-     * @test
-     * @dataProvider boundedValues
      */
+    #[DataProvider('boundedValues')]
+    #[Test]
     public function posted_values_are_clamped_into_range(
         string $posted,
         int $expectedMonths,
@@ -289,9 +284,8 @@ final class MemberPrunerAdminTest extends TestCase
     /**
      * A wiped input posts an empty string and a missing one posts nothing;
      * both mean "no grace period" rather than "reject the submission".
-     *
-     * @test
      */
+    #[Test]
     public function a_missing_field_is_saved_as_zero_rather_than_left_alone(): void
     {
         $this->settings->setRotationGraceMonths(9);
@@ -301,7 +295,7 @@ final class MemberPrunerAdminTest extends TestCase
         $this->assertSame(0, $this->settings->getRotationGraceMonths());
     }
 
-    /** @test */
+    #[Test]
     public function the_success_redirect_returns_to_this_page_with_the_updated_flag(): void
     {
         $url = (new ReflectionMethod(MemberPrunerAdmin::class, 'savedRedirectUrl'))
@@ -314,8 +308,7 @@ final class MemberPrunerAdminTest extends TestCase
     }
 
     // ── render: guard ─────────────────────────────────────────────────
-
-    /** @test */
+    #[Test]
     public function the_screen_refuses_a_user_without_the_capability(): void
     {
         $this->expectException(WpDieException::class);
@@ -323,8 +316,7 @@ final class MemberPrunerAdminTest extends TestCase
     }
 
     // ── render: output ────────────────────────────────────────────────
-
-    /** @test */
+    #[Test]
     public function the_screen_renders_a_form_with_a_nonce_and_the_three_fields(): void
     {
         $this->grantCapability();
@@ -339,7 +331,7 @@ final class MemberPrunerAdminTest extends TestCase
         $this->assertStringContainsString('name="enabled"', $html);
     }
 
-    /** @test */
+    #[Test]
     public function the_stored_values_are_rendered_into_the_inputs(): void
     {
         $this->grantCapability();
@@ -357,9 +349,8 @@ final class MemberPrunerAdminTest extends TestCase
     /**
      * The maxima are rendered as the inputs' max attribute, so the browser
      * enforces the same bound the save clamps to.
-     *
-     * @test
      */
+    #[Test]
     public function the_inputs_advertise_the_same_ceilings_the_save_clamps_to(): void
     {
         $this->grantCapability();
@@ -374,9 +365,8 @@ final class MemberPrunerAdminTest extends TestCase
      * Matched against the input element rather than the whole page: the
      * field's own description reads "When unchecked, …", so a bare search for
      * "checked" passes in both states.
-     *
-     * @test
      */
+    #[Test]
     public function the_enabled_checkbox_reflects_the_stored_state(): void
     {
         $this->grantCapability();
@@ -388,7 +378,7 @@ final class MemberPrunerAdminTest extends TestCase
         );
     }
 
-    /** @test */
+    #[Test]
     public function the_checkbox_is_unchecked_when_the_pruner_is_disabled(): void
     {
         $this->grantCapability();
@@ -407,9 +397,8 @@ final class MemberPrunerAdminTest extends TestCase
     /**
      * The banner is the at-a-glance answer to "is this about to do
      * something?", so the two states have to be distinguishable.
-     *
-     * @test
      */
+    #[Test]
     public function an_enabled_pruner_gets_a_warning_banner(): void
     {
         $this->grantCapability();
@@ -422,7 +411,7 @@ final class MemberPrunerAdminTest extends TestCase
         $this->assertStringNotContainsString('currently disabled', $html);
     }
 
-    /** @test */
+    #[Test]
     public function a_disabled_pruner_gets_an_info_banner(): void
     {
         $this->grantCapability();
@@ -434,7 +423,7 @@ final class MemberPrunerAdminTest extends TestCase
         $this->assertStringNotContainsString('currently enabled', $html);
     }
 
-    /** @test */
+    #[Test]
     public function the_saved_notice_appears_only_after_a_save(): void
     {
         $this->grantCapability();
@@ -449,9 +438,8 @@ final class MemberPrunerAdminTest extends TestCase
     /**
      * The flag is compared strictly against '1', so a truthy-but-different
      * value in the query string does not fake a save.
-     *
-     * @test
      */
+    #[Test]
     public function an_unrecognised_updated_flag_does_not_show_the_saved_notice(): void
     {
         $this->grantCapability();
@@ -461,14 +449,12 @@ final class MemberPrunerAdminTest extends TestCase
     }
 
     // ── render: the next-run line ─────────────────────────────────────
-
     /**
      * The line is shown whether or not the pruner is enabled, because the cron
      * schedule is independent of the flag — an admin re-enabling the pruner
      * needs to know when the next run will land.
-     *
-     * @test
      */
+    #[Test]
     public function an_unscheduled_cron_event_is_reported_as_such(): void
     {
         $this->grantCapability();
@@ -478,7 +464,7 @@ final class MemberPrunerAdminTest extends TestCase
         $this->assertStringContainsString('Cron event is not scheduled', $html);
     }
 
-    /** @test */
+    #[Test]
     public function a_future_run_is_reported_with_its_formatted_timestamp(): void
     {
         $this->grantCapability();
@@ -500,9 +486,8 @@ final class MemberPrunerAdminTest extends TestCase
     /**
      * A timestamp in the past means WP-Cron has not fired — common on a quiet
      * site — rather than that the event is missing, so it gets its own wording.
-     *
-     * @test
      */
+    #[Test]
     public function a_past_timestamp_is_reported_as_overdue(): void
     {
         $this->grantCapability();
@@ -519,7 +504,7 @@ final class MemberPrunerAdminTest extends TestCase
         $this->assertStringContainsString('overdue — will fire on the next site visit', $html);
     }
 
-    /** @test */
+    #[Test]
     public function the_next_run_line_is_shown_when_the_pruner_is_enabled_too(): void
     {
         $this->grantCapability();

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Scrutiny\Tests\Unit\Cleanup;
 
+use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 use Scrutiny\Cleanup\PrunerSettings;
 
@@ -25,7 +26,7 @@ class PrunerSettingsTest extends TestCase
         $GLOBALS['scrutiny_test_options'] = [];
     }
 
-    /** @test */
+    #[Test]
     public function it_returns_the_documented_defaults_when_no_value_is_stored(): void
     {
         $settings = new PrunerSettings();
@@ -40,7 +41,7 @@ class PrunerSettingsTest extends TestCase
         );
     }
 
-    /** @test */
+    #[Test]
     public function it_round_trips_a_saved_rotation_grace_value(): void
     {
         $settings = new PrunerSettings();
@@ -50,7 +51,7 @@ class PrunerSettingsTest extends TestCase
         $this->assertSame(6, $settings->getRotationGraceMonths());
     }
 
-    /** @test */
+    #[Test]
     public function it_round_trips_a_saved_inactivity_value(): void
     {
         $settings = new PrunerSettings();
@@ -60,7 +61,7 @@ class PrunerSettingsTest extends TestCase
         $this->assertSame(18, $settings->getInactivityMonths());
     }
 
-    /** @test */
+    #[Test]
     public function setters_clamp_negative_values_to_zero(): void
     {
         // A negative grace period would slide the cutoff into the
@@ -76,7 +77,7 @@ class PrunerSettingsTest extends TestCase
         $this->assertSame(0, $settings->getInactivityMonths());
     }
 
-    /** @test */
+    #[Test]
     public function getters_clamp_negative_stored_values_to_zero(): void
     {
         // Defence in depth: a negative integer in wp_options written
@@ -92,7 +93,7 @@ class PrunerSettingsTest extends TestCase
         $this->assertSame(0, $settings->getInactivityMonths());
     }
 
-    /** @test */
+    #[Test]
     public function getters_coerce_string_values_into_integers(): void
     {
         // WordPress sometimes stores option values as strings (e.g.
@@ -107,7 +108,7 @@ class PrunerSettingsTest extends TestCase
         $this->assertSame(24, $settings->getInactivityMonths());
     }
 
-    /** @test */
+    #[Test]
     public function rotation_and_inactivity_are_stored_under_distinct_keys(): void
     {
         // Regression guard: writing one must not silently overwrite
@@ -125,7 +126,7 @@ class PrunerSettingsTest extends TestCase
         );
     }
 
-    /** @test */
+    #[Test]
     public function zero_is_a_valid_persisted_value(): void
     {
         // Zero means "no grace", which is a legitimate (if aggressive)
@@ -143,8 +144,7 @@ class PrunerSettingsTest extends TestCase
     // ──────────────────────────────────────────────
     //  Enabled flag
     // ──────────────────────────────────────────────
-
-    /** @test */
+    #[Test]
     public function pruner_is_disabled_by_default(): void
     {
         // The pruner is destructive (even if recoverable from trash),
@@ -157,7 +157,7 @@ class PrunerSettingsTest extends TestCase
         $this->assertFalse(PrunerSettings::DEFAULT_ENABLED);
     }
 
-    /** @test */
+    #[Test]
     public function setEnabled_round_trips_true(): void
     {
         $settings = new PrunerSettings();
@@ -167,7 +167,7 @@ class PrunerSettingsTest extends TestCase
         $this->assertTrue($settings->isEnabled());
     }
 
-    /** @test */
+    #[Test]
     public function setEnabled_round_trips_false(): void
     {
         // Enable then disable — proves the off-state isn't just the
@@ -180,7 +180,7 @@ class PrunerSettingsTest extends TestCase
         $this->assertFalse($settings->isEnabled());
     }
 
-    /** @test */
+    #[Test]
     public function isEnabled_coerces_string_truthy_values(): void
     {
         // The Settings API and various WP option backends serialise
@@ -200,7 +200,7 @@ class PrunerSettingsTest extends TestCase
         }
     }
 
-    /** @test */
+    #[Test]
     public function isEnabled_coerces_string_falsy_values(): void
     {
         // The complement of the above: anything PHP treats as falsy
@@ -222,8 +222,7 @@ class PrunerSettingsTest extends TestCase
     // ──────────────────────────────────────────────
     //  Trash retention
     // ──────────────────────────────────────────────
-
-    /** @test */
+    #[Test]
     public function trash_retention_defaults_to_seven_days(): void
     {
         // Default mirrors the cron interval so a member trashed in
@@ -235,7 +234,7 @@ class PrunerSettingsTest extends TestCase
         $this->assertSame(7, $settings->getTrashRetentionDays());
     }
 
-    /** @test */
+    #[Test]
     public function trash_retention_round_trips(): void
     {
         $settings = new PrunerSettings();
@@ -245,7 +244,7 @@ class PrunerSettingsTest extends TestCase
         $this->assertSame(14, $settings->getTrashRetentionDays());
     }
 
-    /** @test */
+    #[Test]
     public function trash_retention_clamps_negative_values_to_zero(): void
     {
         // Defence in depth — a hand-edited wp_options row containing
@@ -260,7 +259,7 @@ class PrunerSettingsTest extends TestCase
         $this->assertSame(0, $settings->getTrashRetentionDays());
     }
 
-    /** @test */
+    #[Test]
     public function trash_retention_zero_is_a_valid_persisted_value(): void
     {
         // Zero means "delete everything currently in trash" — a

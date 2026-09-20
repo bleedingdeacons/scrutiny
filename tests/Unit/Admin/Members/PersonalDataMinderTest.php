@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace Scrutiny\Tests\Unit\Admin\Members;
 
+use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\Test;
+use function Brain\Monkey\Functions\expect;
 use BleedingDeacons\WpMocks\WpState;
-use Brain\Monkey\Functions;
 use Mockery;
 use Scrutiny\Admin\Members\PersonalDataMinder;
 use Scrutiny\Privacy\PersonalDataPolicy;
@@ -15,9 +17,8 @@ use Unity\Members\Interfaces\Member;
 
 /**
  * Tests for PersonalDataMinder's conditional script enqueue.
- *
- * @covers \Scrutiny\Admin\Members\PersonalDataMinder
  */
+#[CoversClass(\Scrutiny\Admin\Members\PersonalDataMinder::class)]
 class PersonalDataMinderTest extends TestCase
 {
     protected function setUp(): void
@@ -42,9 +43,7 @@ class PersonalDataMinderTest extends TestCase
         return new PersonalDataMinder($configuration);
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function it_registers_the_admin_enqueue_hook_on_construction(): void
     {
         $this->makeMinder();
@@ -53,15 +52,13 @@ class PersonalDataMinderTest extends TestCase
         $this->assertContains('acf/input/admin_enqueue_scripts', $hooks);
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function it_does_nothing_without_a_current_screen(): void
     {
         WpState::$screen = null;
 
         $enqueued = false;
-        Functions\expect('wp_enqueue_script')->andReturnUsing(
+        expect('wp_enqueue_script')->andReturnUsing(
             function () use (&$enqueued) {
                 $enqueued = true;
             }
@@ -72,17 +69,15 @@ class PersonalDataMinderTest extends TestCase
         $this->assertFalse($enqueued, 'No script should be enqueued without a screen.');
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function it_does_nothing_on_a_different_post_type_screen(): void
     {
-        Functions\expect('get_current_screen')->andReturn(
+        expect('get_current_screen')->andReturn(
             (object) ['post_type' => 'post']
         );
 
         $enqueued = false;
-        Functions\expect('wp_enqueue_script')->andReturnUsing(
+        expect('wp_enqueue_script')->andReturnUsing(
             function () use (&$enqueued) {
                 $enqueued = true;
             }
@@ -93,9 +88,7 @@ class PersonalDataMinderTest extends TestCase
         $this->assertFalse($enqueued, 'No script should be enqueued on a non-member screen.');
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function it_enqueues_and_localises_the_script_on_the_member_screen(): void
     {
         $GLOBALS['scrutiny_test_capabilities'] = [
@@ -103,11 +96,11 @@ class PersonalDataMinderTest extends TestCase
             PersonalDataPolicy::VIEW_CAPABILITY => false,
         ];
 
-        Functions\expect('get_current_screen')->andReturn(
+        expect('get_current_screen')->andReturn(
             (object) ['post_type' => 'unity_member']
         );
-        Functions\expect('plugin_dir_url')->andReturn('https://example.com/wp-content/plugins/scrutiny/');
-        Functions\expect('wp_enqueue_script')->once()->with(
+        expect('plugin_dir_url')->andReturn('https://example.com/wp-content/plugins/scrutiny/');
+        expect('wp_enqueue_script')->once()->with(
             'scrutiny-personal-data-minder',
             Mockery::type('string'),
             ['jquery', 'acf-input'],
@@ -116,7 +109,7 @@ class PersonalDataMinderTest extends TestCase
         );
 
         $localised = null;
-        Functions\expect('wp_localize_script')->once()->andReturnUsing(
+        expect('wp_localize_script')->once()->andReturnUsing(
             function ($handle, $object, $data) use (&$localised) {
                 $localised = $data;
                 return true;

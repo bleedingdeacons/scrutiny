@@ -4,8 +4,9 @@ declare(strict_types=1);
 
 namespace Scrutiny\Tests\Unit\Audit;
 
+use PHPUnit\Framework\Attributes\Test;
+use function Brain\Monkey\Functions\when;
 use BleedingDeacons\WpMocks\WpState;
-use Brain\Monkey\Functions;
 use Mockery;
 use Scrutiny\Audit\GdprAuditLogger;
 use Scrutiny\Audit\Interfaces\AuditLogger;
@@ -33,14 +34,14 @@ class AuditLoggerTest extends TestCase
         return $instance;
     }
 
-    /** @test */
+    #[Test]
     public function log_batch_calls_log_for_each_field(): void
     {
         // Previously this test could not call logBatch() at all — log() reaches
         // for wp_get_current_user() and get_current_user_id() — so it set a
         // times(3) expectation it never met and asserted something unrelated.
         // Both are available now, so it exercises the real delegation.
-        Functions\when('wp_get_current_user')->justReturn($this->currentUser('auditor'));
+        when('wp_get_current_user')->justReturn($this->currentUser('auditor'));
         WpState::$currentUserId = 7;
 
         $fields = [
@@ -72,7 +73,7 @@ class AuditLoggerTest extends TestCase
         $this->assertSame(['auditor', 'auditor'], array_column($inserted, 'user_login'));
     }
 
-    /** @test */
+    #[Test]
     public function personal_data_fields_are_correctly_defined(): void
     {
         // Hyphens, not underscores. These values are the audit log's field_name
@@ -83,7 +84,7 @@ class AuditLoggerTest extends TestCase
         $this->assertSame('landline-number', PersonalDataFields::LANDLINE_NUMBER);
     }
 
-    /** @test */
+    #[Test]
     public function all_fields_constant_contains_all_fields(): void
     {
         $this->assertContains(PersonalDataFields::PERSONAL_EMAIL, PersonalDataFields::ALL_FIELDS);
@@ -92,7 +93,7 @@ class AuditLoggerTest extends TestCase
         $this->assertCount(3, PersonalDataFields::ALL_FIELDS);
     }
 
-    /** @test */
+    #[Test]
     public function labels_exist_for_all_fields(): void
     {
         foreach (PersonalDataFields::ALL_FIELDS as $field) {

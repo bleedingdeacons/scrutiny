@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace Scrutiny\Tests\Unit\Audit;
 
+use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\Test;
+use function Brain\Monkey\Functions\when;
 use BleedingDeacons\WpMocks\WpState;
-use Brain\Monkey\Functions;
 use Mockery;
 use Scrutiny\Audit\GdprAuditLogger;
 use Scrutiny\Audit\Interfaces\AuditLogger;
@@ -15,9 +17,8 @@ use Scrutiny\Tests\TestCase;
 /**
  * Tests for GdprAuditLogger — the entry assembly, current-user capture and
  * IP anonymisation performed before delegating to the repository.
- *
- * @covers \Scrutiny\Audit\GdprAuditLogger
  */
+#[CoversClass(\Scrutiny\Audit\GdprAuditLogger::class)]
 class GdprAuditLoggerTest extends TestCase
 {
     protected function setUp(): void
@@ -31,14 +32,12 @@ class GdprAuditLoggerTest extends TestCase
         parent::tearDown();
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function log_assembles_an_entry_with_the_current_user_and_anonymised_ipv4(): void
     {
         $_SERVER['REMOTE_ADDR'] = '203.0.113.42';
 
-        Functions\when('wp_get_current_user')->justReturn($this->currentUser('admin'));
+        when('wp_get_current_user')->justReturn($this->currentUser('admin'));
         WpState::$currentUserId = 7;
 
         $captured = null;
@@ -73,14 +72,12 @@ class GdprAuditLoggerTest extends TestCase
         );
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function log_anonymises_an_ipv6_address(): void
     {
         $_SERVER['REMOTE_ADDR'] = '2001:db8:1234:5678:9abc:def0:1234:5678';
 
-        Functions\when('wp_get_current_user')->justReturn($this->currentUser('admin'));
+        when('wp_get_current_user')->justReturn($this->currentUser('admin'));
         WpState::$currentUserId = 1;
 
         $captured = null;
@@ -98,9 +95,7 @@ class GdprAuditLoggerTest extends TestCase
         $this->assertSame('2001:db8:1234::', $captured['ip_address']);
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function log_falls_back_for_a_missing_or_invalid_ip(): void
     {
         $_SERVER['REMOTE_ADDR'] = 'not-an-ip';
@@ -110,7 +105,7 @@ class GdprAuditLoggerTest extends TestCase
         // semantics — so an unset typed property takes that branch without
         // erroring, exactly as a user object with no login would.
         unset($noLogin->user_login);
-        Functions\when('wp_get_current_user')->justReturn($noLogin);
+        when('wp_get_current_user')->justReturn($noLogin);
         WpState::$currentUserId = 0;
 
         $captured = null;
@@ -129,12 +124,10 @@ class GdprAuditLoggerTest extends TestCase
         $this->assertSame('system', $captured['user_login']);
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function log_batch_logs_one_entry_per_field(): void
     {
-        Functions\when('wp_get_current_user')->justReturn($this->currentUser('admin'));
+        when('wp_get_current_user')->justReturn($this->currentUser('admin'));
         WpState::$currentUserId = 1;
         $_SERVER['REMOTE_ADDR'] = '198.51.100.5';
 

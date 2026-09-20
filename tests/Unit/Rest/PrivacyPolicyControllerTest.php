@@ -4,12 +4,12 @@ declare(strict_types=1);
 
 namespace Scrutiny\Tests\Unit\Rest;
 
+use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 use Scrutiny\Privacy\PrivacyPolicyFormatter;
 use Scrutiny\Rest\PrivacyPolicyController;
 use WP_Post;
 use WP_REST_Request;
-use WP_REST_Response;
 
 require_once __DIR__ . '/StubPrivacyPolicy.php';
 require_once __DIR__ . '/GlobalsBackedPrivacyPolicyRepository.php';
@@ -56,7 +56,7 @@ class PrivacyPolicyControllerTest extends TestCase
         );
     }
 
-    /** @test */
+    #[Test]
     public function it_registers_three_read_only_routes_under_the_scrutiny_v1_namespace(): void
     {
         // Regression guard: the class docblock and the README both
@@ -77,7 +77,7 @@ class PrivacyPolicyControllerTest extends TestCase
         $this->assertContains('scrutiny/v1/privacy-policies/(?P<id>\d+)', $registered);
     }
 
-    /** @test */
+    #[Test]
     public function every_route_is_publicly_readable(): void
     {
         // Privacy policies are explicitly public — the permission
@@ -93,7 +93,7 @@ class PrivacyPolicyControllerTest extends TestCase
         }
     }
 
-    /** @test */
+    #[Test]
     public function active_route_is_registered_before_the_id_capture(): void
     {
         // WordPress matches routes in registration order. The literal
@@ -117,8 +117,7 @@ class PrivacyPolicyControllerTest extends TestCase
     // ──────────────────────────────────────────────
     //  Response shape (formatPolicy)
     // ──────────────────────────────────────────────
-
-    /** @test */
+    #[Test]
     public function it_projects_a_policy_into_the_documented_response_shape(): void
     {
         // Pin the exact response shape the controller's docblock
@@ -159,7 +158,7 @@ class PrivacyPolicyControllerTest extends TestCase
         ], $shape);
     }
 
-    /** @test */
+    #[Test]
     public function active_field_is_coerced_to_a_strict_boolean(): void
     {
         // ACF's true_false field can return 1, 0, '1', '' depending
@@ -183,7 +182,7 @@ class PrivacyPolicyControllerTest extends TestCase
         }
     }
 
-    /** @test */
+    #[Test]
     public function missing_acf_fields_become_safe_empty_strings(): void
     {
         // A draft policy or a buggy ACF state must not crash the
@@ -202,8 +201,7 @@ class PrivacyPolicyControllerTest extends TestCase
     // ──────────────────────────────────────────────
     //  GET /privacy-policies (collection)
     // ──────────────────────────────────────────────
-
-    /** @test */
+    #[Test]
     public function the_collection_route_returns_every_published_policy(): void
     {
         $this->seedPolicy(1, '2026-01-01 00:00:00', active: false);
@@ -219,7 +217,7 @@ class PrivacyPolicyControllerTest extends TestCase
         $this->assertCount(3, $items);
     }
 
-    /** @test */
+    #[Test]
     public function the_collection_route_orders_newest_first(): void
     {
         // Documented contract: the collection comes back newest-first
@@ -236,7 +234,7 @@ class PrivacyPolicyControllerTest extends TestCase
         $this->assertSame([2, 3, 1], array_map(fn(array $i) => $i['id'], $items));
     }
 
-    /** @test */
+    #[Test]
     public function active_query_param_filters_to_only_the_active_policies(): void
     {
         $this->seedPolicy(1, '2026-01-01 00:00:00', active: false);
@@ -252,7 +250,7 @@ class PrivacyPolicyControllerTest extends TestCase
         $this->assertSame(2, $items[0]['id']);
     }
 
-    /** @test */
+    #[Test]
     public function the_collection_route_returns_an_empty_array_when_no_policies_exist(): void
     {
         // No 404 here — an empty array is a perfectly valid answer
@@ -268,8 +266,7 @@ class PrivacyPolicyControllerTest extends TestCase
     // ──────────────────────────────────────────────
     //  GET /privacy-policies/active
     // ──────────────────────────────────────────────
-
-    /** @test */
+    #[Test]
     public function the_active_route_returns_the_single_active_policy(): void
     {
         $this->seedPolicy(1, '2026-01-01 00:00:00', active: false);
@@ -282,7 +279,7 @@ class PrivacyPolicyControllerTest extends TestCase
         $this->assertSame(2, $response->get_data()['id']);
     }
 
-    /** @test */
+    #[Test]
     public function the_active_route_picks_the_newest_when_multiple_are_active(): void
     {
         // The schema doesn't enforce a single-active invariant — if
@@ -297,7 +294,7 @@ class PrivacyPolicyControllerTest extends TestCase
         $this->assertSame(3, $response->get_data()['id']);
     }
 
-    /** @test */
+    #[Test]
     public function the_active_route_returns_404_when_no_policy_is_active(): void
     {
         $this->seedPolicy(1, '2026-01-01 00:00:00', active: false);
@@ -308,7 +305,7 @@ class PrivacyPolicyControllerTest extends TestCase
         $this->assertSame('scrutiny_no_active_policy', $response->get_data()['code']);
     }
 
-    /** @test */
+    #[Test]
     public function the_active_route_returns_404_when_no_policies_exist_at_all(): void
     {
         $response = $this->makeController()->getActive();
@@ -319,8 +316,7 @@ class PrivacyPolicyControllerTest extends TestCase
     // ──────────────────────────────────────────────
     //  GET /privacy-policies/{id}
     // ──────────────────────────────────────────────
-
-    /** @test */
+    #[Test]
     public function the_item_route_returns_the_named_policy(): void
     {
         $this->seedPolicy(7, '2026-02-01 00:00:00', active: true);
@@ -332,7 +328,7 @@ class PrivacyPolicyControllerTest extends TestCase
         $this->assertSame(7, $response->get_data()['id']);
     }
 
-    /** @test */
+    #[Test]
     public function the_item_route_returns_404_for_a_missing_post(): void
     {
         $response = $this->makeController()
@@ -342,7 +338,7 @@ class PrivacyPolicyControllerTest extends TestCase
         $this->assertSame('scrutiny_policy_not_found', $response->get_data()['code']);
     }
 
-    /** @test */
+    #[Test]
     public function the_item_route_returns_404_for_the_wrong_post_type(): void
     {
         // Defence in depth: even if a caller knows a real post ID
@@ -360,7 +356,7 @@ class PrivacyPolicyControllerTest extends TestCase
         $this->assertSame(404, $response->get_status());
     }
 
-    /** @test */
+    #[Test]
     public function the_item_route_returns_404_for_unpublished_policies(): void
     {
         // A draft or trashed policy must never escape via the public

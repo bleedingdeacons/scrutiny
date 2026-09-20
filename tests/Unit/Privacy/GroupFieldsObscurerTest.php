@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace Scrutiny\Tests\Unit\Privacy;
 
+use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\Test;
+use function Brain\Monkey\Functions\when;
 use BleedingDeacons\WpMocks\WpState;
-use Brain\Monkey\Functions;
 use Scrutiny\Privacy\GroupFieldsObscurer;
 use Scrutiny\Privacy\PersonalDataPolicy;
 use Scrutiny\Tests\TestCase;
@@ -14,9 +16,8 @@ use WP_Post;
 /**
  * Tests for GroupFieldsObscurer — the $_POST strip on save and the admin
  * mask/lock UI emission.
- *
- * @covers \Scrutiny\Privacy\GroupFieldsObscurer
  */
+#[CoversClass(\Scrutiny\Privacy\GroupFieldsObscurer::class)]
 class GroupFieldsObscurerTest extends TestCase
 {
     protected function setUp(): void
@@ -48,10 +49,7 @@ class GroupFieldsObscurerTest extends TestCase
     }
 
     // ─── register ──────────────────────────────────────────────────
-
-    /**
-     * @test
-     */
+    #[Test]
     public function register_always_wires_the_save_strip_and_admin_ui_when_admin(): void
     {
         WpState::$isAdmin = true;
@@ -65,9 +63,7 @@ class GroupFieldsObscurerTest extends TestCase
         $this->assertContains('admin_footer-post-new.php', $hooks);
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function register_skips_the_admin_ui_hooks_outside_admin(): void
     {
         WpState::$isAdmin = false;
@@ -80,10 +76,7 @@ class GroupFieldsObscurerTest extends TestCase
     }
 
     // ─── stripProtectedFields ──────────────────────────────────────
-
-    /**
-     * @test
-     */
+    #[Test]
     public function strip_removes_protected_fields_for_a_user_who_cannot_edit(): void
     {
 
@@ -100,9 +93,7 @@ class GroupFieldsObscurerTest extends TestCase
         $this->assertSame('kept', $_POST['post_title']);
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function strip_leaves_post_untouched_for_a_user_who_can_edit(): void
     {
         $GLOBALS['scrutiny_test_capabilities'][PersonalDataPolicy::EDIT_CAPABILITY] = true;
@@ -115,15 +106,13 @@ class GroupFieldsObscurerTest extends TestCase
         $this->assertSame('kept@example.com', $_POST['contact_1_email']);
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function strip_skips_autosaves_and_revisions(): void
     {
         // WordPress answers with the autosave's own post ID, not a bare
         // true — and wp-mocks types the stub int|false to match, so that is
         // what a "yes, this is an autosave" answer has to look like.
-        Functions\when('wp_is_post_autosave')->justReturn(9001);
+        when('wp_is_post_autosave')->justReturn(9001);
 
         $_POST = ['contact_1_email' => 'kept@example.com'];
 
@@ -134,10 +123,7 @@ class GroupFieldsObscurerTest extends TestCase
     }
 
     // ─── emitAdminUi ───────────────────────────────────────────────
-
-    /**
-     * @test
-     */
+    #[Test]
     public function emit_admin_ui_outputs_nothing_for_an_editor(): void
     {
         $GLOBALS['scrutiny_test_capabilities'][PersonalDataPolicy::EDIT_CAPABILITY] = true;
@@ -147,9 +133,7 @@ class GroupFieldsObscurerTest extends TestCase
         $this->assertSame('', $output);
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function emit_admin_ui_outputs_nothing_on_an_unsupported_post_type(): void
     {
         $output = $this->captureEmit('post', 5);
@@ -157,9 +141,7 @@ class GroupFieldsObscurerTest extends TestCase
         $this->assertSame('', $output);
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function emit_admin_ui_shows_a_read_only_banner_for_a_view_only_user(): void
     {
         $GLOBALS['scrutiny_test_capabilities'][PersonalDataPolicy::VIEW_CAPABILITY] = true;
@@ -173,9 +155,7 @@ class GroupFieldsObscurerTest extends TestCase
         $this->assertStringContainsString('var APPLY_MASK = false;', $output);
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function emit_admin_ui_masks_values_for_a_user_with_no_access(): void
     {
         // A group post: contact meta lives on the group itself.
@@ -194,9 +174,7 @@ class GroupFieldsObscurerTest extends TestCase
         $this->assertStringNotContainsString('secret@example.com', $output);
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function emit_admin_ui_for_a_meeting_reads_contact_meta_from_the_linked_group(): void
     {
         // Meeting 5 points at group 9 via group_id meta; the masked values

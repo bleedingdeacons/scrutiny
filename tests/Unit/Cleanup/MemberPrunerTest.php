@@ -4,13 +4,12 @@ declare(strict_types=1);
 
 namespace Scrutiny\Tests\Unit\Cleanup;
 
+use PHPUnit\Framework\Attributes\Test;
 use DateTimeImmutable;
 use PHPUnit\Framework\TestCase;
-use Scrutiny\Cleanup\MemberPruner;
 use Scrutiny\Cleanup\PruneResult;
 use Scrutiny\Cleanup\PrunerSettings;
 use Unity\Members\Interfaces\Member;
-use Unity\Members\Interfaces\MemberRepository;
 use Unity\Testing\Doubles\InMemoryMemberRepository;
 use Unity\Testing\Doubles\MemberStub;
 
@@ -34,8 +33,7 @@ class MemberPrunerTest extends TestCase
     // ──────────────────────────────────────────────
     //  Officer pass
     // ──────────────────────────────────────────────
-
-    /** @test */
+    #[Test]
     public function it_trashes_an_officer_whose_rotation_is_past_when_a_successor_with_later_rotation_exists(): void
     {
         $rotated   = $this->makeMember(id: 1, position: 100, rotation: '2024-01-01');
@@ -49,7 +47,7 @@ class MemberPrunerTest extends TestCase
         $this->assertSame(2, $result->getOfficersConsidered());
     }
 
-    /** @test */
+    #[Test]
     public function it_keeps_the_current_incumbent_even_when_their_rotation_is_past(): void
     {
         // Both rotated long ago. The later one is still the incumbent
@@ -70,7 +68,7 @@ class MemberPrunerTest extends TestCase
         $this->assertSame(PruneResult::SKIP_OFFICER_EARLIER_PEER_EXISTS, $skipReasons[2] ?? null);
     }
 
-    /** @test */
+    #[Test]
     public function it_does_not_trash_a_lone_officer_with_a_past_rotation(): void
     {
         // Single officer for the position. They are the incumbent by
@@ -86,7 +84,7 @@ class MemberPrunerTest extends TestCase
         $this->assertSame(0, $result->getTrashedCount());
     }
 
-    /** @test */
+    #[Test]
     public function it_does_not_trash_an_officer_still_within_the_grace_period(): void
     {
         // Rotation was 2 months ago, grace period is 3 months — the
@@ -104,7 +102,7 @@ class MemberPrunerTest extends TestCase
         $this->assertSame(PruneResult::SKIP_OFFICER_NOT_DUE, $skipReasons[1] ?? null);
     }
 
-    /** @test */
+    #[Test]
     public function it_records_a_skip_when_an_officer_has_an_unparseable_rotation_date(): void
     {
         // Garbage rotation value can't be compared to the cutoff, so
@@ -121,7 +119,7 @@ class MemberPrunerTest extends TestCase
         $this->assertSame(PruneResult::SKIP_OFFICER_INVALID_ROTATION, $skipReasons[1] ?? null);
     }
 
-    /** @test */
+    #[Test]
     public function it_accepts_d_m_y_rotation_format_as_a_fallback(): void
     {
         // Imports and older code paths may bypass the factory's
@@ -136,7 +134,7 @@ class MemberPrunerTest extends TestCase
         $this->assertSame([1], $pruner->getTrashedIds());
     }
 
-    /** @test */
+    #[Test]
     public function it_does_not_treat_a_member_with_invalid_rotation_as_the_incumbent(): void
     {
         // The pruner picks the incumbent by latest *parseable* rotation
@@ -155,7 +153,7 @@ class MemberPrunerTest extends TestCase
         $this->assertSame([1], $pruner->getTrashedIds());
     }
 
-    /** @test */
+    #[Test]
     public function officers_are_grouped_by_position_so_other_positions_do_not_interfere(): void
     {
         // Position 100 has a successor; position 200 does not. The
@@ -176,8 +174,7 @@ class MemberPrunerTest extends TestCase
     // ──────────────────────────────────────────────
     //  Home-group non-GSR pass
     // ──────────────────────────────────────────────
-
-    /** @test */
+    #[Test]
     public function it_trashes_a_home_group_non_gsr_member_inactive_beyond_threshold(): void
     {
         // No position, has a home group, isn't the GSR, last
@@ -197,7 +194,7 @@ class MemberPrunerTest extends TestCase
         $this->assertSame(1, $result->getHomeGroupConsidered());
     }
 
-    /** @test */
+    #[Test]
     public function it_does_not_trash_a_home_group_member_who_is_a_gsr(): void
     {
         // GSRs are explicitly exempt — they're the formal intergroup
@@ -216,7 +213,7 @@ class MemberPrunerTest extends TestCase
         $this->assertSame([], $pruner->getTrashedIds());
     }
 
-    /** @test */
+    #[Test]
     public function it_does_not_trash_a_home_group_member_within_the_inactivity_window(): void
     {
         // Last updated 6 months ago against a 12-month threshold —
@@ -238,7 +235,7 @@ class MemberPrunerTest extends TestCase
         $this->assertSame(PruneResult::SKIP_HOME_GROUP_RECENT, $skipReasons[7] ?? null);
     }
 
-    /** @test */
+    #[Test]
     public function it_skips_home_group_members_with_no_updated_timestamp(): void
     {
         // Empty getUpdated() values can occur for posts loaded before
@@ -261,7 +258,7 @@ class MemberPrunerTest extends TestCase
         $this->assertSame(PruneResult::SKIP_HOME_GROUP_INVALID_UPDATED, $skipReasons[8] ?? null);
     }
 
-    /** @test */
+    #[Test]
     public function members_without_a_home_group_do_not_enter_the_home_group_pass(): void
     {
         // The home-group pass requires homeGroup > 0 — orphans (no
@@ -290,8 +287,7 @@ class MemberPrunerTest extends TestCase
     //  go — and confirm the orphan pass is unaffected because the
     //  rule requires a home group.
     // ──────────────────────────────────────────────
-
-    /** @test */
+    #[Test]
     public function it_keeps_a_home_group_member_who_is_a_twelfth_stepper_even_when_inactive(): void
     {
         // Updated long enough ago that the inactivity rule would
@@ -317,7 +313,7 @@ class MemberPrunerTest extends TestCase
         $this->assertSame(PruneResult::SKIP_PROTECTED_TWELFTH_STEPPER, $skipReasons[1] ?? null);
     }
 
-    /** @test */
+    #[Test]
     public function it_still_trashes_an_inactive_home_group_member_who_is_not_a_twelfth_stepper(): void
     {
         // Regression guard: the new protection rule must not change
@@ -338,7 +334,7 @@ class MemberPrunerTest extends TestCase
         $this->assertTrashedIds($result, [2]);
     }
 
-    /** @test */
+    #[Test]
     public function the_protection_requires_a_home_group_an_orphan_twelfth_stepper_is_not_protected(): void
     {
         // A member flagged as a twelfth stepper but with no home
@@ -361,7 +357,7 @@ class MemberPrunerTest extends TestCase
         $this->assertTrashedIds($result, [3]);
     }
 
-    /** @test */
+    #[Test]
     public function it_keeps_a_rotated_officer_who_has_a_home_group_and_is_a_twelfth_stepper(): void
     {
         // The protection is cross-cutting: it applies in the officer
@@ -388,7 +384,7 @@ class MemberPrunerTest extends TestCase
         $this->assertSame(PruneResult::SKIP_PROTECTED_TWELFTH_STEPPER, $skipReasons[4] ?? null);
     }
 
-    /** @test */
+    #[Test]
     public function it_still_trashes_a_rotated_officer_who_is_a_twelfth_stepper_without_a_home_group(): void
     {
         // Mirror of the previous test for the officer pass: the
@@ -410,7 +406,7 @@ class MemberPrunerTest extends TestCase
         $this->assertTrashedIds($result, [6]);
     }
 
-    /** @test */
+    #[Test]
     public function the_protection_does_not_increase_the_home_group_considered_count_beyond_the_normal_path(): void
     {
         // The home-group pass increments its considered counter
@@ -447,8 +443,7 @@ class MemberPrunerTest extends TestCase
     //  inactivity threshold the home-group pass uses, deliberately:
     //  one knob configures both kinds of "stale" cleanup.
     // ──────────────────────────────────────────────
-
-    /** @test */
+    #[Test]
     public function it_trashes_an_orphan_inactive_beyond_threshold(): void
     {
         // No position, no home group, last updated 18 months ago
@@ -472,7 +467,7 @@ class MemberPrunerTest extends TestCase
         $this->assertSame(PruneResult::REASON_ORPHAN_INACTIVE, $reasons[40] ?? null);
     }
 
-    /** @test */
+    #[Test]
     public function it_does_not_trash_a_recent_orphan(): void
     {
         // Updated 6 months ago against a 12-month threshold — within
@@ -493,7 +488,7 @@ class MemberPrunerTest extends TestCase
         $this->assertSame(PruneResult::SKIP_ORPHAN_RECENT, $skipReasons[41] ?? null);
     }
 
-    /** @test */
+    #[Test]
     public function it_skips_orphans_with_no_updated_timestamp(): void
     {
         // Same defensive treatment as the home-group pass: an empty
@@ -516,7 +511,7 @@ class MemberPrunerTest extends TestCase
         $this->assertSame(PruneResult::SKIP_ORPHAN_INVALID_UPDATED, $skipReasons[42] ?? null);
     }
 
-    /** @test */
+    #[Test]
     public function members_with_a_home_group_do_not_enter_the_orphan_pass(): void
     {
         // A home-group non-GSR is owned by pass 2 even when stale.
@@ -539,7 +534,7 @@ class MemberPrunerTest extends TestCase
         $this->assertSame(PruneResult::REASON_HOME_GROUP_INACTIVE, $reasons[43] ?? null);
     }
 
-    /** @test */
+    #[Test]
     public function members_with_an_intergroup_position_do_not_enter_the_orphan_pass(): void
     {
         // A lone officer with a stale rotation date is kept by the
@@ -562,7 +557,7 @@ class MemberPrunerTest extends TestCase
         $this->assertSame(0, $result->getOrphansConsidered());
     }
 
-    /** @test */
+    #[Test]
     public function the_orphan_pass_uses_the_same_inactivity_threshold_as_the_home_group_pass(): void
     {
         // Two members with identical updated timestamps — one orphan,
@@ -593,8 +588,7 @@ class MemberPrunerTest extends TestCase
     // ──────────────────────────────────────────────
     //  Cross-pass interaction
     // ──────────────────────────────────────────────
-
-    /** @test */
+    #[Test]
     public function officers_are_not_re_evaluated_under_the_inactivity_rule(): void
     {
         // A member with both an intergroup position and a home group
@@ -626,7 +620,7 @@ class MemberPrunerTest extends TestCase
         $this->assertSame(0, $result->getHomeGroupConsidered());
     }
 
-    /** @test */
+    #[Test]
     public function a_member_trashed_in_the_officer_pass_is_not_trashed_again_in_the_home_group_pass(): void
     {
         // Belt-and-braces: even if the home-group pass were reached,
@@ -661,8 +655,7 @@ class MemberPrunerTest extends TestCase
     //  rule decides their fate, and the home-group inactivity rule
     //  must not re-evaluate them. These tests pin that down.
     // ──────────────────────────────────────────────
-
-    /** @test */
+    #[Test]
     public function a_former_gsr_with_a_rotated_position_is_trashed_under_the_officer_rule(): void
     {
         // homeGroup set, isGSR === false (former GSR), and they hold a
@@ -690,7 +683,7 @@ class MemberPrunerTest extends TestCase
         $this->assertSame(0, $result->getHomeGroupConsidered());
     }
 
-    /** @test */
+    #[Test]
     public function a_former_gsr_who_is_a_current_incumbent_officer_is_kept_even_with_an_old_updated_timestamp(): void
     {
         // Lone officer for the position (no successor), so they are
@@ -721,7 +714,7 @@ class MemberPrunerTest extends TestCase
         $this->assertSame(PruneResult::SKIP_OFFICER_EARLIER_PEER_EXISTS, $skipReasons[32] ?? null);
     }
 
-    /** @test */
+    #[Test]
     public function a_former_gsr_within_their_rotation_grace_window_is_kept_and_not_re_evaluated(): void
     {
         // homeGroup + isGSR=false + position. Rotation is recent
@@ -752,8 +745,7 @@ class MemberPrunerTest extends TestCase
     // ──────────────────────────────────────────────
     //  Edge cases
     // ──────────────────────────────────────────────
-
-    /** @test */
+    #[Test]
     public function negative_grace_periods_are_clamped_to_zero(): void
     {
         // Defensive: a misconfigured caller passing negative months
@@ -771,7 +763,7 @@ class MemberPrunerTest extends TestCase
         $this->assertSame([1], $pruner->getTrashedIds());
     }
 
-    /** @test */
+    #[Test]
     public function it_handles_an_empty_member_list_without_error(): void
     {
         $pruner = $this->makePruner([]);
@@ -783,7 +775,7 @@ class MemberPrunerTest extends TestCase
         $this->assertSame(0, $result->getHomeGroupConsidered());
     }
 
-    /** @test */
+    #[Test]
     public function it_records_a_skip_when_wp_trash_post_fails(): void
     {
         // Simulate a WordPress failure: trashMember() returns false.
@@ -810,8 +802,7 @@ class MemberPrunerTest extends TestCase
     //  cron) automatically respects the toggle without each one
     //  having to remember to read the flag separately.
     // ──────────────────────────────────────────────
-
-    /** @test */
+    #[Test]
     public function it_short_circuits_when_settings_report_disabled(): void
     {
         // Set up a scenario where the officer pass would normally
@@ -844,7 +835,7 @@ class MemberPrunerTest extends TestCase
         $this->assertSame(0, $result->getHomeGroupConsidered());
     }
 
-    /** @test */
+    #[Test]
     public function it_runs_normally_when_settings_report_enabled(): void
     {
         // The complement of the previous test: with the same
@@ -865,7 +856,7 @@ class MemberPrunerTest extends TestCase
         $this->assertSame([1], $pruner->getTrashedIds());
     }
 
-    /** @test */
+    #[Test]
     public function it_runs_normally_when_no_settings_object_is_supplied(): void
     {
         // Settings parameter is optional for backward compatibility
@@ -883,7 +874,7 @@ class MemberPrunerTest extends TestCase
         $this->assertSame([1], $pruner->getTrashedIds());
     }
 
-    /** @test */
+    #[Test]
     public function disabled_flag_blocks_the_home_group_pass_too(): void
     {
         // The officer pass tests above prove the short-circuit
