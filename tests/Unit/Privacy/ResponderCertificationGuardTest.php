@@ -4,18 +4,14 @@ declare(strict_types=1);
 
 namespace Scrutiny\Tests\Unit\Privacy;
 
-use PHPUnit\Framework\Attributes\Test;
-use PHPUnit\Framework\Attributes\PreserveGlobalState;
-use PHPUnit\Framework\Attributes\RunInSeparateProcess;
-use function Brain\Monkey\Filters\has;
-use function Brain\Monkey\Functions\expect;
 use BleedingDeacons\WpMocks\WpState;
+use Brain\Monkey\Filters;
+use Brain\Monkey\Functions;
 use Scrutiny\Privacy\ResponderCertificationGuard;
-use Scrutiny\Tests\TestCase;
 use Unity\Core\Interfaces\Configuration;
 use Unity\Members\Interfaces\Member;
 
-/**
+/*
  * Tests for ResponderCertificationGuard.
  *
  * The guard keeps the member responder-certification field visible but
@@ -24,277 +20,196 @@ use Unity\Members\Interfaces\Member;
  * the stored value on save. REST writes (Integrity) are let through because
  * they authenticate with their own permission system and have no current
  * user for current_user_can() to test.
+ *
+ * That REST case defines REST_REQUEST, which cannot be undone, so it runs in a
+ * separate process — and Pest refuses process isolation, so it lives in
+ * ResponderCertificationGuardRestRequestTest as a PHPUnit class.
  */
-class ResponderCertificationGuardTest extends TestCase
+
+covers(ResponderCertificationGuard::class);
+
+const CERT_FIELD = 'service-layout-group_responder-certification';
+const CERT_KEY   = 'field_6a5a5d9e7dcec';
+const CERT_POST_TYPE = 'member';
+
+/**
+ * A minimal ACF radio field array as prepare_field receives it — a shortened
+ * choices set is enough to prove every value gets disabled.
+ *
+ * @return array<string, mixed>
+ */
+function certificationRadioField(): array
 {
-    private const FIELD_RESPONDER_CERTIFICATION = 'service-layout-group_responder-certification';
-    private const KEY_RESPONDER_CERTIFICATION   = 'field_6a5a5d9e7dcec';
+    return [
+        'name'    => CERT_FIELD,
+        'key'     => CERT_KEY,
+        'type'    => 'radio',
+        'choices' => [
+            'None'        => 'None',
+            'Applied'     => 'Applied',
+            'In Training' => 'In Training',
+            'Certified'   => 'Certified',
+        ],
+    ];
+}
 
-    protected function setUp(): void
-    {
-        parent::setUp();
+beforeEach(function () {
+    // The bootstrap's in-memory stubs back current_user_can() and get_field();
+    // reset them so capabilities and stored values do not leak between cases.
+    $GLOBALS['scrutiny_test_capabilities'] = [];
+    $GLOBALS['scrutiny_test_acf_fields'] = [];
 
-        // The bootstrap's in-memory stubs back current_user_can() and
-        // get_field(); reset them so capabilities and stored values do not
-        // leak between cases.
-        $GLOBALS['scrutiny_test_capabilities'] = [];
-        $GLOBALS['scrutiny_test_acf_fields'] = [];
+    // add_action is a bootstrap recorder; register() also wires an action, so
+    // reset the recorder between cases.
+    $GLOBALS['scrutiny_test_actions'] = [];
 
-        // add_action is a bootstrap recorder; register() also wires an action,
-        // so reset the recorder between cases.
-        $GLOBALS['scrutiny_test_actions'] = [];
-    }
-
-    protected function tearDown(): void
-    {
-        parent::tearDown();
-    }
-
-    private const POST_TYPE = 'member';
-
-    /**
-     * @param array<string, mixed>|null $config Config override; null uses the
-     *                                           standard fully-populated config.
-     */
-    private function makeGuard(?array $config = null): ResponderCertificationGuard
-    {
+    // $config overrides the standard fully-populated config when given.
+    $this->makeGuard = function (?array $config = null): ResponderCertificationGuard {
         $configuration = $this->createMock(Configuration::class);
         $configuration->method('getConfig')
             ->with(Member::class)
             ->willReturn($config ?? [
-                'FIELD_RESPONDER_CERTIFICATION' => self::FIELD_RESPONDER_CERTIFICATION,
-                'KEY_RESPONDER_CERTIFICATION'   => self::KEY_RESPONDER_CERTIFICATION,
-                'POST_TYPE'                     => self::POST_TYPE,
+                'FIELD_RESPONDER_CERTIFICATION' => CERT_FIELD,
+                'KEY_RESPONDER_CERTIFICATION'   => CERT_KEY,
+                'POST_TYPE'                     => CERT_POST_TYPE,
             ]);
 
         return new ResponderCertificationGuard($configuration);
-    }
+    };
+});
 
-    /**
-     * A minimal ACF radio field array as prepare_field receives it — a
-     * shortened choices set is enough to prove every value gets disabled.
-     *
-     * @return array<string, mixed>
-     */
-    private function radioField(): array
-    {
-        return [
-            'name'    => self::FIELD_RESPONDER_CERTIFICATION,
-            'key'     => self::KEY_RESPONDER_CERTIFICATION,
-            'type'    => 'radio',
-            'choices' => [
-                'None'        => 'None',
-                'Applied'     => 'Applied',
-                'In Training' => 'In Training',
-                'Certified'   => 'Certified',
-            ],
-        ];
-    }
-
-    #[Test]
-    public function it_disables_every_radio_choice_for_users_without_the_capability(): void
-    {
+describe('disableForReadOnlyUser', function () {
+    it('disables every radio choice for users without the capability', function () {
         // ACF radio reads $field['disabled'] as a list of choice values to
-        // disable, not a boolean — so all choices must be listed for the
-        // whole field to become read-only.
-        $field = $this->makeGuard()->disableForReadOnlyUser($this->radioField());
+        // disable, not a boolean — so all choices must be listed for the whole
+        // field to become read-only.
+        $field = ($this->makeGuard)()->disableForReadOnlyUser(certificationRadioField());
 
-        $this->assertIsArray($field);
-        $this->assertSame(
-            ['None', 'Applied', 'In Training', 'Certified'],
-            $field['disabled'],
-            'Every choice value must be disabled so no radio option can be changed.'
-        );
-        $this->assertStringContainsString(
-            'scrutiny-cert-readonly',
-            $field['wrapper']['class'],
-            'The field wrapper must be tagged so the read-only stylesheet can grey it out.'
-        );
-    }
+        expect($field)->toBeArray()
+            ->and($field['disabled'])->toBe(
+                ['None', 'Applied', 'In Training', 'Certified'],
+                'Every choice value must be disabled so no radio option can be changed.'
+            )
+            ->and($field['wrapper']['class'])->toContain('scrutiny-cert-readonly');
+    });
 
-    #[Test]
-    public function it_leaves_the_field_editable_for_users_with_the_capability(): void
-    {
+    it('leaves the field editable for users with the capability', function () {
         $GLOBALS['scrutiny_test_capabilities'] = [
             ResponderCertificationGuard::EDIT_CAPABILITY => true,
         ];
 
-        $field = $this->makeGuard()->disableForReadOnlyUser($this->radioField());
+        expect(($this->makeGuard)()->disableForReadOnlyUser(certificationRadioField()))
+            ->toBeArray()
+            ->not->toHaveKey('disabled');
+    });
 
-        $this->assertIsArray($field);
-        $this->assertArrayNotHasKey('disabled', $field);
-    }
-
-    #[Test]
-    public function it_passes_through_a_hidden_field_untouched(): void
-    {
+    it('passes a hidden field through untouched', function () {
         // ACF passes false when the field is already hidden (e.g. by
         // conditional logic); the guard must not try to disable it.
-        $this->assertFalse($this->makeGuard()->disableForReadOnlyUser(false));
-    }
+        expect(($this->makeGuard)()->disableForReadOnlyUser(false))->toBeFalse();
+    });
 
-    #[Test]
-    public function it_preserves_the_stored_value_when_user_cannot_edit(): void
-    {
+    it('falls back to a boolean disabled for a non-radio field', function () {
+        // A field that is neither radio nor checkbox has no per-choice disable
+        // semantics, so the guard uses the boolean form.
+        $field = ($this->makeGuard)()->disableForReadOnlyUser([
+            'name' => CERT_FIELD,
+            'key'  => CERT_KEY,
+            'type' => 'text',
+        ]);
+
+        expect($field)->toBeArray()
+            ->and($field['disabled'])->toBe(1)
+            ->and($field['wrapper']['class'])->toContain('scrutiny-cert-readonly');
+    });
+});
+
+describe('preserveCertification', function () {
+    it('preserves the stored value when the user cannot edit', function () {
         // REST_REQUEST is intentionally not defined — admin form saves go
         // through admin-post.php, not REST.
-        $GLOBALS['scrutiny_test_acf_fields'][23462][self::FIELD_RESPONDER_CERTIFICATION] = 'Certified';
+        $GLOBALS['scrutiny_test_acf_fields'][23462][CERT_FIELD] = 'Certified';
 
-        $result = $this->makeGuard()->preserveCertification(
-            'Pending',
-            23462,
-            ['name' => self::FIELD_RESPONDER_CERTIFICATION, 'key' => self::KEY_RESPONDER_CERTIFICATION]
-        );
+        $result = ($this->makeGuard)()->preserveCertification('Pending', 23462, ['name' => CERT_FIELD, 'key' => CERT_KEY]);
 
-        $this->assertSame(
+        expect($result)->toBe(
             'Certified',
-            $result,
             'A tampered POST from a user without the capability must not change the stored stage.'
         );
-    }
+    });
 
-    #[Test]
-    public function it_lets_the_change_through_when_user_can_edit(): void
-    {
+    it('lets the change through when the user can edit', function () {
         $GLOBALS['scrutiny_test_capabilities'] = [
             ResponderCertificationGuard::EDIT_CAPABILITY => true,
         ];
-        $GLOBALS['scrutiny_test_acf_fields'][23462][self::FIELD_RESPONDER_CERTIFICATION] = 'Certified';
+        $GLOBALS['scrutiny_test_acf_fields'][23462][CERT_FIELD] = 'Certified';
 
-        $result = $this->makeGuard()->preserveCertification(
-            'Pending',
-            23462,
-            ['name' => self::FIELD_RESPONDER_CERTIFICATION, 'key' => self::KEY_RESPONDER_CERTIFICATION]
-        );
+        expect(($this->makeGuard)()->preserveCertification('Pending', 23462, ['name' => CERT_FIELD, 'key' => CERT_KEY]))
+            ->toBe('Pending');
+    });
 
-        $this->assertSame('Pending', $result);
-    }
-
-    #[Test]
-    public function it_lets_the_initial_value_through_when_nothing_is_stored(): void
-    {
+    it('lets the initial value through when nothing is stored', function () {
         // No stored value and no capability: a create-time assignment by the
         // process that spawned the member should still land.
-        $result = $this->makeGuard()->preserveCertification(
-            'Applied',
-            23462,
-            ['name' => self::FIELD_RESPONDER_CERTIFICATION, 'key' => self::KEY_RESPONDER_CERTIFICATION]
-        );
+        expect(($this->makeGuard)()->preserveCertification('Applied', 23462, ['name' => CERT_FIELD, 'key' => CERT_KEY]))
+            ->toBe('Applied');
+    });
+});
 
-        $this->assertSame('Applied', $result);
-    }
-
-    #[PreserveGlobalState(false)]
-    #[Test]
-    #[RunInSeparateProcess]
-    public function it_lets_writes_through_during_rest_requests(): void
-    {
-        define('REST_REQUEST', true);
-
-        // A stored value is present and the caller has no capability. If the
-        // REST guard did not take effect first, the stored value would be
-        // preserved instead of the new one.
-        $GLOBALS['scrutiny_test_acf_fields'][23462][self::FIELD_RESPONDER_CERTIFICATION] = 'Certified';
-
-        $result = $this->makeGuard()->preserveCertification(
-            'Pending',
-            23462,
-            ['name' => self::FIELD_RESPONDER_CERTIFICATION, 'key' => self::KEY_RESPONDER_CERTIFICATION]
-        );
-
-        $this->assertSame('Pending', $result);
-    }
-
-    #[Test]
-    public function register_wires_the_prepare_save_and_style_hooks_when_the_key_is_set(): void
-    {
-        $guard = $this->makeGuard();
+describe('register', function () {
+    it('wires the prepare, save and style hooks when the key is set', function () {
+        $guard = ($this->makeGuard)();
 
         $guard->register();
 
         // prepare_field + update_value are filters, so Brain Monkey holds
         // them; the enqueue hook is an action, recorded by the bootstrap's own
         // add_action stub, which this file's tests read directly.
-        self::assertSame(10, has('acf/prepare_field/key=' . self::KEY_RESPONDER_CERTIFICATION, [$guard, 'disableForReadOnlyUser']));
-        self::assertSame(10, has('acf/update_value/key=' . self::KEY_RESPONDER_CERTIFICATION, [$guard, 'preserveCertification']));
+        expect(Filters\has('acf/prepare_field/key=' . CERT_KEY, [$guard, 'disableForReadOnlyUser']))->toBe(10)
+            ->and(Filters\has('acf/update_value/key=' . CERT_KEY, [$guard, 'preserveCertification']))->toBe(10)
+            ->and(array_column($GLOBALS['scrutiny_test_actions'], 'hook'))->toContain('acf/input/admin_enqueue_scripts');
+    });
 
-        $this->assertContains(
-            'acf/input/admin_enqueue_scripts',
-            array_column($GLOBALS['scrutiny_test_actions'], 'hook'),
-        );
-    }
-
-    #[Test]
-    public function register_is_a_noop_when_the_certification_key_is_absent(): void
-    {
+    it('does nothing when the certification key is absent', function () {
         // Without a configured field key there is nothing to hook: register()
         // returns before any add_filter/add_action call, so the action
         // recorder stays empty.
-        $this->makeGuard(['POST_TYPE' => self::POST_TYPE])->register();
+        ($this->makeGuard)(['POST_TYPE' => CERT_POST_TYPE])->register();
 
-        $this->assertSame([], $GLOBALS['scrutiny_test_actions']);
-    }
+        expect($GLOBALS['scrutiny_test_actions'])->toBe([]);
+    });
+});
 
-    #[Test]
-    public function it_falls_back_to_a_boolean_disabled_for_a_non_radio_field(): void
-    {
-        // A field that is neither radio nor checkbox has no per-choice
-        // disable semantics, so the guard uses the boolean form.
-        $field = $this->makeGuard()->disableForReadOnlyUser([
-            'name' => self::FIELD_RESPONDER_CERTIFICATION,
-            'key'  => self::KEY_RESPONDER_CERTIFICATION,
-            'type' => 'text',
-        ]);
-
-        $this->assertIsArray($field);
-        $this->assertSame(1, $field['disabled']);
-        $this->assertStringContainsString('scrutiny-cert-readonly', $field['wrapper']['class']);
-    }
-
-    #[Test]
-    public function it_enqueues_the_readonly_style_on_the_member_screen_for_locked_users(): void
-    {
-        expect('get_current_screen')
-            ->andReturn((object) ['post_type' => self::POST_TYPE]);
-        expect('wp_register_style')->once();
-        expect('wp_enqueue_style')->once()->with('scrutiny-cert-readonly');
-        expect('wp_add_inline_style')
+describe('enqueueReadOnlyStyle', function () {
+    it('enqueues the read-only style on the member screen for locked users', function () {
+        Functions\expect('get_current_screen')->andReturn((object) ['post_type' => CERT_POST_TYPE]);
+        Functions\expect('wp_register_style')->once();
+        Functions\expect('wp_enqueue_style')->once()->with('scrutiny-cert-readonly');
+        Functions\expect('wp_add_inline_style')
             ->once()
             ->with('scrutiny-cert-readonly', \Mockery::pattern('/scrutiny-cert-readonly/'));
 
-        $this->makeGuard()->enqueueReadOnlyStyle();
+        ($this->makeGuard)()->enqueueReadOnlyStyle();
+    });
 
-        // The ->once() expectations are verified on tearDown; assert here too
-        // so the test is not marked risky.
-        $this->assertTrue(true);
-    }
-
-    #[Test]
-    public function it_does_not_enqueue_the_style_for_users_who_can_edit(): void
-    {
+    it('does not enqueue the style for users who can edit', function () {
         $GLOBALS['scrutiny_test_capabilities'][ResponderCertificationGuard::EDIT_CAPABILITY] = true;
 
         // Returns before touching the screen or the style functions.
-        expect('wp_enqueue_style')->never();
+        Functions\expect('wp_enqueue_style')->never();
 
-        $this->makeGuard()->enqueueReadOnlyStyle();
+        ($this->makeGuard)()->enqueueReadOnlyStyle();
+    });
 
-        $this->assertTrue(true);
-    }
-
-    #[Test]
-    public function it_does_not_enqueue_the_style_off_the_member_screen(): void
-    {
-        expect('wp_enqueue_style')->never();
+    it('does not enqueue the style off the member screen', function () {
+        Functions\expect('wp_enqueue_style')->never();
 
         // No screen resolved…
         WpState::$screen = null;
-        $this->makeGuard()->enqueueReadOnlyStyle();
+        ($this->makeGuard)()->enqueueReadOnlyStyle();
 
         // …and a different post type.
-        expect('get_current_screen')->andReturn((object) ['post_type' => 'post']);
-        $this->makeGuard()->enqueueReadOnlyStyle();
-
-        $this->assertTrue(true);
-    }
-}
+        Functions\expect('get_current_screen')->andReturn((object) ['post_type' => 'post']);
+        ($this->makeGuard)()->enqueueReadOnlyStyle();
+    });
+});

@@ -4,18 +4,15 @@ declare(strict_types=1);
 
 namespace Scrutiny\Tests\Unit\Admin;
 
-use PHPUnit\Framework\Attributes\CoversClass;
-use PHPUnit\Framework\Attributes\Test;
 use BleedingDeacons\WpMocks\WpState;
 use Scrutiny\Admin\HelpPage;
 use Scrutiny\Admin\ScrutinyMenu;
-use Scrutiny\Tests\TestCase;
 
-/**
+/*
  * Tests for the Help submenu and the footer script that hijacks its click.
  *
  * register() runs for real against WpState's menu recorder and this plugin's
- * own recording add_action() — see MemberPrunerAdminTest's docblock for why
+ * own recording add_action() — see MemberPrunerAdminTest's header for why
  * hooks are read from $GLOBALS['scrutiny_test_actions'] here rather than
  * through assertActionAdded(), while WpState::$menus still works.
  *
@@ -24,167 +21,107 @@ use Scrutiny\Tests\TestCase;
  * inline <script> whose selectors and window names are the contract that lets
  * the guide's back button refocus the admin tab instead of reloading it.
  */
-#[CoversClass(\Scrutiny\Admin\HelpPage::class)]
-final class HelpPageTest extends TestCase
-{
-    private HelpPage $page;
 
-    protected function setUp(): void
-    {
-        parent::setUp();
+covers(HelpPage::class);
 
-        $GLOBALS['scrutiny_test_actions'] = [];
+beforeEach(function () {
+    $GLOBALS['scrutiny_test_actions'] = [];
 
-        $this->page = new HelpPage();
-    }
+    $this->page = new HelpPage();
+});
 
-    private function capture(callable $render): string
-    {
-        ob_start();
-
-        try {
-            $render();
-        } finally {
-            $html = (string) ob_get_clean();
-        }
-
-        return str_replace("\r\n", "\n", $html);
-    }
-
-    // ── registration ──────────────────────────────────────────────────
-    #[Test]
-    public function it_registers_a_help_submenu_under_the_scrutiny_menu(): void
-    {
+// ── registration ──────────────────────────────────────────────────
+describe('register', function () {
+    it('registers a Help submenu under the Scrutiny menu', function () {
         $this->page->register();
 
-        $this->assertCount(1, WpState::$menus);
-        $this->assertSame([
-            'type'   => 'submenu',
-            'parent' => ScrutinyMenu::MENU_SLUG,
-            'slug'   => HelpPage::SLUG,
-            'title'  => 'Help',
-            'cap'    => HelpPage::CAPABILITY,
-        ], WpState::$menus[0]);
-    }
+        expect(WpState::$menus)->toHaveCount(1)
+            ->and(WpState::$menus[0])->toBe([
+                'type'   => 'submenu',
+                'parent' => ScrutinyMenu::MENU_SLUG,
+                'slug'   => HelpPage::SLUG,
+                'title'  => 'Help',
+                'cap'    => HelpPage::CAPABILITY,
+            ]);
+    });
 
-    /**
-     * Help documents both screens, so it must not be visible to anyone who
-     * cannot reach them — and must not be hidden from anyone who can.
-     */
-    #[Test]
-    public function the_submenu_sits_behind_the_same_capability_as_the_rest_of_the_menu(): void
-    {
-        $this->assertSame(ScrutinyMenu::CAPABILITY, HelpPage::CAPABILITY);
-    }
+    // Help documents both screens, so it must not be visible to anyone who
+    // cannot reach them — and must not be hidden from anyone who can.
+    it('sits behind the same capability as the rest of the menu', function () {
+        expect(HelpPage::CAPABILITY)->toBe(ScrutinyMenu::CAPABILITY);
+    });
 
-    /**
-     * The click interceptor has to be printed on every admin screen, not just
-     * this one — the Help link lives in the sidebar and is clicked from
-     * wherever the user happens to be.
-     */
-    #[Test]
-    public function registering_also_hooks_the_footer_script(): void
-    {
+    // The click interceptor has to be printed on every admin screen, not just
+    // this one — the Help link lives in the sidebar and is clicked from
+    // wherever the user happens to be.
+    it('also hooks the footer script', function () {
         $this->page->register();
 
-        $hooks = [];
-        foreach ($GLOBALS['scrutiny_test_actions'] as $action) {
-            $hooks[$action['hook']] = $action['callback'];
-        }
+        $hooks = array_column($GLOBALS['scrutiny_test_actions'], 'callback', 'hook');
 
-        $this->assertArrayHasKey('admin_footer', $hooks);
-        $this->assertSame([$this->page, 'enqueueHelpTabScript'], $hooks['admin_footer']);
-    }
+        expect($hooks)->toHaveKey('admin_footer')
+            ->and($hooks['admin_footer'])->toBe([$this->page, 'enqueueHelpTabScript']);
+    });
+});
 
-    // ── the no-JavaScript fallback ────────────────────────────────────
-    #[Test]
-    public function the_fallback_page_links_straight_to_the_bundled_guide(): void
-    {
-        $html = $this->capture(fn () => $this->page->render());
+// ── the no-JavaScript fallback ────────────────────────────────────
+describe('render', function () {
+    it('links straight to the bundled guide', function () {
+        expect(captureOutput(fn () => $this->page->render()))
+            ->toContain('<h1>Scrutiny Help</h1>', 'assets/docs/scrutiny.html', 'Open the guide');
+    });
 
-        $this->assertStringContainsString('<h1>Scrutiny Help</h1>', $html);
-        $this->assertStringContainsString('assets/docs/scrutiny.html', $html);
-        $this->assertStringContainsString('Open the guide', $html);
-    }
+    // The fallback opens a new tab, so it needs rel="noopener" — without it
+    // the guide gets a handle on wp-admin through window.opener.
+    it('opens the guide safely in a new tab', function () {
+        expect(captureOutput(fn () => $this->page->render()))
+            ->toContain('target="_blank"', 'rel="noopener"');
+    });
+});
 
-    /**
-     * The fallback opens a new tab, so it needs rel="noopener" — without it
-     * the guide gets a handle on wp-admin through window.opener.
-     */
-    #[Test]
-    public function the_fallback_link_opens_safely_in_a_new_tab(): void
-    {
-        $html = $this->capture(fn () => $this->page->render());
+// ── the click interceptor ─────────────────────────────────────────
+describe('enqueueHelpTabScript', function () {
+    beforeEach(function () {
+        $this->script = captureOutput(fn () => $this->page->enqueueHelpTabScript());
+    });
 
-        $this->assertStringContainsString('target="_blank"', $html);
-        $this->assertStringContainsString('rel="noopener"', $html);
-    }
+    it('emits an inline script block', function () {
+        expect($this->script)->toContain('<script>', '</script>');
+    });
 
-    // ── the click interceptor ─────────────────────────────────────────
-    #[Test]
-    public function the_footer_script_is_emitted_as_an_inline_script_block(): void
-    {
-        $html = $this->capture(fn () => $this->page->enqueueHelpTabScript());
+    // The script finds the Help link by its exact admin URL and falls back to
+    // a slug match if WordPress rendered the href differently — both
+    // selectors are load-bearing.
+    it('matches the Help link by URL and by slug', function () {
+        expect($this->script)->toContain(
+            'admin.php?page=' . HelpPage::SLUG . '"]',
+            'a[href*="page=' . HelpPage::SLUG . '"]',
+        );
+    });
 
-        $this->assertStringContainsString('<script>', $html);
-        $this->assertStringContainsString('</script>', $html);
-    }
+    // The window names are how the guide gets back, and they are the same two
+    // the Audit Log heading button already uses — so both routes share one
+    // guide tab rather than opening a second.
+    it('reuses the window names the Audit Log button uses', function () {
+        expect($this->script)->toContain(
+            "window.name = 'scrutiny-admin'",
+            "window.open('', 'scrutiny-help')",
+            "'?back=' + encodeURIComponent(window.location.href)",
+            'assets/docs/scrutiny.html',
+        );
+    });
 
-    /**
-     * The script finds the Help link by its exact admin URL and falls back to
-     * a slug match if WordPress rendered the href differently — both selectors
-     * are load-bearing.
-     */
-    #[Test]
-    public function the_script_matches_the_help_link_by_url_and_by_slug(): void
-    {
-        $html = $this->capture(fn () => $this->page->enqueueHelpTabScript());
+    // window.open() returns null when a popup blocker or an extension refuses
+    // the window. preventDefault() has already run by then, so without an
+    // explicit fallback the Help link would be inert — and the next line
+    // would throw on the null handle rather than failing quietly.
+    it('falls back to the current tab when the window is blocked', function () {
+        expect($this->script)->toContain('if (!existing) {', 'window.location.href = helpUrl;');
+    });
 
-        $this->assertStringContainsString('admin.php?page=' . HelpPage::SLUG . '"]', $html);
-        $this->assertStringContainsString('a[href*="page=' . HelpPage::SLUG . '"]', $html);
-    }
-
-    /**
-     * The window names are how the guide gets back, and they are the same two
-     * the Audit Log heading button already uses — so both routes share one
-     * guide tab rather than opening a second.
-     */
-    #[Test]
-    public function the_script_reuses_the_window_names_the_audit_log_button_uses(): void
-    {
-        $html = $this->capture(fn () => $this->page->enqueueHelpTabScript());
-
-        $this->assertStringContainsString("window.name = 'scrutiny-admin'", $html);
-        $this->assertStringContainsString("window.open('', 'scrutiny-help')", $html);
-        $this->assertStringContainsString("'?back=' + encodeURIComponent(window.location.href)", $html);
-        $this->assertStringContainsString('assets/docs/scrutiny.html', $html);
-    }
-
-    /**
-     * window.open() returns null when a popup blocker or an extension refuses
-     * the window. preventDefault() has already run by then, so without an
-     * explicit fallback the Help link would be inert — and the next line would
-     * throw on the null handle rather than failing quietly.
-     */
-    #[Test]
-    public function the_script_falls_back_to_the_current_tab_when_the_window_is_blocked(): void
-    {
-        $html = $this->capture(fn () => $this->page->enqueueHelpTabScript());
-
-        $this->assertStringContainsString('if (!existing) {', $html);
-        $this->assertStringContainsString('window.location.href = helpUrl;', $html);
-    }
-
-    /**
-     * preventDefault() is what stops WordPress navigating to the fallback page;
-     * without it the named-tab trick never runs.
-     */
-    #[Test]
-    public function the_script_suppresses_the_default_navigation(): void
-    {
-        $html = $this->capture(fn () => $this->page->enqueueHelpTabScript());
-
-        $this->assertStringContainsString('e.preventDefault()', $html);
-        $this->assertStringContainsString("addEventListener('click'", $html);
-    }
-}
+    // preventDefault() is what stops WordPress navigating to the fallback
+    // page; without it the named-tab trick never runs.
+    it('suppresses the default navigation', function () {
+        expect($this->script)->toContain('e.preventDefault()', "addEventListener('click'");
+    });
+});

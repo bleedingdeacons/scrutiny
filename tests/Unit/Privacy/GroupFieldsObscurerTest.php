@@ -4,211 +4,185 @@ declare(strict_types=1);
 
 namespace Scrutiny\Tests\Unit\Privacy;
 
-use PHPUnit\Framework\Attributes\CoversClass;
-use PHPUnit\Framework\Attributes\Test;
-use function Brain\Monkey\Functions\when;
 use BleedingDeacons\WpMocks\WpState;
+use Brain\Monkey\Functions;
 use Scrutiny\Privacy\GroupFieldsObscurer;
 use Scrutiny\Privacy\PersonalDataPolicy;
-use Scrutiny\Tests\TestCase;
 use WP_Post;
 
-/**
+/*
  * Tests for GroupFieldsObscurer — the $_POST strip on save and the admin
  * mask/lock UI emission.
  */
-#[CoversClass(\Scrutiny\Privacy\GroupFieldsObscurer::class)]
-class GroupFieldsObscurerTest extends TestCase
+
+covers(GroupFieldsObscurer::class);
+
+function groupObscurer(): GroupFieldsObscurer
 {
-    protected function setUp(): void
-    {
-        parent::setUp();
-        $GLOBALS['scrutiny_test_capabilities'] = [];
-        $GLOBALS['scrutiny_test_post_meta'] = [];
-        $GLOBALS['scrutiny_test_actions'] = [];
+    return new GroupFieldsObscurer(new PersonalDataPolicy());
+}
 
-        // protectedContactFields()'s two filters pass through unchanged
-        // (Brain Monkey's apply_filters returns the value it was handed), so
-        // the default set of six contact fields is used.
-        //
-        // __() and wp_json_encode() are real pass-through stubs in wp-mocks,
-        // so neither needs standing in for here any more.
+/**
+ * Run emitAdminUi with $post_type and the edited post's ID/$_GET set up,
+ * capturing everything it echoes.
+ */
+function captureGroupAdminUi(string $postType, int $postId): string
+{
+    global $post_type, $post;
+    $post_type = $postType;
+    $post = null;
+    $_GET['post'] = (string) $postId;
+
+    ob_start();
+    try {
+        groupObscurer()->emitAdminUi();
+    } finally {
+        $output = (string) ob_get_clean();
     }
 
-    protected function tearDown(): void
-    {
-        unset($_POST, $_GET);
-        $_POST = [];
-        $_GET = [];
-        parent::tearDown();
-    }
+    return $output;
+}
 
-    private function obscurer(): GroupFieldsObscurer
-    {
-        return new GroupFieldsObscurer(new PersonalDataPolicy());
-    }
+/** The fixed placeholder as wp_json_encode() writes it: \uXXXX-escaped. */
+function encodedPlaceholder(): string
+{
+    return trim((string) json_encode(PersonalDataPolicy::FIXED_PLACEHOLDER), '"');
+}
 
-    // ─── register ──────────────────────────────────────────────────
-    #[Test]
-    public function register_always_wires_the_save_strip_and_admin_ui_when_admin(): void
-    {
+beforeEach(function () {
+    $GLOBALS['scrutiny_test_capabilities'] = [];
+    $GLOBALS['scrutiny_test_post_meta'] = [];
+    $GLOBALS['scrutiny_test_actions'] = [];
+
+    // protectedContactFields()'s two filters pass through unchanged (Brain
+    // Monkey's apply_filters returns the value it was handed), so the default
+    // set of six contact fields is used.
+    //
+    // __() and wp_json_encode() are real pass-through stubs in wp-mocks, so
+    // neither needs standing in for here any more.
+});
+
+afterEach(function () {
+    $_POST = [];
+    $_GET = [];
+});
+
+// ─── register ──────────────────────────────────────────────────
+describe('register', function () {
+    it('always wires the save strip, and the admin UI when in admin', function () {
         WpState::$isAdmin = true;
 
-        $this->obscurer()->register();
+        groupObscurer()->register();
 
-        $hooks = array_column($GLOBALS['scrutiny_test_actions'], 'hook');
-        $this->assertContains('save_post_tsml_meeting', $hooks);
-        $this->assertContains('save_post_tsml_group', $hooks);
-        $this->assertContains('admin_footer-post.php', $hooks);
-        $this->assertContains('admin_footer-post-new.php', $hooks);
-    }
+        expect(array_column($GLOBALS['scrutiny_test_actions'], 'hook'))->toContain(
+            'save_post_tsml_meeting',
+            'save_post_tsml_group',
+            'admin_footer-post.php',
+            'admin_footer-post-new.php',
+        );
+    });
 
-    #[Test]
-    public function register_skips_the_admin_ui_hooks_outside_admin(): void
-    {
+    it('skips the admin UI hooks outside admin', function () {
         WpState::$isAdmin = false;
 
-        $this->obscurer()->register();
+        groupObscurer()->register();
 
-        $hooks = array_column($GLOBALS['scrutiny_test_actions'], 'hook');
-        $this->assertContains('save_post_tsml_group', $hooks);
-        $this->assertNotContains('admin_footer-post.php', $hooks);
-    }
+        expect(array_column($GLOBALS['scrutiny_test_actions'], 'hook'))
+            ->toContain('save_post_tsml_group')
+            ->not->toContain('admin_footer-post.php');
+    });
+});
 
-    // ─── stripProtectedFields ──────────────────────────────────────
-    #[Test]
-    public function strip_removes_protected_fields_for_a_user_who_cannot_edit(): void
-    {
-
+// ─── stripProtectedFields ──────────────────────────────────────
+describe('stripProtectedFields', function () {
+    it('removes protected fields for a user who cannot edit', function () {
         $_POST = [
             'contact_1_email' => 'leak@example.com',
             'contact_1_phone' => '0700',
             'post_title'      => 'kept',
         ];
 
-        $this->obscurer()->stripProtectedFields(5, new WP_Post(['ID' => 5]));
+        groupObscurer()->stripProtectedFields(5, new WP_Post(['ID' => 5]));
 
-        $this->assertArrayNotHasKey('contact_1_email', $_POST);
-        $this->assertArrayNotHasKey('contact_1_phone', $_POST);
-        $this->assertSame('kept', $_POST['post_title']);
-    }
+        expect($_POST)
+            ->not->toHaveKey('contact_1_email')
+            ->not->toHaveKey('contact_1_phone')
+            ->post_title->toBe('kept');
+    });
 
-    #[Test]
-    public function strip_leaves_post_untouched_for_a_user_who_can_edit(): void
-    {
+    it('leaves $_POST untouched for a user who can edit', function () {
         $GLOBALS['scrutiny_test_capabilities'][PersonalDataPolicy::EDIT_CAPABILITY] = true;
 
+        $_POST = ['contact_1_email' => 'kept@example.com'];
+
+        groupObscurer()->stripProtectedFields(5, new WP_Post(['ID' => 5]));
+
+        expect($_POST['contact_1_email'])->toBe('kept@example.com');
+    });
+
+    it('skips autosaves and revisions', function () {
+        // WordPress answers with the autosave's own post ID, not a bare true —
+        // and wp-mocks types the stub int|false to match, so that is what a
+        // "yes, this is an autosave" answer has to look like.
+        Functions\when('wp_is_post_autosave')->justReturn(9001);
 
         $_POST = ['contact_1_email' => 'kept@example.com'];
 
-        $this->obscurer()->stripProtectedFields(5, new WP_Post(['ID' => 5]));
-
-        $this->assertSame('kept@example.com', $_POST['contact_1_email']);
-    }
-
-    #[Test]
-    public function strip_skips_autosaves_and_revisions(): void
-    {
-        // WordPress answers with the autosave's own post ID, not a bare
-        // true — and wp-mocks types the stub int|false to match, so that is
-        // what a "yes, this is an autosave" answer has to look like.
-        when('wp_is_post_autosave')->justReturn(9001);
-
-        $_POST = ['contact_1_email' => 'kept@example.com'];
-
-        $this->obscurer()->stripProtectedFields(5, new WP_Post(['ID' => 5]));
+        groupObscurer()->stripProtectedFields(5, new WP_Post(['ID' => 5]));
 
         // Early return before the strip loop.
-        $this->assertSame('kept@example.com', $_POST['contact_1_email']);
-    }
+        expect($_POST['contact_1_email'])->toBe('kept@example.com');
+    });
+});
 
-    // ─── emitAdminUi ───────────────────────────────────────────────
-    #[Test]
-    public function emit_admin_ui_outputs_nothing_for_an_editor(): void
-    {
+// ─── emitAdminUi ───────────────────────────────────────────────
+describe('emitAdminUi', function () {
+    it('outputs nothing for an editor', function () {
         $GLOBALS['scrutiny_test_capabilities'][PersonalDataPolicy::EDIT_CAPABILITY] = true;
 
-        $output = $this->captureEmit('tsml_group', 5);
+        expect(captureGroupAdminUi('tsml_group', 5))->toBe('');
+    });
 
-        $this->assertSame('', $output);
-    }
+    it('outputs nothing on an unsupported post type', function () {
+        expect(captureGroupAdminUi('post', 5))->toBe('');
+    });
 
-    #[Test]
-    public function emit_admin_ui_outputs_nothing_on_an_unsupported_post_type(): void
-    {
-        $output = $this->captureEmit('post', 5);
-
-        $this->assertSame('', $output);
-    }
-
-    #[Test]
-    public function emit_admin_ui_shows_a_read_only_banner_for_a_view_only_user(): void
-    {
+    it('shows a read-only banner for a view-only user', function () {
         $GLOBALS['scrutiny_test_capabilities'][PersonalDataPolicy::VIEW_CAPABILITY] = true;
 
-        $output = $this->captureEmit('tsml_group', 5);
+        expect(captureGroupAdminUi('tsml_group', 5))->toContain(
+            'scrutiny-tsml-style',
+            'scrutiny-tsml-script',
+            'Named contact fields are read-only.',
+            // View-only users see real values, so masking is off.
+            'var APPLY_MASK = false;',
+        );
+    });
 
-        $this->assertStringContainsString('scrutiny-tsml-style', $output);
-        $this->assertStringContainsString('scrutiny-tsml-script', $output);
-        $this->assertStringContainsString('Named contact fields are read-only.', $output);
-        // View-only users see real values, so masking is off.
-        $this->assertStringContainsString('var APPLY_MASK = false;', $output);
-    }
-
-    #[Test]
-    public function emit_admin_ui_masks_values_for_a_user_with_no_access(): void
-    {
+    it('masks values for a user with no access', function () {
         // A group post: contact meta lives on the group itself.
         $GLOBALS['scrutiny_test_post_meta'][5]['contact_1_email'] = 'secret@example.com';
 
         WpState::addPost(5, ['post_type' => 'tsml_group']);
 
-        $output = $this->captureEmit('tsml_group', 5);
+        expect(captureGroupAdminUi('tsml_group', 5))
+            ->toContain('Named contact fields are hidden.', 'var APPLY_MASK = true;')
+            // The masked preview, not the real value, is embedded.
+            // wp_json_encode escapes the bullet placeholder to its \uXXXX
+            // unicode form.
+            ->toContain(encodedPlaceholder())
+            ->not->toContain('secret@example.com');
+    });
 
-        $this->assertStringContainsString('Named contact fields are hidden.', $output);
-        $this->assertStringContainsString('var APPLY_MASK = true;', $output);
-        // The masked preview, not the real value, is embedded. wp_json_encode
-        // escapes the bullet placeholder to its \uXXXX unicode form.
-        $encodedPlaceholder = trim(json_encode(PersonalDataPolicy::FIXED_PLACEHOLDER), '"');
-        $this->assertStringContainsString($encodedPlaceholder, $output);
-        $this->assertStringNotContainsString('secret@example.com', $output);
-    }
-
-    #[Test]
-    public function emit_admin_ui_for_a_meeting_reads_contact_meta_from_the_linked_group(): void
-    {
-        // Meeting 5 points at group 9 via group_id meta; the masked values
-        // are read from the group, not the meeting.
+    it('reads contact meta from the linked group for a meeting', function () {
+        // Meeting 5 points at group 9 via group_id meta; the masked values are
+        // read from the group, not the meeting.
         $GLOBALS['scrutiny_test_post_meta'][5]['group_id'] = '9';
         $GLOBALS['scrutiny_test_post_meta'][9]['contact_1_email'] = 'secret@example.com';
 
         WpState::addPost(5, ['post_type' => 'tsml_meeting']);
 
-        $output = $this->captureEmit('tsml_meeting', 5);
-
-        $encodedPlaceholder = trim(json_encode(PersonalDataPolicy::FIXED_PLACEHOLDER), '"');
-        $this->assertStringContainsString('var APPLY_MASK = true;', $output);
-        $this->assertStringContainsString($encodedPlaceholder, $output);
-    }
-
-    /**
-     * Run emitAdminUi with $post_type and the edited post's ID/$_GET set up,
-     * capturing everything it echoes.
-     */
-    private function captureEmit(string $postType, int $postId): string
-    {
-        global $post_type, $post;
-        $post_type = $postType;
-        $post = null;
-        $_GET['post'] = (string) $postId;
-
-        ob_start();
-        try {
-            $this->obscurer()->emitAdminUi();
-        } finally {
-            $output = ob_get_clean();
-        }
-
-        return $output;
-    }
-}
+        expect(captureGroupAdminUi('tsml_meeting', 5))
+            ->toContain('var APPLY_MASK = true;', encodedPlaceholder());
+    });
+});

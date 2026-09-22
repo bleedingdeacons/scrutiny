@@ -4,20 +4,16 @@ declare(strict_types=1);
 
 namespace Scrutiny\Tests\Unit\Fields;
 
-use PHPUnit\Framework\Attributes\CoversClass;
-use PHPUnit\Framework\Attributes\Test;
-use PHPUnit\Framework\Attributes\DataProvider;
+use Brain\Monkey\Filters;
+use Brain\Monkey\Functions;
 use PHPUnit\Framework\MockObject\MockObject;
-use function Brain\Monkey\Filters\expectApplied;
-use function Brain\Monkey\Functions\when;
 use Scrutiny\Admin\AuditLogAdmin;
 use Scrutiny\Audit\Interfaces\AuditRepository;
 use Scrutiny\Fields\AuditHistoryRenderer;
 use Scrutiny\Privacy\PersonalDataFields;
-use Scrutiny\Tests\TestCase;
 use stdClass;
 
-/**
+/*
  * Tests for the AuditHistoryRenderer — the whole behaviour of the
  * GdprAuditHistory ACF field, minus ACF.
  *
@@ -30,74 +26,78 @@ use stdClass;
  *   - The count/page split behind "showing N of M".
  *   - Escaping, on every column that carries stored text.
  */
-#[CoversClass(\Scrutiny\Fields\AuditHistoryRenderer::class)]
-class AuditHistoryRendererTest extends TestCase
+
+covers(AuditHistoryRenderer::class);
+
+/**
+ * Build an audit row in the shape $wpdb->get_results() returns — every column
+ * a string, none of them null.
+ *
+ * @param array<string, string> $overrides
+ */
+function historyEntry(array $overrides = []): stdClass
 {
-    /** @var AuditRepository&MockObject */
-    private $repository;
+    $columns = array_merge([
+        'id'          => '1',
+        'action'      => 'update',
+        'entity_type' => 'member',
+        'entity_id'   => '42',
+        'field_name'  => PersonalDataFields::MOBILE_NUMBER,
+        'detail'      => 'Changed',
+        'user_id'     => '7',
+        'user_login'  => 'admin',
+        'ip_address'  => '203.0.113.0',
+        'logged_at'   => '2026-03-01 09:30:00',
+    ], $overrides);
 
-    private AuditHistoryRenderer $renderer;
-
-    protected function setUp(): void
-    {
-        parent::setUp();
-
-        $GLOBALS['scrutiny_test_capabilities'] = [AuditLogAdmin::CAPABILITY => true];
-
-        $this->repository = $this->createMock(AuditRepository::class);
-        $this->renderer   = new AuditHistoryRenderer($this->repository);
+    $entry = new stdClass();
+    foreach ($columns as $key => $value) {
+        $entry->{$key} = $value;
     }
 
-    protected function tearDown(): void
-    {
-        $GLOBALS['scrutiny_test_capabilities'] = [];
-        parent::tearDown();
-    }
+    return $entry;
+}
 
-    /**
-     * Build an audit row in the shape $wpdb->get_results() returns — every
-     * column a string, none of them null.
-     *
-     * @param array<string, string> $overrides
-     */
-    private function entry(array $overrides = []): stdClass
-    {
-        $columns = array_merge([
-            'id'          => '1',
-            'action'      => 'update',
-            'entity_type' => 'member',
-            'entity_id'   => '42',
-            'field_name'  => PersonalDataFields::MOBILE_NUMBER,
-            'detail'      => 'Changed',
-            'user_id'     => '7',
-            'user_login'  => 'admin',
-            'ip_address'  => '203.0.113.0',
-            'logged_at'   => '2026-03-01 09:30:00',
-        ], $overrides);
+/**
+ * Serve $entries from find() and $total (default: their count) from count().
+ *
+ * @param array<int, stdClass> $entries
+ */
+function serveEntries(MockObject $repository, array $entries, ?int $total = null): void
+{
+    $repository->method('find')->willReturn($entries);
+    $repository->method('count')->willReturn($total ?? count($entries));
+}
 
-        $entry = new stdClass();
-        foreach ($columns as $key => $value) {
-            $entry->{$key} = $value;
-        }
+/**
+ * Record the criteria find() is called with into $captured, serving nothing.
+ */
+function captureCriteria(MockObject $repository, mixed &$captured): void
+{
+    $repository->method('find')
+        ->willReturnCallback(function (array $args) use (&$captured): array {
+            $captured = $args;
+            return [];
+        });
+    $repository->method('count')->willReturn(0);
+}
 
-        return $entry;
-    }
+beforeEach(function () {
+    $GLOBALS['scrutiny_test_capabilities'] = [AuditLogAdmin::CAPABILITY => true];
 
-    /**
-     * @param array<int, stdClass> $entries
-     */
-    private function expectEntries(array $entries, ?int $total = null): void
-    {
-        $this->repository->method('find')->willReturn($entries);
-        $this->repository->method('count')->willReturn($total ?? count($entries));
-    }
+    $this->repository = $this->createMock(AuditRepository::class);
+    $this->renderer   = new AuditHistoryRenderer($this->repository);
+});
 
-    // ──────────────────────────────────────────────
-    //  Capability gate
-    // ──────────────────────────────────────────────
-    #[Test]
-    public function it_refuses_to_render_without_the_capability(): void
-    {
+afterEach(function () {
+    $GLOBALS['scrutiny_test_capabilities'] = [];
+});
+
+// ──────────────────────────────────────────────
+//  Capability gate
+// ──────────────────────────────────────────────
+describe('capability gate', function () {
+    it('refuses to render without the capability', function () {
         $GLOBALS['scrutiny_test_capabilities'] = [];
 
         // The gate has to come before the query, not after it — otherwise the
@@ -105,59 +105,51 @@ class AuditHistoryRendererTest extends TestCase
         $this->repository->expects($this->never())->method('find');
         $this->repository->expects($this->never())->method('count');
 
-        $html = $this->renderer->render(42);
+        expect($this->renderer->render(42))
+            ->toContain('do not have permission')
+            ->not->toContain('<table');
+    });
 
-        $this->assertStringContainsString('do not have permission', $html);
-        $this->assertStringNotContainsString('<table', $html);
-    }
-
-    #[Test]
-    public function it_honours_a_capability_lowered_by_the_filter(): void
-    {
+    it('honours a capability lowered by the filter', function () {
         $GLOBALS['scrutiny_test_capabilities'] = ['edit_others_posts' => true];
 
-        expectApplied(AuditHistoryRenderer::CAPABILITY_FILTER)
+        Filters\expectApplied(AuditHistoryRenderer::CAPABILITY_FILTER)
             ->once()
             ->andReturn('edit_others_posts');
 
-        $this->expectEntries([$this->entry()]);
+        serveEntries($this->repository, [historyEntry()]);
 
-        $this->assertStringContainsString('<table', $this->renderer->render(42));
-    }
+        expect($this->renderer->render(42))->toContain('<table');
+    });
+});
 
-    // ──────────────────────────────────────────────
-    //  Empty states
-    // ──────────────────────────────────────────────
-    #[Test]
-    public function it_explains_itself_on_an_unsaved_record(): void
-    {
+// ──────────────────────────────────────────────
+//  Empty states
+// ──────────────────────────────────────────────
+describe('empty states', function () {
+    it('explains itself on an unsaved record', function () {
         // entity_id 0 is what an unsaved post resolves to. Querying it would
         // match nothing anyway, but the message is the point: an empty table
         // on a new member reads like "nobody has ever touched this".
         $this->repository->expects($this->never())->method('find');
 
-        $html = $this->renderer->render(0);
+        expect($this->renderer->render(0))->toContain('once this record has been saved');
+    });
 
-        $this->assertStringContainsString('once this record has been saved', $html);
-    }
+    it('says so when the record has no entries', function () {
+        serveEntries($this->repository, []);
 
-    #[Test]
-    public function it_says_so_when_the_record_has_no_entries(): void
-    {
-        $this->expectEntries([]);
+        expect($this->renderer->render(42))
+            ->toContain('No audit entries')
+            ->not->toContain('<table');
+    });
+});
 
-        $html = $this->renderer->render(42);
-
-        $this->assertStringContainsString('No audit entries', $html);
-        $this->assertStringNotContainsString('<table', $html);
-    }
-
-    // ──────────────────────────────────────────────
-    //  Query criteria
-    // ──────────────────────────────────────────────
-    #[Test]
-    public function it_queries_the_record_it_was_asked_for(): void
-    {
+// ──────────────────────────────────────────────
+//  Query criteria
+// ──────────────────────────────────────────────
+describe('query criteria', function () {
+    it('queries the record it was asked for', function () {
         $captured = null;
 
         $this->repository->expects($this->once())
@@ -170,219 +162,161 @@ class AuditHistoryRendererTest extends TestCase
 
         $this->renderer->render(42, ['entity_type' => 'group', 'max_entries' => 5]);
 
-        $this->assertSame('group', $captured['entity_type']);
-        $this->assertSame(42, $captured['entity_id']);
-        $this->assertSame(5, $captured['per_page']);
-        $this->assertSame(1, $captured['page']);
-        // No action setting means no action filter — not action ''.
-        $this->assertArrayNotHasKey('action', $captured);
-    }
+        expect($captured)
+            ->entity_type->toBe('group')
+            ->entity_id->toBe(42)
+            ->per_page->toBe(5)
+            ->page->toBe(1)
+            // No action setting means no action filter — not action ''.
+            ->not->toHaveKey('action');
+    });
 
-    #[Test]
-    public function it_passes_a_chosen_action_through_as_a_filter(): void
-    {
+    it('passes a chosen action through as a filter', function () {
         $captured = null;
-
-        $this->repository->method('find')
-            ->willReturnCallback(function (array $args) use (&$captured): array {
-                $captured = $args;
-                return [];
-            });
-        $this->repository->method('count')->willReturn(0);
+        captureCriteria($this->repository, $captured);
 
         $this->renderer->render(42, ['action' => 'view']);
 
-        $this->assertSame('view', $captured['action']);
-    }
+        expect($captured['action'])->toBe('view');
+    });
 
-    #[Test]
-    public function it_falls_back_to_the_member_entity_type(): void
-    {
+    it('falls back to the member entity type', function () {
         $captured = null;
-
-        $this->repository->method('find')
-            ->willReturnCallback(function (array $args) use (&$captured): array {
-                $captured = $args;
-                return [];
-            });
-        $this->repository->method('count')->willReturn(0);
+        captureCriteria($this->repository, $captured);
 
         $this->renderer->render(42, ['entity_type' => '   ']);
 
-        $this->assertSame(AuditHistoryRenderer::DEFAULT_ENTITY_TYPE, $captured['entity_type']);
-    }
+        expect($captured['entity_type'])->toBe(AuditHistoryRenderer::DEFAULT_ENTITY_TYPE);
+    });
 
-    #[DataProvider('clampedEntryCounts')]
-    #[Test]
-    public function it_clamps_the_page_size_to_what_the_repository_will_serve(int $asked, int $expected): void
-    {
+    // GdprAuditRepository::find() silently caps per_page at 200, so asking
+    // for more would promise a page size it never delivers. Zero and negatives
+    // would produce a nonsensical LIMIT.
+    it('clamps the page size to what the repository will serve', function (int $asked, int $expected) {
         $captured = null;
-
-        $this->repository->method('find')
-            ->willReturnCallback(function (array $args) use (&$captured): array {
-                $captured = $args;
-                return [];
-            });
-        $this->repository->method('count')->willReturn(0);
+        captureCriteria($this->repository, $captured);
 
         $this->renderer->render(42, ['max_entries' => $asked]);
 
-        $this->assertSame($expected, $captured['per_page']);
-    }
+        expect($captured['per_page'])->toBe($expected);
+    })->with([
+        'above the ceiling' => [5000, AuditHistoryRenderer::MAX_ENTRIES_CEILING],
+        'at the ceiling'    => [200, 200],
+        'zero'              => [0, 1],
+        'negative'          => [-10, 1],
+        'ordinary'          => [15, 15],
+    ]);
+});
 
-    /**
-     * GdprAuditRepository::find() silently caps per_page at 200, so asking for
-     * more would promise a page size it never delivers. Zero and negatives
-     * would produce a nonsensical LIMIT.
-     *
-     * @return array<string, array{0:int,1:int}>
-     */
-    public static function clampedEntryCounts(): array
-    {
-        return [
-            'above the ceiling' => [5000, AuditHistoryRenderer::MAX_ENTRIES_CEILING],
-            'at the ceiling'    => [200, 200],
-            'zero'              => [0, 1],
-            'negative'          => [-10, 1],
-            'ordinary'          => [15, 15],
-        ];
-    }
-
-    // ──────────────────────────────────────────────
-    //  Table output
-    // ──────────────────────────────────────────────
-    #[Test]
-    public function it_renders_a_row_per_entry(): void
-    {
-        $this->expectEntries([
-            $this->entry(['user_login' => 'alice', 'action' => 'view']),
-            $this->entry(['user_login' => 'bob', 'action' => 'update']),
+// ──────────────────────────────────────────────
+//  Table output
+// ──────────────────────────────────────────────
+describe('table output', function () {
+    it('renders a row per entry', function () {
+        serveEntries($this->repository, [
+            historyEntry(['user_login' => 'alice', 'action' => 'view']),
+            historyEntry(['user_login' => 'bob', 'action' => 'update']),
         ]);
 
         $html = $this->renderer->render(42);
 
-        $this->assertStringContainsString('alice', $html);
-        $this->assertStringContainsString('bob', $html);
-        // One badge per body row (the header row has none).
-        $this->assertSame(2, substr_count($html, 'class="scrutiny-badge'));
-        // Action badges carry the action in the modifier class, which the
-        // stylesheet colours by.
-        $this->assertStringContainsString('scrutiny-badge--view', $html);
-        $this->assertStringContainsString('scrutiny-badge--update', $html);
-    }
+        expect($html)->toContain('alice', 'bob')
+            // One badge per body row (the header row has none).
+            ->and(substr_count($html, 'class="scrutiny-badge'))->toBe(2)
+            // Action badges carry the action in the modifier class, which the
+            // stylesheet colours by.
+            ->and($html)->toContain('scrutiny-badge--view', 'scrutiny-badge--update');
+    });
 
-    #[Test]
-    public function it_labels_the_field_rather_than_naming_the_meta_key(): void
-    {
-        $this->expectEntries([$this->entry(['field_name' => PersonalDataFields::PERSONAL_EMAIL])]);
+    it('labels the field rather than naming the meta key', function () {
+        serveEntries($this->repository, [historyEntry(['field_name' => PersonalDataFields::PERSONAL_EMAIL])]);
 
-        $this->assertStringContainsString('Personal Email', $this->renderer->render(42));
-    }
+        expect($this->renderer->render(42))->toContain('Personal Email');
+    });
 
-    #[Test]
-    public function it_hides_ip_addresses_unless_asked_for_them(): void
-    {
-        $this->expectEntries([$this->entry(['ip_address' => '203.0.113.0'])]);
+    it('hides IP addresses unless asked for them', function () {
+        serveEntries($this->repository, [historyEntry(['ip_address' => '203.0.113.0'])]);
 
-        $this->assertStringNotContainsString('203.0.113.0', $this->renderer->render(42));
-    }
+        expect($this->renderer->render(42))->not->toContain('203.0.113.0');
+    });
 
-    #[Test]
-    public function it_shows_ip_addresses_when_the_setting_is_on(): void
-    {
-        $this->expectEntries([$this->entry(['ip_address' => '203.0.113.0'])]);
+    it('shows IP addresses when the setting is on', function () {
+        serveEntries($this->repository, [historyEntry(['ip_address' => '203.0.113.0'])]);
 
-        $this->assertStringContainsString('203.0.113.0', $this->renderer->render(42, ['show_ip' => true]));
-    }
+        expect($this->renderer->render(42, ['show_ip' => true]))->toContain('203.0.113.0');
+    });
 
-    #[Test]
-    public function it_renders_reach_caller_details_as_a_named_requester(): void
-    {
+    it('renders Reach caller details as a named requester', function () {
         // Reach's structured detail strings are the reason this field exists
         // on a member: they record who was shown that member's contact
         // details. Raw `caller:John D.#7` would be unreadable.
-        when('get_edit_post_link')->justReturn('https://example.test/edit');
+        Functions\when('get_edit_post_link')->justReturn('https://example.test/edit');
 
-        $this->expectEntries([
-            $this->entry(['action' => 'view', 'detail' => 'caller:John D.#7']),
+        serveEntries($this->repository, [
+            historyEntry(['action' => 'view', 'detail' => 'caller:John D.#7']),
         ]);
 
-        $html = $this->renderer->render(42);
+        expect($this->renderer->render(42))->toContain('Requester: ', 'John D.');
+    });
+});
 
-        $this->assertStringContainsString('Requester: ', $html);
-        $this->assertStringContainsString('John D.', $html);
-    }
-
-    // ──────────────────────────────────────────────
-    //  Summary and full-log link
-    // ──────────────────────────────────────────────
-    #[Test]
-    public function it_reports_the_full_total_not_the_page_size(): void
-    {
+// ──────────────────────────────────────────────
+//  Summary and full-log link
+// ──────────────────────────────────────────────
+describe('summary and full-log link', function () {
+    it('reports the full total, not the page size', function () {
         // count() is asked separately for exactly this reason: a member with
         // hundreds of view entries must not look like they have two.
-        $this->expectEntries([$this->entry(), $this->entry()], 137);
+        serveEntries($this->repository, [historyEntry(), historyEntry()], 137);
 
-        $html = $this->renderer->render(42, ['max_entries' => 2]);
+        expect($this->renderer->render(42, ['max_entries' => 2]))->toContain('2 most recent of 137');
+    });
 
-        $this->assertStringContainsString('2 most recent of 137', $html);
-    }
+    it('links to the full log filtered to this record', function () {
+        Functions\when('get_the_title')->justReturn('John D.');
+        serveEntries($this->repository, [historyEntry()]);
 
-    #[Test]
-    public function it_links_to_the_full_log_filtered_to_this_record(): void
-    {
-        when('get_the_title')->justReturn('John D.');
-        $this->expectEntries([$this->entry()]);
+        expect($this->renderer->render(42))
+            ->toContain(AuditLogAdmin::MENU_SLUG, 'entity_query=John', 'View the full audit log');
+    });
 
-        $html = $this->renderer->render(42);
-
-        $this->assertStringContainsString(AuditLogAdmin::MENU_SLUG, $html);
-        $this->assertStringContainsString('entity_query=John', $html);
-        $this->assertStringContainsString('View the full audit log', $html);
-    }
-
-    #[Test]
-    public function it_omits_the_link_for_users_who_cannot_open_the_audit_log(): void
-    {
+    it('omits the link for users who cannot open the audit log', function () {
         // The gate was lowered by the filter, so the table renders — but the
         // Audit Log page still requires manage_options, and a link that dies
         // on "You do not have permission" is worse than no link.
         $GLOBALS['scrutiny_test_capabilities'] = ['edit_others_posts' => true];
 
-        expectApplied(AuditHistoryRenderer::CAPABILITY_FILTER)
+        Filters\expectApplied(AuditHistoryRenderer::CAPABILITY_FILTER)
             ->andReturn('edit_others_posts');
 
-        $this->expectEntries([$this->entry()]);
+        serveEntries($this->repository, [historyEntry()]);
 
-        $html = $this->renderer->render(42);
+        expect($this->renderer->render(42))
+            ->toContain('<table')
+            ->not->toContain('View the full audit log');
+    });
+});
 
-        $this->assertStringContainsString('<table', $html);
-        $this->assertStringNotContainsString('View the full audit log', $html);
-    }
+// ──────────────────────────────────────────────
+//  Escaping
+// ──────────────────────────────────────────────
+it('escapes every stored value it prints', function () {
+    serveEntries($this->repository, [
+        historyEntry([
+            'user_login' => '<script>alert(1)</script>',
+            'detail'     => '<img src=x onerror=alert(1)>',
+            'ip_address' => '"><script>alert(1)</script>',
+            'action'     => 'update"><script>alert(1)</script>',
+        ]),
+    ]);
 
-    // ──────────────────────────────────────────────
-    //  Escaping
-    // ──────────────────────────────────────────────
-    #[Test]
-    public function it_escapes_every_stored_value_it_prints(): void
-    {
-        $this->expectEntries([
-            $this->entry([
-                'user_login' => '<script>alert(1)</script>',
-                'detail'     => '<img src=x onerror=alert(1)>',
-                'ip_address' => '"><script>alert(1)</script>',
-                'action'     => 'update"><script>alert(1)</script>',
-            ]),
-        ]);
-
-        $html = $this->renderer->render(42, ['show_ip' => true]);
-
+    expect($this->renderer->render(42, ['show_ip' => true]))
         // Nothing stored reaches the page as markup: no tag opens, and the
         // action never breaks out of the badge's class attribute.
-        $this->assertStringNotContainsString('<script', $html);
-        $this->assertStringNotContainsString('<img', $html);
-        $this->assertStringNotContainsString('scrutiny-badge--update"><', $html);
-        // It is still all there, escaped, so an audit is not silently redacted.
-        $this->assertStringContainsString('&lt;script&gt;alert(1)&lt;/script&gt;', $html);
-    }
-}
+        ->not->toContain('<script')
+        ->not->toContain('<img')
+        ->not->toContain('scrutiny-badge--update"><')
+        // It is still all there, escaped, so an audit is not silently
+        // redacted.
+        ->toContain('&lt;script&gt;alert(1)&lt;/script&gt;');
+});

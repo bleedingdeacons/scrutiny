@@ -4,15 +4,12 @@ declare(strict_types=1);
 
 namespace Scrutiny\Tests\Unit\Audit;
 
-use PHPUnit\Framework\Attributes\CoversClass;
-use PHPUnit\Framework\Attributes\Test;
 use BleedingDeacons\WpMocks\WpState;
 use Mockery;
 use Scrutiny\Audit\AuditTracker;
 use Scrutiny\Audit\Interfaces\AuditLogger;
 use Scrutiny\Privacy\PersonalDataFields;
 use Scrutiny\Privacy\PersonalDataPolicy;
-use Scrutiny\Tests\TestCase;
 use Unity\Contacts\Interfaces\Contact;
 use Unity\Groups\Interfaces\Group;
 use Unity\Groups\Interfaces\GroupRepository;
@@ -22,309 +19,271 @@ use Unity\Members\PreferredContact;
 use Unity\Members\ResponderCertification;
 use Unity\Positions\Interfaces\PositionRepository;
 
-/**
+/*
  * Broad coverage for AuditTracker's view-tracking, group/contact change,
  * deletion, hide and import/export logging paths.
  */
-#[CoversClass(\Scrutiny\Audit\AuditTracker::class)]
-class AuditTrackerCoverageTest extends TestCase
+
+covers(AuditTracker::class);
+
+/**
+ * Build a tracker with dependencies injected by reflection so no WP hooks are
+ * registered (the constructor's add_action/add_filter calls are not under test
+ * here).
+ *
+ * @param array<string, mixed>  $config
+ * @param array<string, string> $acfMap
+ */
+function coverageTracker(AuditLogger $logger, array $config = [], array $acfMap = []): AuditTracker
 {
-    protected function setUp(): void
-    {
-        parent::setUp();
-        $GLOBALS['scrutiny_test_capabilities'] = [];
-        $_GET = [];
+    $ref = new \ReflectionClass(AuditTracker::class);
+    $tracker = $ref->newInstanceWithoutConstructor();
+
+    $set = static fn (string $name, mixed $value) => $ref->getProperty($name)->setValue($tracker, $value);
+
+    $set('logger', $logger);
+    $set('policy', new PersonalDataPolicy());
+    $set('member_config', $config);
+    $set('acfFieldMap', $acfMap);
+    // Never consulted here: no case in this file moves a member between groups
+    // or positions. AuditTrackerTest covers that path.
+    $set('groupRepository', Mockery::mock(GroupRepository::class));
+    $set('positionRepository', Mockery::mock(PositionRepository::class));
+
+    return $tracker;
+}
+
+function grantViewCapability(): void
+{
+    $GLOBALS['scrutiny_test_capabilities'][PersonalDataPolicy::VIEW_CAPABILITY] = true;
+}
+
+/**
+ * @param array<int, array{name?: string, email?: string, phone?: string}> $rows
+ * @return Contact[]
+ */
+function contactsOf(array $rows): array
+{
+    return array_map(function (array $row): Contact {
+        $c = Mockery::mock(Contact::class);
+        $c->shouldReceive('getName')->andReturn($row['name'] ?? '');
+        $c->shouldReceive('getEmail')->andReturn($row['email'] ?? '');
+        $c->shouldReceive('getPhone')->andReturn($row['phone'] ?? '');
+        return $c;
+    }, $rows);
+}
+
+/**
+ * A Group mock with id 5 carrying the given contacts and meetings.
+ *
+ * @param Contact[] $contacts
+ * @param Meeting[] $meetings
+ */
+function groupWith(array $contacts, array $meetings = []): Group
+{
+    $group = Mockery::mock(Group::class);
+    $group->shouldReceive('getId')->andReturn(5);
+    $group->shouldReceive('getContacts')->andReturn($contacts);
+    $group->shouldReceive('getMeetings')->andReturn($meetings);
+
+    return $group;
+}
+
+/**
+ * A Member mock answering every accessor the change tracker reads.
+ *
+ * @param array<string, mixed> $overrides
+ */
+function memberWith(array $overrides = []): Member
+{
+    $data = array_merge([
+        'getId' => 42,
+        'getPersonalEmail' => 'same@example.com',
+        'getMobileNumber' => '07700 900000',
+        'getLandlineNumber' => '0117 496 0000',
+        'getPreferredContact' => PreferredContact::Mobile,
+        'getResponderCertification' => ResponderCertification::None,
+        'getHomeGroup' => 0,
+        'getIntergroupPosition' => 0,
+        'isGSR' => false,
+        'getIntergroupPositionRotation' => '',
+        'isTwelfthStepper' => false,
+        'isTelephoneResponder' => false,
+        'showAnonymousName' => false,
+        'showMemberProfile' => false,
+        'getArea' => '',
+        'getAccepts' => [],
+        'getAnonymousProfile' => '',
+        'getMeetingPO' => null,
+        'isGdprAccepted' => false,
+    ], $overrides);
+
+    $member = Mockery::mock(Member::class);
+    foreach ($data as $method => $value) {
+        $member->shouldReceive($method)->andReturn($value);
+    }
+    return $member;
+}
+
+beforeEach(function () {
+    $GLOBALS['scrutiny_test_capabilities'] = [];
+    $_GET = [];
+
+    $this->logger = Mockery::mock(AuditLogger::class);
+});
+
+afterEach(function () {
+    $_GET = [];
+});
+
+// ─── import / export ────────────────────────────────────────────
+it('logs one entry for each import and export hook', function () {
+    foreach (
+        [
+            [AuditLogger::ACTION_IMPORT, AuditLogger::ENTITY_MEMBER, 'personal-email'],
+            [AuditLogger::ACTION_EXPORT, AuditLogger::ENTITY_MEMBER, 'personal-email'],
+            [AuditLogger::ACTION_IMPORT, AuditLogger::ENTITY_GROUP, 'group'],
+            [AuditLogger::ACTION_EXPORT, AuditLogger::ENTITY_GROUP, 'group'],
+            [AuditLogger::ACTION_IMPORT, AuditLogger::ENTITY_POSITION, 'position'],
+            [AuditLogger::ACTION_EXPORT, AuditLogger::ENTITY_POSITION, 'position'],
+        ] as [$action, $entity, $field]
+    ) {
+        $this->logger->shouldReceive('log')->once()->with($action, $entity, 0, $field, Mockery::type('string'));
     }
 
-    protected function tearDown(): void
-    {
-        $_GET = [];
-        parent::tearDown();
-    }
+    $tracker = coverageTracker($this->logger);
 
-    /**
-     * Build a tracker with dependencies injected by reflection so no WP
-     * hooks are registered (the constructor's add_action/add_filter calls
-     * are not under test here).
-     *
-     * @param array<string, mixed>  $config
-     * @param array<string, string> $acfMap
-     */
-    private function tracker(AuditLogger $logger, array $config = [], array $acfMap = []): AuditTracker
-    {
-        $ref = new \ReflectionClass(AuditTracker::class);
-        $tracker = $ref->newInstanceWithoutConstructor();
+    $tracker->onMemberImport(3, 'personal-email');
+    $tracker->onMemberExport(4, 'personal-email');
+    $tracker->onGroupImport(5, 'group');
+    $tracker->onGroupExport(6, 'group');
+    $tracker->onPositionImport(7, 'position');
+    $tracker->onPositionExport(8, 'position');
+});
 
-        $this->setProp($tracker, 'logger', $logger);
-        $this->setProp($tracker, 'policy', new PersonalDataPolicy());
-        $this->setProp($tracker, 'member_config', $config);
-        $this->setProp($tracker, 'acfFieldMap', $acfMap);
-        // Never consulted here: no case in this file moves a member between
-        // groups or positions. AuditTrackerTest covers that path.
-        $this->setProp($tracker, 'groupRepository', Mockery::mock(GroupRepository::class));
-        $this->setProp($tracker, 'positionRepository', Mockery::mock(PositionRepository::class));
-
-        return $tracker;
-    }
-
-    private function setProp(object $object, string $name, mixed $value): void
-    {
-        $prop = (new \ReflectionClass($object))->getProperty($name);
-        $prop->setValue($object, $value);
-    }
-
-    private function grantView(): void
-    {
-        $GLOBALS['scrutiny_test_capabilities'][PersonalDataPolicy::VIEW_CAPABILITY] = true;
-    }
-
-    /**
-     * @param array<int, array{name?: string, email?: string, phone?: string}> $rows
-     * @return Contact[]
-     */
-    private function contacts(array $rows): array
-    {
-        return array_map(function (array $row): Contact {
-            $c = Mockery::mock(Contact::class);
-            $c->shouldReceive('getName')->andReturn($row['name'] ?? '');
-            $c->shouldReceive('getEmail')->andReturn($row['email'] ?? '');
-            $c->shouldReceive('getPhone')->andReturn($row['phone'] ?? '');
-            return $c;
-        }, $rows);
-    }
-
-    // ─── import / export ────────────────────────────────────────────
-    #[Test]
-    public function import_export_hooks_log_one_entry_each(): void
-    {
-        $logger = Mockery::mock(AuditLogger::class);
-
-        $logger->shouldReceive('log')->once()
-            ->with(AuditLogger::ACTION_IMPORT, AuditLogger::ENTITY_MEMBER, 0, 'personal-email', Mockery::type('string'));
-        $logger->shouldReceive('log')->once()
-            ->with(AuditLogger::ACTION_EXPORT, AuditLogger::ENTITY_MEMBER, 0, 'personal-email', Mockery::type('string'));
-        $logger->shouldReceive('log')->once()
-            ->with(AuditLogger::ACTION_IMPORT, AuditLogger::ENTITY_GROUP, 0, 'group', Mockery::type('string'));
-        $logger->shouldReceive('log')->once()
-            ->with(AuditLogger::ACTION_EXPORT, AuditLogger::ENTITY_GROUP, 0, 'group', Mockery::type('string'));
-        $logger->shouldReceive('log')->once()
-            ->with(AuditLogger::ACTION_IMPORT, AuditLogger::ENTITY_POSITION, 0, 'position', Mockery::type('string'));
-        $logger->shouldReceive('log')->once()
-            ->with(AuditLogger::ACTION_EXPORT, AuditLogger::ENTITY_POSITION, 0, 'position', Mockery::type('string'));
-
-        $tracker = $this->tracker($logger);
-
-        $tracker->onMemberImport(3, 'personal-email');
-        $tracker->onMemberExport(4, 'personal-email');
-        $tracker->onGroupImport(5, 'group');
-        $tracker->onGroupExport(6, 'group');
-        $tracker->onPositionImport(7, 'position');
-        $tracker->onPositionExport(8, 'position');
-    }
-
-    // ─── deletion / hide ────────────────────────────────────────────
-    #[Test]
-    public function member_deletion_batches_every_personal_and_gdpr_field(): void
-    {
+// ─── deletion / hide ────────────────────────────────────────────
+describe('deletion and hiding', function () {
+    it('batches every personal and GDPR field when a member is deleted', function () {
         $expectedFields = array_merge(PersonalDataFields::ALL_FIELDS, PersonalDataFields::GDPR_FIELDS);
 
-        $logger = Mockery::mock(AuditLogger::class);
-        $logger->shouldReceive('logBatch')->once()
+        $this->logger->shouldReceive('logBatch')->once()
             ->with(AuditLogger::ACTION_DELETE, AuditLogger::ENTITY_MEMBER, 99, $expectedFields, 'Member deleted');
 
-        $this->tracker($logger)->onMemberDeleted(99, null);
-    }
+        coverageTracker($this->logger)->onMemberDeleted(99, null);
+    });
 
-    #[Test]
-    public function group_deletion_and_hide_batch_the_group_contact_fields(): void
-    {
-        $logger = Mockery::mock(AuditLogger::class);
-        $logger->shouldReceive('logBatch')->once()
+    it('batches the group contact fields when a group is deleted or hidden', function () {
+        $this->logger->shouldReceive('logBatch')->once()
             ->with(AuditLogger::ACTION_DELETE, AuditLogger::ENTITY_GROUP, 7, PersonalDataFields::GROUP_CONTACT_FIELDS, 'Group deleted');
-        $logger->shouldReceive('logBatch')->once()
+        $this->logger->shouldReceive('logBatch')->once()
             ->with(AuditLogger::ACTION_UPDATE, AuditLogger::ENTITY_GROUP, 7, PersonalDataFields::GROUP_CONTACT_FIELDS, Mockery::type('string'));
 
-        $tracker = $this->tracker($logger);
+        $tracker = coverageTracker($this->logger);
         $tracker->onGroupDeleted(7, null);
         $tracker->onGroupHidden(7, null);
-    }
+    });
+});
 
-    // ─── group / contact change ─────────────────────────────────────
-    #[Test]
-    public function group_change_logs_each_differing_contact_field(): void
-    {
-        $logger = Mockery::mock(AuditLogger::class);
+// ─── group / contact change ─────────────────────────────────────
+describe('group changes', function () {
+    it('logs each differing contact field', function () {
         // Name and email differ; phone is unchanged.
-        $logger->shouldReceive('log')->once()
+        $this->logger->shouldReceive('log')->once()
             ->with(AuditLogger::ACTION_UPDATE, AuditLogger::ENTITY_GROUP, 5, PersonalDataFields::GROUP_CONTACT_NAME, Mockery::type('string'));
-        $logger->shouldReceive('log')->once()
+        $this->logger->shouldReceive('log')->once()
             ->with(AuditLogger::ACTION_UPDATE, AuditLogger::ENTITY_GROUP, 5, PersonalDataFields::GROUP_CONTACT_EMAIL, Mockery::type('string'));
 
-        $original = Mockery::mock(Group::class);
-        $original->shouldReceive('getId')->andReturn(5);
-        $original->shouldReceive('getContacts')->andReturn($this->contacts([
-            ['name' => 'Alice', 'email' => 'alice@example.com', 'phone' => '111'],
-        ]));
-        $original->shouldReceive('getMeetings')->andReturn([]);
+        $original = groupWith(contactsOf([['name' => 'Alice', 'email' => 'alice@example.com', 'phone' => '111']]));
+        $updated  = groupWith(contactsOf([['name' => 'Alicia', 'email' => 'alicia@example.com', 'phone' => '111']]));
 
-        $updated = Mockery::mock(Group::class);
-        $updated->shouldReceive('getId')->andReturn(5);
-        $updated->shouldReceive('getContacts')->andReturn($this->contacts([
-            ['name' => 'Alicia', 'email' => 'alicia@example.com', 'phone' => '111'],
-        ]));
-        $updated->shouldReceive('getMeetings')->andReturn([]);
+        coverageTracker($this->logger)->onGroupChanged($updated, $original);
+    });
 
-        $this->tracker($logger)->onGroupChanged($updated, $original);
-    }
-
-    #[Test]
-    public function group_change_logs_meeting_contact_changes_too(): void
-    {
-        $logger = Mockery::mock(AuditLogger::class);
+    it('logs meeting contact changes too', function () {
         // Group contacts unchanged; a meeting's contact phone changed.
-        $logger->shouldReceive('log')->once()
+        $this->logger->shouldReceive('log')->once()
             ->with(AuditLogger::ACTION_UPDATE, AuditLogger::ENTITY_MEETING, 88, PersonalDataFields::MEETING_CONTACT_PHONE, Mockery::type('string'));
 
-        $groupContacts = $this->contacts([['name' => 'Al', 'email' => 'al@example.com', 'phone' => '111']]);
+        $groupContacts = contactsOf([['name' => 'Al', 'email' => 'al@example.com', 'phone' => '111']]);
 
         $originalMeeting = Mockery::mock(Meeting::class);
         $originalMeeting->shouldReceive('getId')->andReturn(88);
-        $originalMeeting->shouldReceive('getContacts')->andReturn($this->contacts([['phone' => '111']]));
+        $originalMeeting->shouldReceive('getContacts')->andReturn(contactsOf([['phone' => '111']]));
 
         $updatedMeeting = Mockery::mock(Meeting::class);
         $updatedMeeting->shouldReceive('getId')->andReturn(88);
-        $updatedMeeting->shouldReceive('getContacts')->andReturn($this->contacts([['phone' => '222']]));
+        $updatedMeeting->shouldReceive('getContacts')->andReturn(contactsOf([['phone' => '222']]));
 
-        $original = Mockery::mock(Group::class);
-        $original->shouldReceive('getId')->andReturn(5);
-        $original->shouldReceive('getContacts')->andReturn($groupContacts);
-        $original->shouldReceive('getMeetings')->andReturn([$originalMeeting]);
+        coverageTracker($this->logger)->onGroupChanged(
+            groupWith($groupContacts, [$updatedMeeting]),
+            groupWith($groupContacts, [$originalMeeting]),
+        );
+    });
+});
 
-        $updated = Mockery::mock(Group::class);
-        $updated->shouldReceive('getId')->andReturn(5);
-        $updated->shouldReceive('getContacts')->andReturn($groupContacts);
-        $updated->shouldReceive('getMeetings')->andReturn([$updatedMeeting]);
-
-        $this->tracker($logger)->onGroupChanged($updated, $original);
-    }
-
-    // ─── GDPR consent change ────────────────────────────────────────
-    #[Test]
-    public function member_change_logs_a_consent_recorded_transition(): void
-    {
-        $logger = Mockery::mock(AuditLogger::class);
-        $logger->shouldReceive('log')->once()
+// ─── member change ──────────────────────────────────────────────
+describe('member changes', function () {
+    it('logs a consent-recorded transition', function () {
+        $this->logger->shouldReceive('log')->once()
             ->with(AuditLogger::ACTION_UPDATE, AuditLogger::ENTITY_MEMBER, 42, PersonalDataFields::GDPR_ACCEPTED, 'Consent recorded');
 
-        $original = $this->member(['isGdprAccepted' => false]);
-        $updated  = $this->member(['isGdprAccepted' => true]);
+        coverageTracker($this->logger)->onMemberChanged(
+            memberWith(['isGdprAccepted' => true]),
+            memberWith(['isGdprAccepted' => false]),
+        );
+    });
 
-        $this->tracker($logger)->onMemberChanged($updated, $original);
-    }
-
-    #[Test]
-    public function member_change_logs_email_and_mobile_updates(): void
-    {
-        $logger = Mockery::mock(AuditLogger::class);
-        $logger->shouldReceive('log')->once()
+    it('logs email and mobile updates', function () {
+        $this->logger->shouldReceive('log')->once()
             ->with(AuditLogger::ACTION_UPDATE, AuditLogger::ENTITY_MEMBER, 42, PersonalDataFields::PERSONAL_EMAIL, Mockery::type('string'));
-        $logger->shouldReceive('log')->once()
+        $this->logger->shouldReceive('log')->once()
             ->with(AuditLogger::ACTION_UPDATE, AuditLogger::ENTITY_MEMBER, 42, PersonalDataFields::MOBILE_NUMBER, Mockery::type('string'));
 
-        $original = $this->member(['getPersonalEmail' => 'old@example.com', 'getMobileNumber' => '111']);
-        $updated  = $this->member(['getPersonalEmail' => 'new@example.com', 'getMobileNumber' => '222']);
+        coverageTracker($this->logger)->onMemberChanged(
+            memberWith(['getPersonalEmail' => 'new@example.com', 'getMobileNumber' => '222']),
+            memberWith(['getPersonalEmail' => 'old@example.com', 'getMobileNumber' => '111']),
+        );
+    });
 
-        $this->tracker($logger)->onMemberChanged($updated, $original);
-    }
+    it('logs nothing when no personal data differs', function () {
+        $this->logger->shouldNotReceive('log');
 
-    #[Test]
-    public function member_change_with_no_personal_data_diff_logs_nothing(): void
-    {
-        $logger = Mockery::mock(AuditLogger::class);
-        $logger->shouldNotReceive('log');
+        coverageTracker($this->logger)->onMemberChanged(memberWith(), memberWith());
+    });
+});
 
-        $original = $this->member();
-        $updated  = $this->member();
+// ─── admin form view tracking ───────────────────────────────────
+describe('admin form view tracking', function () {
+    it('logs a view for a viewer editing a member', function () {
+        grantViewCapability();
 
-        $this->tracker($logger)->onMemberChanged($updated, $original);
-    }
-
-    /**
-     * @param array<string, mixed> $overrides
-     */
-    private function member(array $overrides = []): Member
-    {
-        $defaults = [
-            'getId' => 42,
-            'getPersonalEmail' => 'same@example.com',
-            'getMobileNumber' => '07700 900000',
-            'getLandlineNumber' => '0117 496 0000',
-            'getPreferredContact' => PreferredContact::Mobile,
-            'getResponderCertification' => ResponderCertification::None,
-            'getHomeGroup' => 0,
-            'getIntergroupPosition' => 0,
-            'isGSR' => false,
-            'getIntergroupPositionRotation' => '',
-            'isTwelfthStepper' => false,
-            'isTelephoneResponder' => false,
-            'showAnonymousName' => false,
-            'showMemberProfile' => false,
-            'getArea' => '',
-            'getAccepts' => [],
-            'getAnonymousProfile' => '',
-            'getMeetingPO' => null,
-            'isGdprAccepted' => false,
-        ];
-        $data = array_merge($defaults, $overrides);
-
-        $member = Mockery::mock(Member::class);
-        foreach ($data as $method => $value) {
-            $member->shouldReceive($method)->andReturn($value);
-        }
-        return $member;
-    }
-
-    // ─── admin form view tracking ───────────────────────────────────
-    #[Test]
-    public function admin_form_view_is_logged_for_a_viewer_editing_a_member(): void
-    {
-        $this->grantView();
-
-        $logger = Mockery::mock(AuditLogger::class);
-        $logger->shouldReceive('logBatch')->once()
+        $this->logger->shouldReceive('logBatch')->once()
             ->with(AuditLogger::ACTION_VIEW, AuditLogger::ENTITY_MEMBER, 23, PersonalDataFields::ALL_FIELDS, Mockery::type('string'));
 
         $_GET['post'] = '23';
         $screen = (object) ['base' => 'post', 'post_type' => 'unity_member'];
 
-        $tracker = $this->tracker($logger, ['POST_TYPE' => 'unity_member']);
+        $tracker = coverageTracker($this->logger, ['POST_TYPE' => 'unity_member']);
         $tracker->onMemberAdminFormDisplayed($screen);
         // A second call in the same request is de-duped.
         $tracker->onMemberAdminFormDisplayed($screen);
-    }
+    });
 
-    #[Test]
-    public function admin_form_view_is_skipped_for_a_non_viewer(): void
-    {
-        $logger = Mockery::mock(AuditLogger::class);
-        $logger->shouldNotReceive('logBatch');
+    it('skips a non-viewer', function () {
+        $this->logger->shouldNotReceive('logBatch');
 
         $_GET['post'] = '23';
-        $screen = (object) ['base' => 'post', 'post_type' => 'unity_member'];
 
-        $this->tracker($logger, ['POST_TYPE' => 'unity_member'])
-            ->onMemberAdminFormDisplayed($screen);
-    }
+        coverageTracker($this->logger, ['POST_TYPE' => 'unity_member'])
+            ->onMemberAdminFormDisplayed((object) ['base' => 'post', 'post_type' => 'unity_member']);
+    });
 
-    #[Test]
-    public function admin_form_view_ignores_the_new_post_screen_and_other_screens(): void
-    {
-        $this->grantView();
+    it('ignores the new-post screen and other screens', function () {
+        grantViewCapability();
 
-        $logger = Mockery::mock(AuditLogger::class);
-        $logger->shouldNotReceive('logBatch');
+        $this->logger->shouldNotReceive('logBatch');
 
-        $tracker = $this->tracker($logger, ['POST_TYPE' => 'unity_member']);
+        $tracker = coverageTracker($this->logger, ['POST_TYPE' => 'unity_member']);
 
         // Wrong screen base.
         $tracker->onMemberAdminFormDisplayed((object) ['base' => 'edit', 'post_type' => 'unity_member']);
@@ -333,81 +292,65 @@ class AuditTrackerCoverageTest extends TestCase
         // New-post screen (no ?post).
         $_GET = [];
         $tracker->onMemberAdminFormDisplayed((object) ['base' => 'post', 'post_type' => 'unity_member']);
-    }
+    });
+});
 
-    // ─── frontend ACF view tracking ─────────────────────────────────
-    #[Test]
-    public function frontend_field_load_logs_a_personal_data_view(): void
-    {
-        $this->grantView();
+// ─── frontend ACF view tracking ─────────────────────────────────
+describe('frontend field view tracking', function () {
+    beforeEach(function () {
+        $this->fieldTracker = coverageTracker(
+            $this->logger,
+            ['POST_TYPE' => 'unity_member'],
+            ['field_email_key' => 'personal-email']
+        );
+    });
+
+    it('logs a personal data view', function () {
+        grantViewCapability();
 
         WpState::addPost(50, ['post_type' => 'unity_member']);
         WpState::$isAdmin = false;
 
-        $logger = Mockery::mock(AuditLogger::class);
-        $logger->shouldReceive('log')->once()
+        $this->logger->shouldReceive('log')->once()
             ->with(AuditLogger::ACTION_VIEW, AuditLogger::ENTITY_MEMBER, 50, 'personal-email', Mockery::type('string'));
 
-        $tracker = $this->tracker(
-            $logger,
-            ['POST_TYPE' => 'unity_member'],
-            ['field_email_key' => 'personal-email']
-        );
-
         $field = ['key' => 'field_email_key'];
+
         // First load logs; second is de-duped.
-        $this->assertSame('val', $tracker->onPersonalDataFieldLoaded('val', 50, $field));
-        $this->assertSame('val', $tracker->onPersonalDataFieldLoaded('val', 50, $field));
-    }
+        expect($this->fieldTracker->onPersonalDataFieldLoaded('val', 50, $field))->toBe('val')
+            ->and($this->fieldTracker->onPersonalDataFieldLoaded('val', 50, $field))->toBe('val');
+    });
 
-    #[Test]
-    public function frontend_field_load_skips_non_member_admin_and_unmapped_fields(): void
-    {
-        $this->grantView();
+    it('skips non-member posts, the admin context and unmapped fields', function () {
+        grantViewCapability();
 
-        $logger = Mockery::mock(AuditLogger::class);
-        $logger->shouldNotReceive('log');
-
-        $tracker = $this->tracker(
-            $logger,
-            ['POST_TYPE' => 'unity_member'],
-            ['field_email_key' => 'personal-email']
-        );
+        $this->logger->shouldNotReceive('log');
 
         // Non-integer post id: returned untouched before any WP calls.
-        $this->assertSame('v', $tracker->onPersonalDataFieldLoaded('v', 'user_1', ['key' => 'field_email_key']));
+        expect($this->fieldTracker->onPersonalDataFieldLoaded('v', 'user_1', ['key' => 'field_email_key']))->toBe('v');
 
         // Wrong post type.
         WpState::addPost(50, ['post_type' => 'post']);
-        $this->assertSame('v', $tracker->onPersonalDataFieldLoaded('v', 50, ['key' => 'field_email_key']));
+        expect($this->fieldTracker->onPersonalDataFieldLoaded('v', 50, ['key' => 'field_email_key']))->toBe('v');
 
         // Member, but in admin context.
         WpState::addPost(51, ['post_type' => 'unity_member']);
         WpState::$isAdmin = true;
-        $this->assertSame('v', $tracker->onPersonalDataFieldLoaded('v', 51, ['key' => 'field_email_key']));
-    }
+        expect($this->fieldTracker->onPersonalDataFieldLoaded('v', 51, ['key' => 'field_email_key']))->toBe('v');
+    });
 
-    #[Test]
-    public function frontend_field_load_skips_a_user_who_cannot_view_and_unmapped_keys(): void
-    {
+    it('skips a user who cannot view, and unmapped keys', function () {
         // View capability withheld this time.
-        $logger = Mockery::mock(AuditLogger::class);
-        $logger->shouldNotReceive('log');
+        $this->logger->shouldNotReceive('log');
 
         WpState::addPost(50, ['post_type' => 'unity_member']);
         WpState::$isAdmin = false;
 
-        $tracker = $this->tracker(
-            $logger,
-            ['POST_TYPE' => 'unity_member'],
-            ['field_email_key' => 'personal-email']
-        );
-
         // Non-viewer: nothing logged.
-        $this->assertSame('v', $tracker->onPersonalDataFieldLoaded('v', 50, ['key' => 'field_email_key']));
+        expect($this->fieldTracker->onPersonalDataFieldLoaded('v', 50, ['key' => 'field_email_key']))->toBe('v');
 
         // Now grant view but hand it an unmapped field key.
-        $this->grantView();
-        $this->assertSame('v', $tracker->onPersonalDataFieldLoaded('v', 50, ['key' => 'field_unknown']));
-    }
-}
+        grantViewCapability();
+        expect($this->fieldTracker->onPersonalDataFieldLoaded('v', 50, ['key' => 'field_unknown']))->toBe('v');
+    });
+});
