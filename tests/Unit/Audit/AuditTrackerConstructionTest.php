@@ -4,8 +4,6 @@ declare(strict_types=1);
 
 namespace Scrutiny\Tests\Unit\Audit;
 
-use PHPUnit\Framework\Attributes\Test;
-use Scrutiny\Tests\TestCase;
 use Scrutiny\Audit\AuditTracker;
 use Scrutiny\Audit\Interfaces\AuditLogger;
 use Scrutiny\Privacy\PersonalDataPolicy;
@@ -14,7 +12,7 @@ use Unity\Groups\Interfaces\GroupRepository;
 use Unity\Members\Interfaces\Member;
 use Unity\Positions\Interfaces\PositionRepository;
 
-/**
+/*
  * Covers the AuditTracker constructor.
  *
  * Every other AuditTracker test builds the object via
@@ -23,51 +21,41 @@ use Unity\Positions\Interfaces\PositionRepository;
  * its ACF field map from configuration and registers the full set of
  * change/view/deletion/import-export hooks.
  */
-class AuditTrackerConstructionTest extends TestCase
-{
-    protected function setUp(): void
-    {
-        parent::setUp();
-        // add_action is a bootstrap recorder; reset it between cases.
-        $GLOBALS['scrutiny_test_actions'] = [];
-    }
 
-    protected function tearDown(): void
-    {
-        parent::tearDown();
-    }
+beforeEach(function () {
+    // add_action is a bootstrap recorder; reset it between cases.
+    $GLOBALS['scrutiny_test_actions'] = [];
+});
 
-    #[Test]
-    public function it_builds_the_field_map_and_registers_every_hook(): void
-    {
-        $configuration = $this->createMock(Configuration::class);
-        // Include entries whose keys appear in PersonalDataFields::CONFIG_KEY_MAP
-        // so the field-map construction loop records at least one mapping.
-        $configuration->method('getConfig')
-            ->with(Member::class)
-            ->willReturn([
-                'FIELD_PERSONAL_EMAIL' => 'field_personal_email_key',
-                'FIELD_MOBILE_NUMBER'  => 'field_mobile_number_key',
-            ]);
+it('builds the field map and registers every hook', function () {
+    $configuration = $this->createMock(Configuration::class);
+    // Include entries whose keys appear in PersonalDataFields::CONFIG_KEY_MAP
+    // so the field-map construction loop records at least one mapping.
+    $configuration->method('getConfig')
+        ->with(Member::class)
+        ->willReturn([
+            'FIELD_PERSONAL_EMAIL' => 'field_personal_email_key',
+            'FIELD_MOBILE_NUMBER'  => 'field_mobile_number_key',
+        ]);
 
-        // add_filter belongs to Brain Monkey, which records the
-        // constructor's single acf/load_value filter without needing a stub.
-        // The rest of the hooks are actions recorded by the bootstrap's own
-        // add_action stub, asserted below.
+    // add_filter belongs to Brain Monkey, which records the constructor's
+    // single acf/load_value filter without needing a stub. The rest of the
+    // hooks are actions recorded by the bootstrap's own add_action stub,
+    // asserted below.
 
-        $tracker = new AuditTracker(
-            $configuration,
-            $this->createMock(AuditLogger::class),
-            new PersonalDataPolicy(),
-            $this->createMock(GroupRepository::class),
-            $this->createMock(PositionRepository::class),
-        );
+    $tracker = new AuditTracker(
+        $configuration,
+        $this->createMock(AuditLogger::class),
+        new PersonalDataPolicy(),
+        $this->createMock(GroupRepository::class),
+        $this->createMock(PositionRepository::class),
+    );
 
-        $this->assertInstanceOf(AuditTracker::class, $tracker);
+    expect($tracker)->toBeInstanceOf(AuditTracker::class);
 
-        $actionHooks = array_column($GLOBALS['scrutiny_test_actions'], 'hook');
-        foreach (
-            [
+    $actionHooks = array_column($GLOBALS['scrutiny_test_actions'], 'hook');
+    foreach (
+        [
             'current_screen',
             'unity/member_created',
             'unity/member_changing',
@@ -81,9 +69,8 @@ class AuditTrackerConstructionTest extends TestCase
             'unity/group_export',
             'unity/position_import',
             'unity/position_export',
-            ] as $hook
-        ) {
-            $this->assertContains($hook, $actionHooks, "constructor must register the $hook action");
-        }
+        ] as $hook
+    ) {
+        expect($actionHooks)->toContain($hook);
     }
-}
+});

@@ -4,12 +4,9 @@ declare(strict_types=1);
 
 namespace Scrutiny\Tests\Unit\Audit;
 
-use PHPUnit\Framework\Attributes\CoversClass;
-use PHPUnit\Framework\Attributes\Test;
-use Scrutiny\Tests\TestCase;
 use Scrutiny\Audit\GdprAuditRepository;
 
-/**
+/*
  * Tests for GdprAuditRepository's SQL-building read/write paths.
  *
  * A recording $wpdb double captures the values passed to prepare() so the
@@ -17,141 +14,128 @@ use Scrutiny\Audit\GdprAuditRepository;
  * without a live database. createTable() is not exercised because it
  * require()s a WordPress core file absent from the unit environment.
  */
-#[CoversClass(\Scrutiny\Audit\GdprAuditRepository::class)]
-class GdprAuditRepositoryTest extends TestCase
+
+covers(GdprAuditRepository::class);
+
+/**
+ * @return array<string, mixed>
+ */
+function auditLogRow(): array
 {
-    /** @var object The previous global $wpdb, restored in tearDown. */
-    private $previousWpdb;
+    return [
+        'action'      => 'update',
+        'entity_type' => 'member',
+        'entity_id'   => 42,
+        'field_name'  => 'personal-email',
+        'user_id'     => 7,
+        'user_login'  => 'admin',
+        'ip_address'  => '127.0.0.1',
+        'logged_at'   => '2026-07-01 10:00:00',
+    ];
+}
 
-    /** @var object The recording double installed as $wpdb. */
-    private $wpdb;
+beforeEach(function () {
+    $GLOBALS['scrutiny_test_log_entries'] = [];
 
-    private GdprAuditRepository $repository;
+    // esc_sql is a passthrough for the table name in these tests.
 
-    protected function setUp(): void
-    {
-        parent::setUp();
-        $GLOBALS['scrutiny_test_log_entries'] = [];
+    $this->previousWpdb = $GLOBALS['wpdb'] ?? null;
+    $this->wpdb = new class {
+        public string $prefix = 'wp_';
+        public int $insert_id = 0;
+        public string $last_error = '';
+        /** @var mixed */
+        public $insertReturn = 1;
+        /** @var array<int, mixed> */
+        public array $getResultsReturn = [];
+        /** @var int */
+        public $getVarReturn = 0;
+        /** @var int */
+        public $queryReturn = 0;
 
-        // esc_sql is a passthrough for the table name in these tests.
+        /** @var array{0: string, 1: array<string,mixed>}|null */
+        public $lastInsert = null;
+        /** @var array<int, mixed> */
+        public array $lastPrepareValues = [];
 
-        $this->previousWpdb = $GLOBALS['wpdb'] ?? null;
-        $this->wpdb = new class {
-            public string $prefix = 'wp_';
-            public int $insert_id = 0;
-            public string $last_error = '';
-            /** @var mixed */
-            public $insertReturn = 1;
-            /** @var array<int, mixed> */
-            public array $getResultsReturn = [];
-            /** @var int */
-            public $getVarReturn = 0;
-            /** @var int */
-            public $queryReturn = 0;
+        public function insert(string $table, array $data, array $formats)
+        {
+            $this->lastInsert = [$table, $data];
+            return $this->insertReturn;
+        }
 
-            /** @var array{0: string, 1: array<string,mixed>}|null */
-            public $lastInsert = null;
-            /** @var array<int, mixed> */
-            public array $lastPrepareValues = [];
+        public function prepare(string $query, ...$values): string
+        {
+            $this->lastPrepareValues = $values;
+            return $query;
+        }
 
-            public function insert(string $table, array $data, array $formats)
-            {
-                $this->lastInsert = [$table, $data];
-                return $this->insertReturn;
-            }
+        /** @return array<int, mixed> */
+        public function get_results(string $sql): array
+        {
+            return $this->getResultsReturn;
+        }
 
-            public function prepare(string $query, ...$values): string
-            {
-                $this->lastPrepareValues = $values;
-                return $query;
-            }
+        public function get_var(string $sql): int
+        {
+            return $this->getVarReturn;
+        }
 
-            /** @return array<int, mixed> */
-            public function get_results(string $sql): array
-            {
-                return $this->getResultsReturn;
-            }
+        public function query(string $sql): int
+        {
+            return $this->queryReturn;
+        }
+    };
+    $GLOBALS['wpdb'] = $this->wpdb;
 
-            public function get_var(string $sql): int
-            {
-                return $this->getVarReturn;
-            }
+    $this->repository = new GdprAuditRepository();
+});
 
-            public function query(string $sql): int
-            {
-                return $this->queryReturn;
-            }
-        };
-        $GLOBALS['wpdb'] = $this->wpdb;
+afterEach(function () {
+    $GLOBALS['wpdb'] = $this->previousWpdb;
+});
 
-        $this->repository = new GdprAuditRepository();
-    }
-
-    protected function tearDown(): void
-    {
-        $GLOBALS['wpdb'] = $this->previousWpdb;
-        parent::tearDown();
-    }
-
-    private function entry(): array
-    {
-        return [
-            'action'      => 'update',
-            'entity_type' => 'member',
-            'entity_id'   => 42,
-            'field_name'  => 'personal-email',
-            'user_id'     => 7,
-            'user_login'  => 'admin',
-            'ip_address'  => '127.0.0.1',
-            'logged_at'   => '2026-07-01 10:00:00',
-        ];
-    }
-
-    // ─── insert ─────────────────────────────────────────────────────
-    #[Test]
-    public function insert_returns_the_new_row_id_on_success(): void
-    {
+// ─── insert ─────────────────────────────────────────────────────
+describe('insert', function () {
+    it('returns the new row id on success', function () {
         $this->wpdb->insertReturn = 1;
         $this->wpdb->insert_id = 555;
 
-        $this->assertSame(555, $this->repository->insert($this->entry()));
+        expect($this->repository->insert(auditLogRow()))->toBe(555);
 
         [$table, $data] = $this->wpdb->lastInsert;
-        $this->assertSame('wp_scrutiny_audit_log', $table);
-        $this->assertSame('member', $data['entity_type']);
-        // detail defaults to '' when the entry omits it.
-        $this->assertSame('', $data['detail']);
-    }
 
-    #[Test]
-    public function insert_logs_and_returns_false_on_failure(): void
-    {
+        expect($table)->toBe('wp_scrutiny_audit_log')
+            ->and($data['entity_type'])->toBe('member')
+            // detail defaults to '' when the entry omits it.
+            ->and($data['detail'])->toBe('');
+    });
+
+    it('logs and returns false on failure', function () {
         $this->wpdb->insertReturn = false;
         $this->wpdb->last_error = 'db exploded';
 
-        $this->assertFalse($this->repository->insert($this->entry()));
+        expect($this->repository->insert(auditLogRow()))->toBeFalse();
 
         $messages = array_column($GLOBALS['scrutiny_test_log_entries'], 'message');
-        $this->assertNotEmpty($messages);
-        $this->assertStringContainsString('db exploded', $messages[0]);
-    }
 
-    // ─── find ───────────────────────────────────────────────────────
-    #[Test]
-    public function find_appends_pagination_params_even_with_no_filters(): void
-    {
+        expect($messages)->not->toBeEmpty()
+            ->and($messages[0])->toContain('db exploded');
+    });
+});
+
+// ─── find ───────────────────────────────────────────────────────
+describe('find', function () {
+    it('appends the pagination params even with no filters', function () {
         $rows = [(object) ['id' => 1]];
         $this->wpdb->getResultsReturn = $rows;
 
-        $this->assertSame($rows, $this->repository->find());
+        expect($this->repository->find())->toBe($rows)
+            // Only LIMIT + OFFSET are appended: default per_page 50, page 1.
+            ->and($this->wpdb->lastPrepareValues)->toBe([50, 0]);
+    });
 
-        // Only LIMIT + OFFSET are appended: default per_page 50, page 1.
-        $this->assertSame([50, 0], $this->wpdb->lastPrepareValues);
-    }
-
-    #[Test]
-    public function find_builds_where_values_in_declaration_order(): void
-    {
+    it('builds the WHERE values in declaration order', function () {
         $this->repository->find([
             'entity_type' => 'member',
             'entity_id'   => 42,
@@ -161,69 +145,10 @@ class GdprAuditRepositoryTest extends TestCase
         ]);
 
         // entity_type, entity_id, action, then LIMIT, OFFSET ((3-1)*10=20).
-        $this->assertSame(['member', 42, 'update', 10, 20], $this->wpdb->lastPrepareValues);
-    }
+        expect($this->wpdb->lastPrepareValues)->toBe(['member', 42, 'update', 10, 20]);
+    });
 
-    #[Test]
-    public function find_caps_per_page_at_two_hundred(): void
-    {
-        $this->repository->find(['per_page' => 5000]);
-
-        $this->assertSame([200, 0], $this->wpdb->lastPrepareValues);
-    }
-
-    #[Test]
-    public function find_expands_entity_ids_into_an_in_list(): void
-    {
-        // Duplicates and non-positives are dropped and de-duped.
-        $this->repository->find(['entity_ids' => [5, 5, 0, -3, 8]]);
-
-        $this->assertSame([5, 8, 50, 0], $this->wpdb->lastPrepareValues);
-    }
-
-    #[Test]
-    public function find_forces_an_impossible_id_when_no_valid_entity_ids_remain(): void
-    {
-        // A name search that matched no posts must return nothing, not
-        // everything — the IN list collapses to (0).
-        $this->repository->find(['entity_ids' => [0, -1]]);
-
-        $this->assertSame([0, 50, 0], $this->wpdb->lastPrepareValues);
-    }
-
-    // ─── count ──────────────────────────────────────────────────────
-    #[Test]
-    public function count_with_no_filters_skips_prepare(): void
-    {
-        $this->wpdb->getVarReturn = 12;
-
-        $this->assertSame(12, $this->repository->count());
-
-        // No WHERE values → prepare() is never called, so nothing recorded.
-        $this->assertSame([], $this->wpdb->lastPrepareValues);
-    }
-
-    #[Test]
-    public function count_builds_where_values_for_supplied_filters(): void
-    {
-        $this->wpdb->getVarReturn = 3;
-
-        $this->assertSame(3, $this->repository->count([
-            'field_name' => 'personal-email',
-            'user_id'    => 7,
-            'date_from'  => '2026-01-01 00:00:00',
-            'date_to'    => '2026-12-31 23:59:59',
-        ]));
-
-        $this->assertSame(
-            [7, 'personal-email', '2026-01-01 00:00:00', '2026-12-31 23:59:59'],
-            $this->wpdb->lastPrepareValues
-        );
-    }
-
-    #[Test]
-    public function find_builds_the_user_field_and_date_where_clauses(): void
-    {
+    it('builds the user, field and date WHERE clauses', function () {
         // These four filters are the ones the declaration-order test above
         // does not set, so drive them here to cover their WHERE branches.
         $this->repository->find([
@@ -234,58 +159,90 @@ class GdprAuditRepositoryTest extends TestCase
         ]);
 
         // user_id, field_name, date_from, date_to, then LIMIT 50, OFFSET 0.
-        $this->assertSame(
-            [7, 'personal-email', '2026-01-01 00:00:00', '2026-12-31 23:59:59', 50, 0],
-            $this->wpdb->lastPrepareValues,
-        );
-    }
+        expect($this->wpdb->lastPrepareValues)
+            ->toBe([7, 'personal-email', '2026-01-01 00:00:00', '2026-12-31 23:59:59', 50, 0]);
+    });
 
-    #[Test]
-    public function count_builds_the_entity_and_action_where_clauses(): void
-    {
+    it('caps per_page at two hundred', function () {
+        $this->repository->find(['per_page' => 5000]);
+
+        expect($this->wpdb->lastPrepareValues)->toBe([200, 0]);
+    });
+
+    it('expands entity_ids into an IN list', function () {
+        // Duplicates and non-positives are dropped and de-duped.
+        $this->repository->find(['entity_ids' => [5, 5, 0, -3, 8]]);
+
+        expect($this->wpdb->lastPrepareValues)->toBe([5, 8, 50, 0]);
+    });
+
+    it('forces an impossible id when no valid entity_ids remain', function () {
+        // A name search that matched no posts must return nothing, not
+        // everything — the IN list collapses to (0).
+        $this->repository->find(['entity_ids' => [0, -1]]);
+
+        expect($this->wpdb->lastPrepareValues)->toBe([0, 50, 0]);
+    });
+});
+
+// ─── count ──────────────────────────────────────────────────────
+describe('count', function () {
+    it('skips prepare with no filters', function () {
+        $this->wpdb->getVarReturn = 12;
+
+        expect($this->repository->count())->toBe(12)
+            // No WHERE values → prepare() is never called, so nothing recorded.
+            ->and($this->wpdb->lastPrepareValues)->toBe([]);
+    });
+
+    it('builds the WHERE values for the supplied filters', function () {
+        $this->wpdb->getVarReturn = 3;
+
+        expect($this->repository->count([
+            'field_name' => 'personal-email',
+            'user_id'    => 7,
+            'date_from'  => '2026-01-01 00:00:00',
+            'date_to'    => '2026-12-31 23:59:59',
+        ]))->toBe(3)
+            ->and($this->wpdb->lastPrepareValues)
+            ->toBe([7, 'personal-email', '2026-01-01 00:00:00', '2026-12-31 23:59:59']);
+    });
+
+    it('builds the entity and action WHERE clauses', function () {
         $this->wpdb->getVarReturn = 4;
 
-        $this->assertSame(4, $this->repository->count([
+        expect($this->repository->count([
             'entity_type' => 'member',
             'entity_id'   => 42,
             'action'      => 'update',
-        ]));
+        ]))->toBe(4)
+            ->and($this->wpdb->lastPrepareValues)->toBe(['member', 42, 'update']);
+    });
 
-        $this->assertSame(['member', 42, 'update'], $this->wpdb->lastPrepareValues);
-    }
-
-    #[Test]
-    public function count_expands_entity_ids_into_an_in_list(): void
-    {
+    it('expands entity_ids into an IN list', function () {
         $this->wpdb->getVarReturn = 2;
 
         // Duplicates and non-positives are dropped and de-duped, mirroring find().
         $this->repository->count(['entity_ids' => [5, 5, 0, -3, 8]]);
 
-        $this->assertSame([5, 8], $this->wpdb->lastPrepareValues);
-    }
+        expect($this->wpdb->lastPrepareValues)->toBe([5, 8]);
+    });
 
-    #[Test]
-    public function count_forces_an_impossible_id_when_no_valid_entity_ids_remain(): void
-    {
+    it('forces an impossible id when no valid entity_ids remain', function () {
         $this->repository->count(['entity_ids' => [0, -1]]);
 
-        $this->assertSame([0], $this->wpdb->lastPrepareValues);
-    }
+        expect($this->wpdb->lastPrepareValues)->toBe([0]);
+    });
+});
 
-    // ─── purge ──────────────────────────────────────────────────────
-    #[Test]
-    public function purge_deletes_rows_older_than_the_cutoff(): void
-    {
+// ─── purge ──────────────────────────────────────────────────────
+describe('purge', function () {
+    it('deletes rows older than the cutoff', function () {
         $this->wpdb->queryReturn = 9;
 
-        $this->assertSame(9, $this->repository->purge(30));
-
-        // The prepared cutoff is a single datetime string.
-        $this->assertCount(1, $this->wpdb->lastPrepareValues);
-        $this->assertMatchesRegularExpression(
-            '/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/',
-            $this->wpdb->lastPrepareValues[0]
-        );
-    }
-}
+        expect($this->repository->purge(30))->toBe(9)
+            // The prepared cutoff is a single datetime string.
+            ->and($this->wpdb->lastPrepareValues)->toHaveCount(1)
+            ->and($this->wpdb->lastPrepareValues[0])->toMatch('/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/');
+    });
+});

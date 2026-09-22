@@ -344,12 +344,20 @@ The table is created via `dbDelta`, so it is safe to run `Plugin::activate()` mu
 
 ## Testing
 
-Tests use PHPUnit 10 and live in `tests/Unit/`.
+Tests are written in [Pest](https://pestphp.com) (running on PHPUnit) and live in
+`tests/Unit/`. Run them with Pest, not PHPUnit directly — `vendor/bin/phpunit`
+cannot load Pest's closure-based files.
 
 ```bash
 composer install
-./vendor/bin/phpunit
+composer test
 ```
+
+Two files stay PHPUnit classes: the REST-request tests in
+`MemberFieldsObscurerTest` and `ResponderCertificationGuardRestRequestTest`
+define `REST_REQUEST`, which cannot be undone, so they run in a separate
+process — and Pest does not support process isolation. Pest runs them as they
+are.
 
 Test suites cover:
 

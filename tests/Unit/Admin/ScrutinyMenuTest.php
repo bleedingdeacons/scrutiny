@@ -4,13 +4,10 @@ declare(strict_types=1);
 
 namespace Scrutiny\Tests\Unit\Admin;
 
-use PHPUnit\Framework\Attributes\CoversClass;
-use PHPUnit\Framework\Attributes\Test;
 use BleedingDeacons\WpMocks\WpState;
 use Scrutiny\Admin\ScrutinyMenu;
-use Scrutiny\Tests\TestCase;
 
-/**
+/*
  * Tests for the top-level Scrutiny menu registrar.
  *
  * Two static, hook-only methods, both driven for real: the shared stubs record
@@ -23,57 +20,42 @@ use Scrutiny\Tests\TestCase;
  * changed on one side only, the removal would silently stop matching and the
  * dead item would come back; the last test here pins the two together.
  */
-#[CoversClass(\Scrutiny\Admin\ScrutinyMenu::class)]
-final class ScrutinyMenuTest extends TestCase
-{
-    #[Test]
-    public function it_registers_one_top_level_menu(): void
-    {
-        ScrutinyMenu::registerMenu();
 
-        $this->assertCount(1, WpState::$menus);
-        $this->assertSame('menu', WpState::$menus[0]['type']);
-        $this->assertSame(ScrutinyMenu::MENU_SLUG, WpState::$menus[0]['slug']);
-        $this->assertSame('Scrutiny', WpState::$menus[0]['title']);
-    }
+covers(ScrutinyMenu::class);
 
-    /**
-     * The parent menu has to be visible to exactly the audience its child
-     * pages are, or an admin sees a menu whose every page refuses them.
-     */
-    #[Test]
-    public function the_menu_capability_matches_the_pages_beneath_it(): void
-    {
-        ScrutinyMenu::registerMenu();
+it('registers one top-level menu', function () {
+    ScrutinyMenu::registerMenu();
 
-        $this->assertSame('manage_options', ScrutinyMenu::CAPABILITY);
-        $this->assertSame(ScrutinyMenu::CAPABILITY, WpState::$menus[0]['cap']);
-    }
+    expect(WpState::$menus)->toHaveCount(1)
+        ->and(WpState::$menus[0])
+        ->type->toBe('menu')
+        ->slug->toBe(ScrutinyMenu::MENU_SLUG)
+        ->title->toBe('Scrutiny');
+});
 
-    #[Test]
-    public function it_removes_the_auto_generated_default_submenu(): void
-    {
-        ScrutinyMenu::removeDefaultSubmenu();
+// The parent menu has to be visible to exactly the audience its child pages
+// are, or an admin sees a menu whose every page refuses them.
+it('gives the menu the same capability as the pages beneath it', function () {
+    ScrutinyMenu::registerMenu();
 
-        $this->assertSame(
-            [[ScrutinyMenu::MENU_SLUG, ScrutinyMenu::MENU_SLUG]],
-            WpState::$removedSubmenus
-        );
-    }
+    expect(ScrutinyMenu::CAPABILITY)->toBe('manage_options')
+        ->and(WpState::$menus[0]['cap'])->toBe(ScrutinyMenu::CAPABILITY);
+});
 
-    /**
-     * WordPress keys the auto-generated item on the parent slug, so the
-     * removal only matches while both halves name the same slug.
-     */
-    #[Test]
-    public function the_removal_targets_the_menu_that_was_registered(): void
-    {
-        ScrutinyMenu::registerMenu();
-        ScrutinyMenu::removeDefaultSubmenu();
+it('removes the auto-generated default submenu', function () {
+    ScrutinyMenu::removeDefaultSubmenu();
 
-        [$parent, $slug] = WpState::$removedSubmenus[0];
+    expect(WpState::$removedSubmenus)->toBe([[ScrutinyMenu::MENU_SLUG, ScrutinyMenu::MENU_SLUG]]);
+});
 
-        $this->assertSame(WpState::$menus[0]['slug'], $parent);
-        $this->assertSame($parent, $slug, 'the default item points at the parent slug');
-    }
-}
+// WordPress keys the auto-generated item on the parent slug, so the removal
+// only matches while both halves name the same slug.
+it('targets the removal at the menu that was registered', function () {
+    ScrutinyMenu::registerMenu();
+    ScrutinyMenu::removeDefaultSubmenu();
+
+    [$parent, $slug] = WpState::$removedSubmenus[0];
+
+    expect($parent)->toBe(WpState::$menus[0]['slug'])
+        ->and($slug)->toBe($parent, 'the default item points at the parent slug');
+});

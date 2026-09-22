@@ -15,8 +15,11 @@ use BleedingDeacons\WpMocks\TestCase as WpMocksTestCase;
  * now.
  *
  * Tests that only touch the globals-backed stubs in tests/bootstrap.php — the
- * Cleanup and Rest suites — still extend PHPUnit's TestCase directly. They
- * never needed a mocking framework and do not need one now.
+ * Cleanup and Rest suites — run on Pest's default, plain PHPUnit. They never
+ * needed a mocking framework and do not need one now.
+ *
+ * The tests are closure-based Pest files with no class to extend this from;
+ * tests/Pest.php binds the files that need it.
  *
  * Note the stubs in tests/bootstrap.php are *not* reset by WpState::reset():
  * they are backed by $GLOBALS, which each test clears for itself, exactly as

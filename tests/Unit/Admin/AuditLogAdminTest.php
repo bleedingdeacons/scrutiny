@@ -4,13 +4,10 @@ declare(strict_types=1);
 
 namespace Scrutiny\Tests\Unit\Admin;
 
-use PHPUnit\Framework\Attributes\CoversClass;
-use PHPUnit\Framework\Attributes\Test;
-use PHPUnit\Framework\Attributes\DataProvider;
-use function Brain\Monkey\Functions\when;
 use BleedingDeacons\WpMocks\Doubles\FakeWpdb;
 use BleedingDeacons\WpMocks\Exceptions\WpDieException;
 use BleedingDeacons\WpMocks\WpState;
+use Brain\Monkey\Functions;
 use Mockery;
 use ReflectionMethod;
 use Scrutiny\Admin\AuditLogAdmin;
@@ -18,9 +15,8 @@ use Scrutiny\Audit\Interfaces\AuditLogger;
 use Scrutiny\Audit\Interfaces\AuditRepository;
 use Scrutiny\Privacy\PersonalDataFields;
 use Scrutiny\Testing\Doubles\SpyAuditLogger;
-use Scrutiny\Tests\TestCase;
 
-/**
+/*
  * Tests for the Audit Log screen.
  *
  * The screen is the only place the audit trail is read by a human, so what is
@@ -30,7 +26,7 @@ use Scrutiny\Tests\TestCase;
  * Techniques, following Integrity's SettingsPageTest:
  *
  *   - Registration runs for real; the constructor's hooks are read from this
- *     plugin's own recording add_action() (see MemberPrunerAdminTest's docblock
+ *     plugin's own recording add_action() (see MemberPrunerAdminTest's header
  *     for why that rather than assertActionAdded()).
  *   - The capability guard on renderPage() calls wp_die(), which the shared
  *     stubs turn into a WpDieException.
@@ -46,105 +42,96 @@ use Scrutiny\Tests\TestCase;
  * writes an audit entry recording what it deleted, and that entry's contents
  * are the assertion.
  */
-#[CoversClass(\Scrutiny\Admin\AuditLogAdmin::class)]
-final class AuditLogAdminTest extends TestCase
+
+covers(AuditLogAdmin::class);
+
+function grantAuditLogCapability(): void
 {
-    /** @var AuditRepository&Mockery\MockInterface */
-    private $repository;
-    private SpyAuditLogger $logger;
-    private AuditLogAdmin $page;
-    private FakeWpdb $wpdb;
+    $GLOBALS['scrutiny_test_capabilities'][AuditLogAdmin::CAPABILITY] = true;
+}
 
-    protected function setUp(): void
-    {
-        parent::setUp();
+/**
+ * Build an audit row in the shape GdprAuditRepository hands back.
+ *
+ * @param array<string, mixed> $overrides
+ */
+function auditRow(array $overrides = []): object
+{
+    return (object) array_merge([
+        'id'          => 1,
+        'logged_at'   => '2026-03-01 09:30:00',
+        'user_id'     => 7,
+        'user_login'  => 'secretary',
+        'action'      => 'update',
+        'entity_type' => 'member',
+        'entity_id'   => 42,
+        'field_name'  => PersonalDataFields::MOBILE_NUMBER,
+        'detail'      => '',
+        'ip_address'  => '192.168.0.x',
+    ], $overrides);
+}
 
-        $GLOBALS['scrutiny_test_actions']      = [];
-        $GLOBALS['scrutiny_test_capabilities'] = [];
-        $GLOBALS['scrutiny_test_options']      = [];
+function detailCell(object $entry): string
+{
+    return (new ReflectionMethod(AuditLogAdmin::class, 'renderDetailCell'))->invoke(null, $entry);
+}
 
-        $_GET = [];
+/**
+ * @return int[]
+ */
+function postIdsWithTitle(string $search): array
+{
+    return (new ReflectionMethod(AuditLogAdmin::class, 'findPostIdsByTitle'))->invoke(null, $search);
+}
 
-        $this->wpdb      = new FakeWpdb();
-        $GLOBALS['wpdb'] = $this->wpdb;
+/**
+ * Start a purge request for $days (or none, to exercise the default).
+ */
+function requestPurge(?string $days = null): void
+{
+    grantAuditLogCapability();
+    $_GET['scrutiny_purge'] = '1';
 
-        $this->repository = Mockery::mock(AuditRepository::class);
-        $this->logger     = new SpyAuditLogger();
-        $this->page       = new AuditLogAdmin($this->repository, $this->logger);
-
-        // Neither is in the shared stub set.
-        when('wp_nonce_url')->alias(
-            static fn (string $url, string $action = '-1'): string => $url . '&_wpnonce=nonce-' . $action
-        );
-        when('get_userdata')->justReturn(false);
+    if ($days !== null) {
+        $_GET['scrutiny_purge_days'] = $days;
     }
+}
 
-    protected function tearDown(): void
-    {
-        $_GET = [];
-        unset($GLOBALS['wpdb']);
+beforeEach(function () {
+    $GLOBALS['scrutiny_test_actions']      = [];
+    $GLOBALS['scrutiny_test_capabilities'] = [];
+    $GLOBALS['scrutiny_test_options']      = [];
 
-        parent::tearDown();
-    }
+    $_GET = [];
 
-    private function grantCapability(): void
-    {
-        $GLOBALS['scrutiny_test_capabilities'][AuditLogAdmin::CAPABILITY] = true;
-    }
+    $this->wpdb      = new FakeWpdb();
+    $GLOBALS['wpdb'] = $this->wpdb;
 
-    /**
-     * Build an audit row in the shape GdprAuditRepository hands back.
-     *
-     * @param array<string, mixed> $overrides
-     */
-    private function entry(array $overrides = []): object
-    {
-        return (object) array_merge([
-            'id'          => 1,
-            'logged_at'   => '2026-03-01 09:30:00',
-            'user_id'     => 7,
-            'user_login'  => 'secretary',
-            'action'      => 'update',
-            'entity_type' => 'member',
-            'entity_id'   => 42,
-            'field_name'  => PersonalDataFields::MOBILE_NUMBER,
-            'detail'      => '',
-            'ip_address'  => '192.168.0.x',
-        ], $overrides);
-    }
+    $this->repository = Mockery::mock(AuditRepository::class);
+    $this->logger     = new SpyAuditLogger();
+    $this->page       = new AuditLogAdmin($this->repository, $this->logger);
 
-    /**
-     * Drive the screen with the given repository results and hand back the
-     * markup, line endings normalised so assertions read the same on Windows
-     * and on CI.
-     *
-     * @param array<int, object> $entries
-     */
-    private function render(array $entries = [], ?int $total = null): string
-    {
-        $this->grantCapability();
+    // Neither is in the shared stub set.
+    Functions\when('wp_nonce_url')->alias(
+        static fn (string $url, string $action = '-1'): string => $url . '&_wpnonce=nonce-' . $action
+    );
+    Functions\when('get_userdata')->justReturn(false);
+
+    // Drive the screen with the given repository results and hand back the
+    // markup, line endings normalised so assertions read the same on Windows
+    // and on CI.
+    $this->render = function (array $entries = [], ?int $total = null): string {
+        grantAuditLogCapability();
 
         $this->repository->shouldReceive('find')->andReturn($entries);
         $this->repository->shouldReceive('count')->andReturn($total ?? count($entries));
 
-        ob_start();
-        try {
-            $this->page->renderPage();
-        } finally {
-            $html = (string) ob_get_clean();
-        }
+        return captureOutput(fn () => $this->page->renderPage());
+    };
 
-        return str_replace("\r\n", "\n", $html);
-    }
-
-    /**
-     * Capture the arguments the screen builds for the repository.
-     *
-     * @return array<string, mixed>
-     */
-    private function captureQueryArgs(): array
-    {
-        $this->grantCapability();
+    // Capture the arguments the screen builds for the repository.
+    $this->queryArgs = function (): array {
+        grantAuditLogCapability();
 
         $captured = [];
         $this->repository->shouldReceive('find')
@@ -155,148 +142,105 @@ final class AuditLogAdminTest extends TestCase
             });
         $this->repository->shouldReceive('count')->andReturn(0);
 
-        ob_start();
-        try {
-            $this->page->renderPage();
-        } finally {
-            ob_end_clean();
-        }
+        captureOutput(fn () => $this->page->renderPage());
 
         return $captured;
-    }
+    };
+});
 
-    // ── registration ──────────────────────────────────────────────────
-    #[Test]
-    public function it_hooks_the_menu_and_the_purge_handler_on_construction(): void
-    {
-        $hooks = [];
-        foreach ($GLOBALS['scrutiny_test_actions'] as $action) {
-            $hooks[$action['hook']] = $action['priority'];
-        }
+afterEach(function () {
+    $_GET = [];
+    unset($GLOBALS['wpdb']);
+});
 
-        $this->assertArrayHasKey('admin_menu', $hooks);
-        $this->assertSame(20, $hooks['admin_menu']);
-        $this->assertArrayHasKey('admin_init', $hooks);
-    }
+// ── registration ──────────────────────────────────────────────────
+describe('registration', function () {
+    it('hooks the menu and the purge handler on construction', function () {
+        $hooks = array_column($GLOBALS['scrutiny_test_actions'], 'priority', 'hook');
 
-    /**
-     * This screen deliberately sits under Intergroup rather than the Scrutiny
-     * menu: it is a working tool, not a configuration page.
-     */
-    #[Test]
-    public function it_registers_a_submenu_under_the_intergroup_menu(): void
-    {
+        expect($hooks)->toHaveKeys(['admin_menu', 'admin_init'])
+            ->and($hooks['admin_menu'])->toBe(20);
+    });
+
+    // This screen deliberately sits under Intergroup rather than the Scrutiny
+    // menu: it is a working tool, not a configuration page.
+    it('registers a submenu under the Intergroup menu', function () {
         $this->page->registerMenu();
 
-        $this->assertSame([
+        expect(WpState::$menus[0])->toBe([
             'type'   => 'submenu',
             'parent' => 'intergroup',
             'slug'   => AuditLogAdmin::MENU_SLUG,
             'title'  => 'Audit Log',
             'cap'    => AuditLogAdmin::CAPABILITY,
-        ], WpState::$menus[0]);
-    }
+        ]);
+    });
+});
 
-    // ── purge ─────────────────────────────────────────────────────────
-    /**
-     * admin_init fires on every admin request, so an ordinary page load must
-     * not reach the repository.
-     */
-    #[Test]
-    public function the_purge_handler_ignores_a_request_that_did_not_ask_for_it(): void
-    {
-        $this->grantCapability();
+// ── purge ─────────────────────────────────────────────────────────
+describe('purge', function () {
+    // admin_init fires on every admin request, so an ordinary page load must
+    // not reach the repository.
+    it('ignores a request that did not ask for it', function () {
+        grantAuditLogCapability();
         $this->repository->shouldNotReceive('purge');
 
         $this->page->handlePurge();
 
-        $this->assertSame([], $this->logger->entries);
-    }
+        expect($this->logger->entries)->toBe([]);
+    });
 
-    /**
-     * The purge is a destructive GET, so the capability is checked before the
-     * nonce — a user without it gets nothing at all, not a nonce failure.
-     */
-    #[Test]
-    public function the_purge_handler_ignores_a_user_without_the_capability(): void
-    {
+    // The purge is a destructive GET, so the capability is checked before the
+    // nonce — a user without it gets nothing at all, not a nonce failure.
+    it('ignores a user without the capability', function () {
         $_GET['scrutiny_purge'] = '1';
         $this->repository->shouldNotReceive('purge');
 
         $this->page->handlePurge();
 
-        $this->assertSame([], $this->logger->entries);
-    }
+        expect($this->logger->entries)->toBe([]);
+    });
 
-    #[Test]
-    public function a_purge_deletes_using_the_requested_retention_window(): void
-    {
-        $this->grantCapability();
-        $_GET['scrutiny_purge']      = '1';
-        $_GET['scrutiny_purge_days'] = '90';
-
+    it('deletes using the requested retention window', function () {
+        requestPurge('90');
         $this->repository->shouldReceive('purge')->once()->with(90)->andReturn(12);
 
         $this->page->handlePurge();
 
-        $this->assertSame(
-            'Purged 12 entries older than 90 days',
-            $this->logger->entries[0]['detail']
-        );
-    }
+        expect($this->logger->entries[0]['detail'])->toBe('Purged 12 entries older than 90 days');
+    });
 
-    /**
-     * The button on the screen only offers 365 days, but the window arrives in
-     * the query string, so the handler needs its own default.
-     */
-    #[Test]
-    public function a_purge_without_an_explicit_window_falls_back_to_a_year(): void
-    {
-        $this->grantCapability();
-        $_GET['scrutiny_purge'] = '1';
-
+    // The button on the screen only offers 365 days, but the window arrives in
+    // the query string, so the handler needs its own default.
+    it('falls back to a year without an explicit window', function () {
+        requestPurge();
         $this->repository->shouldReceive('purge')->once()->with(365)->andReturn(0);
 
         $this->page->handlePurge();
 
-        $this->assertSame(
-            'Purged 0 entries older than 365 days',
-            $this->logger->entries[0]['detail']
-        );
-    }
+        expect($this->logger->entries[0]['detail'])->toBe('Purged 0 entries older than 365 days');
+    });
 
-    /**
-     * Deleting audit entries is itself an auditable act — otherwise the one
-     * action a bad actor would most want to hide is the one the log forgets.
-     */
-    #[Test]
-    public function a_purge_writes_its_own_audit_entry(): void
-    {
-        $this->grantCapability();
-        $_GET['scrutiny_purge']      = '1';
-        $_GET['scrutiny_purge_days'] = '30';
-
+    // Deleting audit entries is itself an auditable act — otherwise the one
+    // action a bad actor would most want to hide is the one the log forgets.
+    it('writes its own audit entry', function () {
+        requestPurge('30');
         $this->repository->shouldReceive('purge')->once()->andReturn(5);
 
         $this->page->handlePurge();
 
-        $this->assertCount(1, $this->logger->entries);
-        $this->assertSame([
-            'action'     => 'purge',
-            'entityType' => 'audit_log',
-            'entityId'   => 0,
-            'fieldName'  => 'all',
-            'detail'     => 'Purged 5 entries older than 30 days',
-        ], $this->logger->entries[0]);
-    }
+        expect($this->logger->entries)->toHaveCount(1)
+            ->and($this->logger->entries[0])->toBe([
+                'action'     => 'purge',
+                'entityType' => 'audit_log',
+                'entityId'   => 0,
+                'fieldName'  => 'all',
+                'detail'     => 'Purged 5 entries older than 30 days',
+            ]);
+    });
 
-    #[Test]
-    public function a_purge_queues_an_admin_notice_reporting_what_it_removed(): void
-    {
-        $this->grantCapability();
-        $_GET['scrutiny_purge']      = '1';
-        $_GET['scrutiny_purge_days'] = '30';
-
+    it('queues an admin notice reporting what it removed', function () {
+        requestPurge('30');
         $this->repository->shouldReceive('purge')->once()->andReturn(5);
 
         $this->page->handlePurge();
@@ -305,194 +249,130 @@ final class AuditLogAdminTest extends TestCase
             $GLOBALS['scrutiny_test_actions'],
             static fn (array $a): bool => $a['hook'] === 'admin_notices'
         ));
-        $this->assertCount(1, $notices);
 
-        ob_start();
-        try {
-            ($notices[0]['callback'])();
-        } finally {
-            $html = (string) ob_get_clean();
-        }
+        expect($notices)->toHaveCount(1)
+            ->and(captureOutput($notices[0]['callback']))
+            ->toContain('notice-success', 'Purged 5 audit log entries older than 30 days.');
+    });
+});
 
-        $this->assertStringContainsString('notice-success', $html);
-        $this->assertStringContainsString('Purged 5 audit log entries older than 30 days.', $html);
-    }
+// ── render: guard ─────────────────────────────────────────────────
+it('refuses to render the screen for a user without the capability', function () {
+    $this->page->renderPage();
+})->throws(WpDieException::class);
 
-    // ── render: guard ─────────────────────────────────────────────────
-    #[Test]
-    public function the_screen_refuses_a_user_without_the_capability(): void
-    {
-        $this->expectException(WpDieException::class);
-        $this->page->renderPage();
-    }
+// ── render: chrome ────────────────────────────────────────────────
+describe('the screen chrome', function () {
+    it('renders an empty log as the table with a placeholder row', function () {
+        expect(($this->render)())->toContain(
+            'Scrutiny – Audit Log',
+            'No entries found.',
+            '<strong>0</strong> entries found.',
+        );
+    });
 
-    // ── render: chrome ────────────────────────────────────────────────
-    #[Test]
-    public function an_empty_log_renders_the_table_with_a_placeholder_row(): void
-    {
-        $html = $this->render();
+    // The Help link's href is the guide itself rather than "#", and the
+    // handler only cancels that navigation once window.open() has returned a
+    // window. A popup blocker refusing it returns null, and an unconditional
+    // preventDefault() would leave the link doing nothing at all.
+    it('keeps the Help link working when the popup is blocked', function () {
+        expect(($this->render)())
+            ->toContain(
+                'assets/docs/scrutiny.html" target="_blank"',
+                'rel="noopener"',
+                'if (help) { event.preventDefault();',
+            )
+            ->not->toContain('href="#"');
+    });
 
-        $this->assertStringContainsString('Scrutiny – Audit Log', $html);
-        $this->assertStringContainsString('No entries found.', $html);
-        $this->assertStringContainsString('<strong>0</strong> entries found.', $html);
-    }
+    it('offers every entity, action and field in the filter form', function () {
+        expect(($this->render)())->toContain(
+            '<option value="member"',
+            '<option value="audit_log"',
+            '<option value="purge"',
+            '<option value="' . PersonalDataFields::MOBILE_NUMBER . '"',
+        );
+    });
 
-    /**
-     * The Help link's href is the guide itself rather than "#", and the handler
-     * only cancels that navigation once window.open() has returned a window.
-     * A popup blocker refusing it returns null, and an unconditional
-     * preventDefault() would leave the link doing nothing at all.
-     */
-    #[Test]
-    public function the_help_link_survives_a_blocked_popup(): void
-    {
-        $html = $this->render();
+    it('gives the purge button a nonce and the one-year window', function () {
+        expect(($this->render)())->toContain(
+            'scrutiny_purge=1',
+            'scrutiny_purge_days=365',
+            '_wpnonce=nonce-' . AuditLogAdmin::NONCE_ACTION,
+        );
+    });
 
-        $this->assertStringContainsString('assets/docs/scrutiny.html" target="_blank"', $html);
-        $this->assertStringContainsString('rel="noopener"', $html);
-        $this->assertStringContainsString('if (help) { event.preventDefault();', $html);
-        $this->assertStringNotContainsString('href="#"', $html);
-    }
-
-    #[Test]
-    public function the_filter_form_offers_every_entity_action_and_field(): void
-    {
-        $html = $this->render();
-
-        $this->assertStringContainsString('<option value="member"', $html);
-        $this->assertStringContainsString('<option value="audit_log"', $html);
-        $this->assertStringContainsString('<option value="purge"', $html);
-        $this->assertStringContainsString('<option value="' . PersonalDataFields::MOBILE_NUMBER . '"', $html);
-    }
-
-    #[Test]
-    public function the_purge_button_carries_a_nonce_and_the_one_year_window(): void
-    {
-        $html = $this->render();
-
-        $this->assertStringContainsString('scrutiny_purge=1', $html);
-        $this->assertStringContainsString('scrutiny_purge_days=365', $html);
-        $this->assertStringContainsString('_wpnonce=nonce-' . AuditLogAdmin::NONCE_ACTION, $html);
-    }
-
-    /**
-     * The dropdown is built from whoever actually appears in the log, so an
-     * intergroup with three admins does not get a list of every WP user.
-     */
-    #[Test]
-    public function the_user_filter_lists_only_users_who_appear_in_the_log(): void
-    {
+    // The dropdown is built from whoever actually appears in the log, so an
+    // intergroup with three admins does not get a list of every WP user.
+    it('lists only users who appear in the log in the user filter', function () {
         $this->wpdb->results = [
             (object) ['user_id' => 3, 'user_login' => 'chair'],
             (object) ['user_id' => 7, 'user_login' => 'secretary'],
         ];
 
-        $html = $this->render();
+        expect(($this->render)())->toContain('chair', 'secretary')
+            ->and($this->wpdb->lastQuery())->toContain('scrutiny_audit_log');
+    });
+});
 
-        $this->assertStringContainsString('chair', $html);
-        $this->assertStringContainsString('secretary', $html);
-        $this->assertStringContainsString('scrutiny_audit_log', $this->wpdb->lastQuery());
-    }
+// ── render: rows ──────────────────────────────────────────────────
+describe('the rows', function () {
+    it('renders the user, action, field and IP of a row', function () {
+        expect(($this->render)([auditRow()]))
+            ->not->toContain('No entries found.')
+            ->toContain('secretary', '(#7)', 'scrutiny-badge--update', 'Update', 'Mobile Number', '192.168.0.x');
+    });
 
-    // ── render: rows ──────────────────────────────────────────────────
-    #[Test]
-    public function a_row_renders_its_user_action_field_and_ip(): void
-    {
-        $html = $this->render([$this->entry()]);
-
-        $this->assertStringNotContainsString('No entries found.', $html);
-        $this->assertStringContainsString('secretary', $html);
-        $this->assertStringContainsString('(#7)', $html);
-        $this->assertStringContainsString('scrutiny-badge--update', $html);
-        $this->assertStringContainsString('Update', $html);
-        $this->assertStringContainsString('Mobile Number', $html);
-        $this->assertStringContainsString('192.168.0.x', $html);
-    }
-
-    /**
-     * The entity_id is a post ID and the post title is the member's anonymous
-     * name, which is what an administrator recognises — a bare number is not.
-     */
-    #[Test]
-    public function a_member_row_links_to_the_member_using_their_anonymous_name(): void
-    {
+    // The entity_id is a post ID and the post title is the member's anonymous
+    // name, which is what an administrator recognises — a bare number is not.
+    it('links a member row to the member using their anonymous name', function () {
         WpState::addPost(42, ['post_title' => 'John D.']);
 
-        $html = $this->render([$this->entry()]);
+        expect(($this->render)([auditRow()]))
+            ->toContain('John D.')
+            // &#038;, not &: WordPress encodes the separator in an href.
+            ->toContain('post.php?post=42&#038;action=edit');
+    });
 
-        $this->assertStringContainsString('John D.', $html);
-        // &#038;, not &: WordPress encodes the separator in an href.
-        $this->assertStringContainsString('post.php?post=42&#038;action=edit', $html);
-    }
+    // `user` rows store a WP user ID in entity_id, not a post ID, so there is
+    // no title to find and the raw reference is shown instead.
+    it('falls back to the raw id when there is no post title', function () {
+        expect(($this->render)([auditRow(['entity_type' => 'user', 'entity_id' => 99])]))->toContain('#99');
+    });
 
-    /**
-     * `user` rows store a WP user ID in entity_id, not a post ID, so there is
-     * no title to find and the raw reference is shown instead.
-     */
-    #[Test]
-    public function a_row_with_no_post_title_falls_back_to_the_raw_id(): void
-    {
-        $html = $this->render([$this->entry(['entity_type' => 'user', 'entity_id' => 99])]);
+    it('renders a dash rather than a broken link for a row with no entity', function () {
+        expect(($this->render)([auditRow(['entity_id' => 0])]))
+            ->toContain('—')
+            ->not->toContain('post.php?post=0');
+    });
 
-        $this->assertStringContainsString('#99', $html);
-    }
-
-    #[Test]
-    public function a_row_with_no_entity_renders_a_dash_rather_than_a_broken_link(): void
-    {
-        $html = $this->render([$this->entry(['entity_id' => 0])]);
-
-        $this->assertStringContainsString('—', $html);
-        $this->assertStringNotContainsString('post.php?post=0', $html);
-    }
-
-    /**
-     * Timestamps are stored in UTC; the screen shows them in the site's
-     * timezone using the site's own date and time formats.
-     */
-    #[Test]
-    public function a_timestamp_is_rendered_in_the_sites_configured_format(): void
-    {
+    // Timestamps are stored in UTC; the screen shows them in the site's
+    // timezone using the site's own date and time formats.
+    it("renders a timestamp in the site's configured format", function () {
         $GLOBALS['scrutiny_test_options']['date_format'] = 'Y-m-d';
         $GLOBALS['scrutiny_test_options']['time_format'] = 'H:i';
 
-        $html = $this->render([$this->entry(['logged_at' => '2026-03-01 09:30:00'])]);
+        expect(($this->render)([auditRow(['logged_at' => '2026-03-01 09:30:00'])]))->toContain('2026-03-01 09:30');
+    });
 
-        $this->assertStringContainsString('2026-03-01 09:30', $html);
-    }
+    // An unparseable stored value is shown as-is rather than swallowed — a
+    // corrupt row should be visible, not invisible.
+    it('renders an unparseable timestamp verbatim', function () {
+        expect(($this->render)([auditRow(['logged_at' => 'not a date at all'])]))->toContain('not a date at all');
+    });
 
-    /**
-     * An unparseable stored value is shown as-is rather than swallowed — a
-     * corrupt row should be visible, not invisible.
-     */
-    #[Test]
-    public function an_unparseable_timestamp_is_rendered_verbatim(): void
-    {
-        $html = $this->render([$this->entry(['logged_at' => 'not a date at all'])]);
+    it('renders an unrecognised entity type rather than dropping it', function () {
+        expect(($this->render)([auditRow(['entity_type' => 'sponsorship'])]))->toContain('sponsorship');
+    });
+});
 
-        $this->assertStringContainsString('not a date at all', $html);
-    }
+// ── render: filters ───────────────────────────────────────────────
+describe('the filters', function () {
+    it('asks only for the first page when unfiltered', function () {
+        expect(($this->queryArgs)())->toBe(['per_page' => 50, 'page' => 1]);
+    });
 
-    #[Test]
-    public function an_unrecognised_entity_type_is_rendered_rather_than_dropped(): void
-    {
-        $html = $this->render([$this->entry(['entity_type' => 'sponsorship'])]);
-
-        $this->assertStringContainsString('sponsorship', $html);
-    }
-
-    // ── render: filters ───────────────────────────────────────────────
-    #[Test]
-    public function an_unfiltered_screen_asks_only_for_the_first_page(): void
-    {
-        $args = $this->captureQueryArgs();
-
-        $this->assertSame(['per_page' => 50, 'page' => 1], $args);
-    }
-
-    #[Test]
-    public function the_dropdown_filters_are_passed_through_to_the_repository(): void
-    {
+    it('passes the dropdown filters through to the repository', function () {
         $_GET = [
             'entity_type'   => 'member',
             'filter_action' => 'view',
@@ -502,24 +382,19 @@ final class AuditLogAdminTest extends TestCase
             'date_to'       => '2026-01-31',
         ];
 
-        $args = $this->captureQueryArgs();
+        expect(($this->queryArgs)())
+            ->entity_type->toBe('member')
+            ->action->toBe('view')
+            ->field_name->toBe(PersonalDataFields::PERSONAL_EMAIL)
+            ->user_id->toBe(7, 'user_id should be an int')
+            ->date_from->toBe('2026-01-01')
+            ->date_to->toBe('2026-01-31');
+    });
 
-        $this->assertSame('member', $args['entity_type']);
-        $this->assertSame('view', $args['action']);
-        $this->assertSame(PersonalDataFields::PERSONAL_EMAIL, $args['field_name']);
-        $this->assertSame(7, $args['user_id'], 'user_id should be an int');
-        $this->assertSame('2026-01-01', $args['date_from']);
-        $this->assertSame('2026-01-31', $args['date_to']);
-    }
-
-    /**
-     * Empty query-string values mean "no filter", not "filter on the empty
-     * string" — otherwise submitting the form with everything blank would
-     * return nothing.
-     */
-    #[Test]
-    public function blank_filter_fields_are_dropped_rather_than_queried_on(): void
-    {
+    // Empty query-string values mean "no filter", not "filter on the empty
+    // string" — otherwise submitting the form with everything blank would
+    // return nothing.
+    it('drops blank filter fields rather than querying on them', function () {
         $_GET = [
             'entity_type'   => '',
             'filter_action' => '',
@@ -529,70 +404,52 @@ final class AuditLogAdminTest extends TestCase
             'date_to'       => '',
         ];
 
-        $this->assertSame(['per_page' => 50, 'page' => 1], $this->captureQueryArgs());
-    }
+        expect(($this->queryArgs)())->toBe(['per_page' => 50, 'page' => 1]);
+    });
 
-    #[Test]
-    public function the_page_number_is_read_from_the_query_string(): void
-    {
+    it('reads the page number from the query string', function () {
         $_GET['paged'] = '4';
 
-        $this->assertSame(4, $this->captureQueryArgs()['page']);
-    }
+        expect(($this->queryArgs)()['page'])->toBe(4);
+    });
 
-    #[Test]
-    public function a_zero_or_negative_page_is_clamped_to_the_first_page(): void
-    {
+    it('clamps a zero or negative page to the first page', function () {
         $_GET['paged'] = '-3';
 
-        $this->assertSame(1, $this->captureQueryArgs()['page']);
-    }
+        expect(($this->queryArgs)()['page'])->toBe(1);
+    });
 
-    /**
-     * The Member box takes either an ID or a name fragment. A numeric entry is
-     * an exact ID match; anything else is resolved to post titles first.
-     */
-    #[Test]
-    public function a_numeric_member_filter_becomes_an_exact_id_match(): void
-    {
+    // The Member box takes either an ID or a name fragment. A numeric entry is
+    // an exact ID match; anything else is resolved to post titles first.
+    it('turns a numeric member filter into an exact id match', function () {
         $_GET['entity_query'] = '42';
 
-        $args = $this->captureQueryArgs();
+        expect(($this->queryArgs)())
+            ->entity_id->toBe(42)
+            ->not->toHaveKey('entity_ids')
+            ->not->toHaveKey('entity_query', message: 'the raw box value is not a repository argument');
+    });
 
-        $this->assertSame(42, $args['entity_id']);
-        $this->assertArrayNotHasKey('entity_ids', $args);
-        $this->assertArrayNotHasKey('entity_query', $args, 'the raw box value is not a repository argument');
-    }
-
-    #[Test]
-    public function a_name_member_filter_is_resolved_to_matching_post_ids(): void
-    {
+    it('resolves a name member filter to the matching post ids', function () {
         $_GET['entity_query'] = 'John';
         $this->wpdb->col      = ['11', '12'];
 
-        $args = $this->captureQueryArgs();
+        expect(($this->queryArgs)())
+            ->entity_ids->toBe([11, 12])
+            ->not->toHaveKey('entity_id')
+            ->and($this->wpdb->queries[0])->toContain('post_title LIKE');
+    });
 
-        $this->assertSame([11, 12], $args['entity_ids']);
-        $this->assertArrayNotHasKey('entity_id', $args);
-        $this->assertStringContainsString('post_title LIKE', $this->wpdb->queries[0]);
-    }
-
-    /**
-     * A name matching nothing has to produce an empty result rather than
-     * silently dropping the filter and showing the whole log.
-     */
-    #[Test]
-    public function a_name_filter_matching_nothing_forces_an_empty_result(): void
-    {
+    // A name matching nothing has to produce an empty result rather than
+    // silently dropping the filter and showing the whole log.
+    it('forces an empty result for a name filter matching nothing', function () {
         $_GET['entity_query'] = 'Nobody';
         $this->wpdb->col      = [];
 
-        $this->assertSame([0], $this->captureQueryArgs()['entity_ids']);
-    }
+        expect(($this->queryArgs)()['entity_ids'])->toBe([0]);
+    });
 
-    #[Test]
-    public function the_active_filter_summary_names_each_filter_in_force(): void
-    {
+    it('names each filter in force in the active filter summary', function () {
         $_GET = [
             'entity_type'   => 'member',
             'filter_action' => 'view',
@@ -604,269 +461,159 @@ final class AuditLogAdminTest extends TestCase
         ];
         $this->wpdb->col = ['11'];
 
-        $html = $this->render();
+        expect(($this->render)())->toContain(
+            'Active Filters:',
+            'Entity: Member',
+            'Action: View',
+            'Field: Personal Email',
+            'Member: John',
+            'From: 2026-01-01',
+            'To: 2026-01-31',
+        );
+    });
 
-        $this->assertStringContainsString('Active Filters:', $html);
-        $this->assertStringContainsString('Entity: Member', $html);
-        $this->assertStringContainsString('Action: View', $html);
-        $this->assertStringContainsString('Field: Personal Email', $html);
-        $this->assertStringContainsString('Member: John', $html);
-        $this->assertStringContainsString('From: 2026-01-01', $html);
-        $this->assertStringContainsString('To: 2026-01-31', $html);
-    }
-
-    /**
-     * get_userdata() returns false for a deleted user, and the summary has to
-     * stay readable rather than rendering an empty "User: ".
-     */
-    #[Test]
-    public function a_filter_on_a_deleted_user_falls_back_to_their_id(): void
-    {
+    // get_userdata() returns false for a deleted user, and the summary has to
+    // stay readable rather than rendering an empty "User: ".
+    it('falls back to the id for a filter on a deleted user', function () {
         $_GET['user_id'] = '7';
 
-        $this->assertStringContainsString('User: ID #7', $this->render());
-    }
+        expect(($this->render)())->toContain('User: ID #7');
+    });
 
-    #[Test]
-    public function a_filter_on_a_known_user_names_them(): void
-    {
-        when('get_userdata')->justReturn((object) ['user_login' => 'chair']);
+    it('names a known user in the filter summary', function () {
+        Functions\when('get_userdata')->justReturn((object) ['user_login' => 'chair']);
         $_GET['user_id'] = '3';
 
-        $this->assertStringContainsString('User: chair', $this->render());
-    }
+        expect(($this->render)())->toContain('User: chair');
+    });
 
-    #[Test]
-    public function a_numeric_member_filter_is_summarised_as_an_id(): void
-    {
+    it('summarises a numeric member filter as an id', function () {
         $_GET['entity_query'] = '42';
 
-        $this->assertStringContainsString('Member ID: #42', $this->render());
-    }
+        expect(($this->render)())->toContain('Member ID: #42');
+    });
 
-    #[Test]
-    public function no_summary_is_shown_when_nothing_is_filtered(): void
-    {
-        $this->assertStringNotContainsString('Active Filters:', $this->render());
-    }
+    it('shows no summary when nothing is filtered', function () {
+        expect(($this->render)())->not->toContain('Active Filters:');
+    });
+});
 
-    // ── render: pagination ────────────────────────────────────────────
-    #[Test]
-    public function a_single_page_of_results_has_no_pagination(): void
-    {
-        $html = $this->render([$this->entry()], 20);
+// ── render: pagination ────────────────────────────────────────────
+describe('pagination', function () {
+    it('shows no pagination for a single page of results', function () {
+        expect(($this->render)([auditRow()], 20))
+            ->not->toContain('tablenav')
+            ->not->toContain('Page 1 of');
+    });
 
-        $this->assertStringNotContainsString('tablenav', $html);
-        $this->assertStringNotContainsString('Page 1 of', $html);
-    }
-
-    /**
-     * 50 rows per page, so 120 entries is three pages, and the page the admin
-     * is on is rendered as plain text rather than a link to itself.
-     */
-    #[Test]
-    public function multiple_pages_are_linked_with_the_current_one_marked(): void
-    {
+    // 50 rows per page, so 120 entries is three pages, and the page the admin
+    // is on is rendered as plain text rather than a link to itself.
+    it('links multiple pages with the current one marked', function () {
         $_GET['paged'] = '2';
 
-        $html = $this->render([$this->entry()], 120);
+        expect(($this->render)([auditRow()], 120))
+            ->toContain('Page 2 of 3.', '<strong>[2]</strong>', 'paged=1', 'paged=3');
+    });
 
-        $this->assertStringContainsString('Page 2 of 3.', $html);
-        $this->assertStringContainsString('<strong>[2]</strong>', $html);
-        $this->assertStringContainsString('paged=1', $html);
-        $this->assertStringContainsString('paged=3', $html);
-    }
-
-    /**
-     * Paging must not silently drop the filters the admin applied.
-     */
-    #[Test]
-    public function pagination_links_carry_the_active_filters_forward(): void
-    {
+    // Paging must not silently drop the filters the admin applied.
+    it('carries the active filters forward in the page links', function () {
         $_GET = ['entity_type' => 'member', 'filter_action' => 'view', 'paged' => '1'];
 
-        $html = $this->render([$this->entry()], 120);
+        expect(($this->render)([auditRow()], 120))->toContain('entity_type=member', 'filter_action=view');
+    });
+});
 
-        $this->assertStringContainsString('entity_type=member', $html);
-        $this->assertStringContainsString('filter_action=view', $html);
-    }
+// ── detail cell (reflection: private statics) ─────────────────────
+describe('the detail cell', function () {
+    // Reach writes a structured detail string for the view and call steps.
+    // Everything else — legacy rows, other plugins, earlier versions — has to
+    // survive as escaped plain text.
+    it('renders the detail of a non-Reach action as plain text', function () {
+        expect(detailCell(auditRow(['action' => 'update', 'detail' => 'caller:John D.#11'])))
+            ->toBe('caller:John D.#11')
+            ->not->toContain('<a');
+    });
 
-    // ── detail cell (reflection: private statics) ─────────────────────
+    it('escapes a detail string rendered as text', function () {
+        expect(detailCell(auditRow(['action' => 'update', 'detail' => '<script>alert(1)</script>'])))
+            ->not->toContain('<script>');
+    });
 
-    private function detailCell(object $entry): string
-    {
-        /** @var string $html */
-        $html = (new ReflectionMethod(AuditLogAdmin::class, 'renderDetailCell'))
-            ->invoke(null, $entry);
+    it('names the requester of a view row and links to them', function () {
+        expect(detailCell(auditRow(['action' => AuditLogger::ACTION_VIEW, 'detail' => 'caller:John D.#11'])))
+            ->toContain('Requester:', 'John D.', 'post=11');
+    });
 
-        return $html;
-    }
-
-    /**
-     * Reach writes a structured detail string for the view and call steps.
-     * Everything else — legacy rows, other plugins, earlier versions — has to
-     * survive as escaped plain text.
-     */
-    #[Test]
-    public function a_non_reach_action_renders_its_detail_as_plain_text(): void
-    {
-        $html = $this->detailCell($this->entry([
-            'action' => 'update',
-            'detail' => 'caller:John D.#11',
-        ]));
-
-        $this->assertSame('caller:John D.#11', $html);
-        $this->assertStringNotContainsString('<a', $html);
-    }
-
-    #[Test]
-    public function a_detail_string_is_escaped_when_it_is_rendered_as_text(): void
-    {
-        $html = $this->detailCell($this->entry([
-            'action' => 'update',
-            'detail' => '<script>alert(1)</script>',
-        ]));
-
-        $this->assertStringNotContainsString('<script>', $html);
-    }
-
-    #[Test]
-    public function a_view_row_names_the_requester_and_links_to_them(): void
-    {
-        $html = $this->detailCell($this->entry([
-            'action' => AuditLogger::ACTION_VIEW,
-            'detail' => 'caller:John D.#11',
-        ]));
-
-        $this->assertStringContainsString('Requester:', $html);
-        $this->assertStringContainsString('John D.', $html);
-        $this->assertStringContainsString('post=11', $html);
-    }
-
-    /**
-     * The same detail format serves both actions, but a call is placed by a
-     * "caller" while a view is run by a "requester".
-     */
-    #[Test]
-    public function a_call_row_names_the_caller_and_its_result(): void
-    {
-        $html = $this->detailCell($this->entry([
+    // The same detail format serves both actions, but a call is placed by a
+    // "caller" while a view is run by a "requester".
+    it('names the caller of a call row and its result', function () {
+        expect(detailCell(auditRow([
             'action' => AuditLogger::ACTION_CALL,
             'detail' => 'caller:John D.#11;result:No answer',
-        ]));
+        ])))->toContain('Caller:', 'John D.', 'Result: No answer');
+    });
 
-        $this->assertStringContainsString('Caller:', $html);
-        $this->assertStringContainsString('John D.', $html);
-        $this->assertStringContainsString('Result: No answer', $html);
-    }
-
-    #[Test]
-    public function an_unknown_caller_is_named_but_not_linked(): void
-    {
-        $html = $this->detailCell($this->entry([
+    it('names an unknown caller but does not link them', function () {
+        expect(detailCell(auditRow([
             'action' => AuditLogger::ACTION_CALL,
             'detail' => 'caller:unknown;result:Engaged',
-        ]));
+        ])))
+            ->toContain('Caller: unknown', 'Result: Engaged')
+            ->not->toContain('<a');
+    });
 
-        $this->assertStringContainsString('Caller: unknown', $html);
-        $this->assertStringContainsString('Result: Engaged', $html);
-        $this->assertStringNotContainsString('<a', $html);
-    }
+    // get_edit_post_link() returns null for a post the current user cannot
+    // edit; the name still has to render, just without the link.
+    it('renders a caller with no editable post unlinked', function () {
+        Functions\when('get_edit_post_link')->justReturn(null);
 
-    /**
-     * get_edit_post_link() returns null for a post the current user cannot
-     * edit; the name still has to render, just without the link.
-     */
-    #[Test]
-    public function a_caller_with_no_editable_post_renders_unlinked(): void
-    {
-        when('get_edit_post_link')->justReturn(null);
+        expect(detailCell(auditRow(['action' => AuditLogger::ACTION_VIEW, 'detail' => 'caller:John D.#11'])))
+            ->toContain('Requester: John D.')
+            ->not->toContain('<a');
+    });
 
-        $html = $this->detailCell($this->entry([
-            'action' => AuditLogger::ACTION_VIEW,
-            'detail' => 'caller:John D.#11',
-        ]));
+    it('falls back to plain text for a malformed Reach detail', function (string $detail) {
+        expect(detailCell(auditRow(['action' => AuditLogger::ACTION_VIEW, 'detail' => $detail])))
+            ->toBe(htmlspecialchars($detail, ENT_QUOTES | ENT_HTML5, 'UTF-8'));
+    })->with([
+        'no caller prefix'   => ['requester:John D.#11'],
+        'empty'              => [''],
+        'no hash'            => ['caller:John D.'],
+        'empty name'         => ['caller:#11'],
+        'non-numeric id'     => ['caller:John D.#abc'],
+        'zero id'            => ['caller:John D.#0'],
+        'empty result label' => ['caller:John D.#11;result:'],
+    ]);
 
-        $this->assertStringContainsString('Requester: John D.', $html);
-        $this->assertStringNotContainsString('<a', $html);
-    }
+    // An anonymous name containing a '#' is unusual but legal, so the id is
+    // split off the last '#' rather than the first.
+    it('splits a name containing a hash on the last one', function () {
+        expect(detailCell(auditRow(['action' => AuditLogger::ACTION_VIEW, 'detail' => 'caller:John #2 D.#11'])))
+            ->toContain('John #2 D.', 'post=11');
+    });
 
-    #[DataProvider('unparseableDetails')]
-    #[Test]
-    public function a_malformed_reach_detail_falls_back_to_plain_text(string $detail): void
-    {
-        $html = $this->detailCell($this->entry([
-            'action' => AuditLogger::ACTION_VIEW,
-            'detail' => $detail,
-        ]));
+    it('treats a missing detail property as empty', function () {
+        expect(detailCell((object) ['action' => 'update']))->toBe('');
+    });
+});
 
-        $this->assertSame(htmlspecialchars($detail, ENT_QUOTES | ENT_HTML5, 'UTF-8'), $html);
-    }
+// ── title lookup (reflection: private static) ─────────────────────
+describe('the title lookup', function () {
+    // An empty search would otherwise LIKE '%%' and match every post in the
+    // site, so it short-circuits to the no-match sentinel instead.
+    it('matches nothing for an empty search, without querying', function () {
+        expect(postIdsWithTitle(''))->toBe([0])
+            ->and($this->wpdb->queries)->toBe([], 'no query should have been run');
+    });
 
-    /** @return array<string, array{0: string}> */
-    public static function unparseableDetails(): array
-    {
-        return [
-            'no caller prefix'    => ['requester:John D.#11'],
-            'empty'               => [''],
-            'no hash'             => ['caller:John D.'],
-            'empty name'          => ['caller:#11'],
-            'non-numeric id'      => ['caller:John D.#abc'],
-            'zero id'             => ['caller:John D.#0'],
-            'empty result label'  => ['caller:John D.#11;result:'],
-        ];
-    }
-
-    /**
-     * An anonymous name containing a '#' is unusual but legal, so the id is
-     * split off the last '#' rather than the first.
-     */
-    #[Test]
-    public function a_name_containing_a_hash_is_split_on_the_last_one(): void
-    {
-        $html = $this->detailCell($this->entry([
-            'action' => AuditLogger::ACTION_VIEW,
-            'detail' => 'caller:John #2 D.#11',
-        ]));
-
-        $this->assertStringContainsString('John #2 D.', $html);
-        $this->assertStringContainsString('post=11', $html);
-    }
-
-    #[Test]
-    public function a_missing_detail_property_is_treated_as_empty(): void
-    {
-        $this->assertSame('', $this->detailCell((object) ['action' => 'update']));
-    }
-
-    // ── title lookup (reflection: private static) ─────────────────────
-    /**
-     * An empty search would otherwise LIKE '%%' and match every post in the
-     * site, so it short-circuits to the no-match sentinel instead.
-     */
-    #[Test]
-    public function an_empty_title_search_matches_nothing_without_querying(): void
-    {
-        /** @var int[] $ids */
-        $ids = (new ReflectionMethod(AuditLogAdmin::class, 'findPostIdsByTitle'))
-            ->invoke(null, '');
-
-        $this->assertSame([0], $ids);
-        $this->assertSame([], $this->wpdb->queries, 'no query should have been run');
-    }
-
-    #[Test]
-    public function a_title_search_excludes_revisions_and_trashed_posts(): void
-    {
+    it('excludes revisions and trashed posts', function () {
         $this->wpdb->col = ['5'];
 
-        /** @var int[] $ids */
-        $ids = (new ReflectionMethod(AuditLogAdmin::class, 'findPostIdsByTitle'))
-            ->invoke(null, 'John');
-
-        $this->assertSame([5], $ids);
-        $this->assertStringContainsString("post_type NOT IN ('revision', 'nav_menu_item')", $this->wpdb->lastQuery());
-        $this->assertStringContainsString("post_status NOT IN ('auto-draft', 'trash')", $this->wpdb->lastQuery());
-        $this->assertStringContainsString('LIMIT 200', $this->wpdb->lastQuery());
-    }
-}
+        expect(postIdsWithTitle('John'))->toBe([5])
+            ->and($this->wpdb->lastQuery())->toContain(
+                "post_type NOT IN ('revision', 'nav_menu_item')",
+                "post_status NOT IN ('auto-draft', 'trash')",
+                'LIMIT 200',
+            );
+    });
+});

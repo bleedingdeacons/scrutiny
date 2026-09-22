@@ -4,8 +4,6 @@ declare(strict_types=1);
 
 namespace Scrutiny\Tests\Unit\Rest;
 
-use PHPUnit\Framework\Attributes\Test;
-use PHPUnit\Framework\TestCase;
 use Scrutiny\Privacy\PrivacyPolicyFormatter;
 use Scrutiny\Rest\PrivacyPolicyController;
 use WP_Post;
@@ -14,122 +12,130 @@ use WP_REST_Request;
 require_once __DIR__ . '/StubPrivacyPolicy.php';
 require_once __DIR__ . '/GlobalsBackedPrivacyPolicyRepository.php';
 
-/**
+/*
  * Tests for the PrivacyPolicyController.
  *
- * The controller is the read-only REST surface for the privacy-policy
- * CPT. The post type and its ACF fields are stubbed via the bootstrap
- * (see tests/bootstrap.php for get_field / get_post / get_posts), so
- * every test can drive the full route callback path without a WP
- * harness.
+ * The controller is the read-only REST surface for the privacy-policy CPT.
+ * The post type and its ACF fields are stubbed via the bootstrap (see
+ * tests/bootstrap.php for get_field / get_post / get_posts), so every test can
+ * drive the full route callback path without a WP harness.
  *
- * Coverage focuses on the contract guarantees promised in the
- * controller's class docblock: the response shape, the active-only
- * filtering, the 404 behaviours, and the route registration.
+ * Coverage focuses on the contract guarantees promised in the controller's
+ * class docblock: the response shape, the active-only filtering, the 404
+ * behaviours, and the route registration.
  */
-class PrivacyPolicyControllerTest extends TestCase
+
+/**
+ * Build a controller wired to the globals-backed repository stub. Every test
+ * resolves through this helper so the collaborator stays in one place — if the
+ * controller's dependencies change again, only this function needs to update.
+ */
+function policyController(): PrivacyPolicyController
 {
-    protected function setUp(): void
-    {
-        // Reset every in-memory store so one test's fixtures can't
-        // bleed into the next.
-        $GLOBALS['scrutiny_test_posts']       = [];
-        $GLOBALS['scrutiny_test_acf_fields']  = [];
-        $GLOBALS['scrutiny_test_rest_routes'] = [];
-    }
+    return new PrivacyPolicyController(
+        new GlobalsBackedPrivacyPolicyRepository(),
+        new PrivacyPolicyFormatter()
+    );
+}
 
-    // ──────────────────────────────────────────────
-    //  Route registration
-    // ──────────────────────────────────────────────
+function policyPost(int $id, string $gmt = '2026-01-01 00:00:00'): WP_Post
+{
+    return new WP_Post([
+        'ID'                => $id,
+        'post_title'        => "Policy {$id}",
+        'post_type'         => PrivacyPolicyController::POST_TYPE,
+        'post_status'       => 'publish',
+        'post_modified_gmt' => $gmt,
+        'post_date_gmt'     => $gmt,
+    ]);
+}
 
-    /**
-     * Build a controller wired to the globals-backed repository
-     * stub. Every test resolves through this helper so the
-     * collaborator stays in one place — if the controller's
-     * dependencies change again, only this method needs to update.
-     */
-    private function makeController(): PrivacyPolicyController
-    {
-        return new PrivacyPolicyController(
-            new GlobalsBackedPrivacyPolicyRepository(),
-            new PrivacyPolicyFormatter()
-        );
-    }
+/**
+ * Seed a published policy fixture in both the post store and the ACF store,
+ * with sensible defaults for the fields that tests don't otherwise care about.
+ */
+function seedPolicy(int $id, string $gmt, bool $active = false): void
+{
+    $GLOBALS['scrutiny_test_posts'][$id] = policyPost($id, $gmt);
+    $GLOBALS['scrutiny_test_acf_fields'][$id] = [
+        'gdpr-policy'         => "<p>Policy {$id} body.</p>",
+        'gdpr-policy-version' => "1.{$id}",
+        'gdpr-policy-active'  => $active,
+    ];
+}
 
-    #[Test]
-    public function it_registers_three_read_only_routes_under_the_scrutiny_v1_namespace(): void
-    {
-        // Regression guard: the class docblock and the README both
-        // promise three routes under scrutiny/v1. Anything that drops
-        // or renames one of them deserves to be caught here.
-        $controller = $this->makeController();
-        $controller->registerRoutes();
+beforeEach(function () {
+    // Reset every in-memory store so one test's fixtures can't bleed into the
+    // next.
+    $GLOBALS['scrutiny_test_posts']       = [];
+    $GLOBALS['scrutiny_test_acf_fields']  = [];
+    $GLOBALS['scrutiny_test_rest_routes'] = [];
+});
+
+// ──────────────────────────────────────────────
+//  Route registration
+// ──────────────────────────────────────────────
+describe('route registration', function () {
+    it('registers three read-only routes under the scrutiny/v1 namespace', function () {
+        // Regression guard: the class docblock and the README both promise
+        // three routes under scrutiny/v1. Anything that drops or renames one
+        // of them deserves to be caught here.
+        policyController()->registerRoutes();
 
         $routes = $GLOBALS['scrutiny_test_rest_routes'];
-        $this->assertCount(3, $routes);
 
-        $registered = array_map(
-            fn(array $r) => $r['namespace'] . $r['route'],
-            $routes
-        );
-        $this->assertContains('scrutiny/v1/privacy-policies', $registered);
-        $this->assertContains('scrutiny/v1/privacy-policies/active', $registered);
-        $this->assertContains('scrutiny/v1/privacy-policies/(?P<id>\d+)', $registered);
-    }
+        expect($routes)->toHaveCount(3)
+            ->and(array_map(fn (array $r) => $r['namespace'] . $r['route'], $routes))->toContain(
+                'scrutiny/v1/privacy-policies',
+                'scrutiny/v1/privacy-policies/active',
+                'scrutiny/v1/privacy-policies/(?P<id>\d+)',
+            );
+    });
 
-    #[Test]
-    public function every_route_is_publicly_readable(): void
-    {
-        // Privacy policies are explicitly public — the permission
-        // callback should be a permissive one on every route. If a
-        // future change tightens this without removing the docblock
-        // guarantee, the test will fail.
-        $controller = $this->makeController();
-        $controller->registerRoutes();
+    it('makes every route publicly readable', function () {
+        // Privacy policies are explicitly public — the permission callback
+        // should be a permissive one on every route. If a future change
+        // tightens this without removing the docblock guarantee, the test
+        // will fail.
+        policyController()->registerRoutes();
 
         foreach ($GLOBALS['scrutiny_test_rest_routes'] as $route) {
-            $this->assertSame('GET', $route['args']['methods']);
-            $this->assertSame('__return_true', $route['args']['permission_callback']);
+            expect($route['args']['methods'])->toBe('GET')
+                ->and($route['args']['permission_callback'])->toBe('__return_true');
         }
-    }
+    });
 
-    #[Test]
-    public function active_route_is_registered_before_the_id_capture(): void
-    {
-        // WordPress matches routes in registration order. The literal
-        // /active segment must come before /(?P<id>\d+) so a request
-        // to …/privacy-policies/active hits the active handler rather
-        // than failing the numeric regex first. Guarding the order
-        // here prevents an accidental reshuffle from breaking the
-        // route silently.
-        $controller = $this->makeController();
-        $controller->registerRoutes();
+    it('registers the active route before the id capture', function () {
+        // WordPress matches routes in registration order. The literal /active
+        // segment must come before /(?P<id>\d+) so a request to
+        // …/privacy-policies/active hits the active handler rather than
+        // failing the numeric regex first. Guarding the order here prevents
+        // an accidental reshuffle from breaking the route silently.
+        policyController()->registerRoutes();
 
-        $order = array_map(fn(array $r) => $r['route'], $GLOBALS['scrutiny_test_rest_routes']);
+        $order = array_map(fn (array $r) => $r['route'], $GLOBALS['scrutiny_test_rest_routes']);
         $activeIndex = array_search('/privacy-policies/active', $order, true);
         $idIndex     = array_search('/privacy-policies/(?P<id>\d+)', $order, true);
 
-        $this->assertNotFalse($activeIndex);
-        $this->assertNotFalse($idIndex);
-        $this->assertLessThan($idIndex, $activeIndex);
-    }
+        expect($activeIndex)->not->toBeFalse()
+            ->and($idIndex)->not->toBeFalse()
+            ->and($activeIndex)->toBeLessThan($idIndex);
+    });
+});
 
-    // ──────────────────────────────────────────────
-    //  Response shape (formatPolicy)
-    // ──────────────────────────────────────────────
-    #[Test]
-    public function it_projects_a_policy_into_the_documented_response_shape(): void
-    {
-        // Pin the exact response shape the controller's docblock
-        // promises to consumers. Field names are converted from the
-        // ACF kebab-case convention to snake_case, the redundant
-        // "gdpr-" prefix is stripped, and the modified timestamp is
-        // ISO 8601.
+// ──────────────────────────────────────────────
+//  Response shape (formatPolicy)
+// ──────────────────────────────────────────────
+describe('the response shape', function () {
+    it('projects a policy into the documented response shape', function () {
+        // Pin the exact response shape the controller's docblock promises to
+        // consumers. Field names are converted from the ACF kebab-case
+        // convention to snake_case, the redundant "gdpr-" prefix is stripped,
+        // and the modified timestamp is ISO 8601.
         //
-        // The formatter now reads from a PrivacyPolicy domain object
-        // rather than a WP_Post + ACF map, but the projection it
-        // emits is identical — that's the contract the REST clients
-        // already depend on.
+        // The formatter now reads from a PrivacyPolicy domain object rather
+        // than a WP_Post + ACF map, but the projection it emits is identical —
+        // that's the contract the REST clients already depend on.
         $policy = new StubPrivacyPolicy(
             new WP_Post([
                 'ID'                => 42,
@@ -146,270 +152,178 @@ class PrivacyPolicyControllerTest extends TestCase
             ],
         );
 
-        $shape = $this->makeController()->formatPolicy($policy);
-
-        $this->assertSame([
+        expect(policyController()->formatPolicy($policy))->toBe([
             'id'       => 42,
             'title'    => 'Privacy Policy',
             'version'  => '2.1',
             'active'   => true,
             'policy'   => '<p>The full policy text.</p>',
             'modified' => '2026-04-15T09:30:00+00:00',
-        ], $shape);
-    }
+        ]);
+    });
 
-    #[Test]
-    public function active_field_is_coerced_to_a_strict_boolean(): void
-    {
-        // ACF's true_false field can return 1, 0, '1', '' depending
-        // on the storage backend version. The response must always
-        // be a real boolean so JSON consumers can rely on
-        // typeof === "boolean". The coercion now lives on the
-        // PrivacyPolicy implementation rather than in the formatter,
-        // but the contract the controller exposes is unchanged.
-        $post = $this->makePost(7);
+    // ACF's true_false field can return 1, 0, '1', '' depending on the
+    // storage backend version. The response must always be a real boolean so
+    // JSON consumers can rely on typeof === "boolean". The coercion now lives
+    // on the PrivacyPolicy implementation rather than in the formatter, but
+    // the contract the controller exposes is unchanged.
+    it('coerces the active field to a strict boolean', function (mixed $stored, bool $expected) {
+        $policy = new StubPrivacyPolicy(policyPost(7), ['gdpr-policy-active' => $stored]);
 
-        foreach ([1, '1', true, 'yes'] as $truthy) {
-            $policy = new StubPrivacyPolicy($post, ['gdpr-policy-active' => $truthy]);
-            $shape  = $this->makeController()->formatPolicy($policy);
-            $this->assertTrue($shape['active'], 'Expected true for ' . var_export($truthy, true));
-        }
+        expect(policyController()->formatPolicy($policy)['active'])->toBe($expected);
+    })->with([
+        'integer 1'    => [1, true],
+        "string '1'"   => ['1', true],
+        'true'         => [true, true],
+        "string 'yes'" => ['yes', true],
+        'integer 0'    => [0, false],
+        "string '0'"   => ['0', false],
+        'false'        => [false, false],
+        'empty string' => ['', false],
+    ]);
 
-        foreach ([0, '0', false, ''] as $falsy) {
-            $policy = new StubPrivacyPolicy($post, ['gdpr-policy-active' => $falsy]);
-            $shape  = $this->makeController()->formatPolicy($policy);
-            $this->assertFalse($shape['active'], 'Expected false for ' . var_export($falsy, true));
-        }
-    }
+    it('turns missing ACF fields into safe empty values', function () {
+        // A draft policy or a buggy ACF state must not crash the formatter.
+        // Every absent field reads back as '' (or false for the boolean), so
+        // consumers see a well-formed payload they can render through.
+        expect(policyController()->formatPolicy(new StubPrivacyPolicy(policyPost(99), [])))
+            ->policy->toBe('')
+            ->version->toBe('')
+            ->active->toBeFalse();
+    });
+});
 
-    #[Test]
-    public function missing_acf_fields_become_safe_empty_strings(): void
-    {
-        // A draft policy or a buggy ACF state must not crash the
-        // formatter. Every absent field reads back as '' (or false
-        // for the boolean), so consumers see a well-formed payload
-        // they can render through.
-        $policy = new StubPrivacyPolicy($this->makePost(99), []);
+// ──────────────────────────────────────────────
+//  GET /privacy-policies (collection)
+// ──────────────────────────────────────────────
+describe('GET /privacy-policies', function () {
+    it('returns every published policy', function () {
+        seedPolicy(1, '2026-01-01 00:00:00', active: false);
+        seedPolicy(2, '2026-02-01 00:00:00', active: true);
+        seedPolicy(3, '2026-03-01 00:00:00', active: false);
 
-        $shape = $this->makeController()->formatPolicy($policy);
+        $response = policyController()->getCollection(new WP_REST_Request());
 
-        $this->assertSame('', $shape['policy']);
-        $this->assertSame('', $shape['version']);
-        $this->assertFalse($shape['active']);
-    }
+        expect($response->get_status())->toBe(200)
+            ->and($response->get_data())->toBeArray()->toHaveCount(3);
+    });
 
-    // ──────────────────────────────────────────────
-    //  GET /privacy-policies (collection)
-    // ──────────────────────────────────────────────
-    #[Test]
-    public function the_collection_route_returns_every_published_policy(): void
-    {
-        $this->seedPolicy(1, '2026-01-01 00:00:00', active: false);
-        $this->seedPolicy(2, '2026-02-01 00:00:00', active: true);
-        $this->seedPolicy(3, '2026-03-01 00:00:00', active: false);
+    it('orders the policies newest first', function () {
+        // Documented contract: the collection comes back newest-first so a
+        // frontend can render "policy history" without an extra sort pass.
+        seedPolicy(1, '2026-01-01 00:00:00');
+        seedPolicy(2, '2026-03-01 00:00:00');
+        seedPolicy(3, '2026-02-01 00:00:00');
 
-        $response = $this->makeController()
-            ->getCollection(new WP_REST_Request());
+        $items = policyController()->getCollection(new WP_REST_Request())->get_data();
 
-        $this->assertSame(200, $response->get_status());
-        $items = $response->get_data();
-        $this->assertIsArray($items);
-        $this->assertCount(3, $items);
-    }
+        expect(array_map(fn (array $i) => $i['id'], $items))->toBe([2, 3, 1]);
+    });
 
-    #[Test]
-    public function the_collection_route_orders_newest_first(): void
-    {
-        // Documented contract: the collection comes back newest-first
-        // so a frontend can render "policy history" without an extra
-        // sort pass.
-        $this->seedPolicy(1, '2026-01-01 00:00:00');
-        $this->seedPolicy(2, '2026-03-01 00:00:00');
-        $this->seedPolicy(3, '2026-02-01 00:00:00');
+    it('filters to only the active policies with the active query param', function () {
+        seedPolicy(1, '2026-01-01 00:00:00', active: false);
+        seedPolicy(2, '2026-02-01 00:00:00', active: true);
+        seedPolicy(3, '2026-03-01 00:00:00', active: false);
 
-        $items = $this->makeController()
-            ->getCollection(new WP_REST_Request())
-            ->get_data();
+        $items = policyController()->getCollection(new WP_REST_Request(['active' => true]))->get_data();
 
-        $this->assertSame([2, 3, 1], array_map(fn(array $i) => $i['id'], $items));
-    }
+        expect($items)->toHaveCount(1)
+            ->and($items[0]['id'])->toBe(2);
+    });
 
-    #[Test]
-    public function active_query_param_filters_to_only_the_active_policies(): void
-    {
-        $this->seedPolicy(1, '2026-01-01 00:00:00', active: false);
-        $this->seedPolicy(2, '2026-02-01 00:00:00', active: true);
-        $this->seedPolicy(3, '2026-03-01 00:00:00', active: false);
+    it('returns an empty array when no policies exist', function () {
+        // No 404 here — an empty array is a perfectly valid answer for "list
+        // everything"; only the /active convenience route 404s on absence.
+        $response = policyController()->getCollection(new WP_REST_Request());
 
-        $request = new WP_REST_Request(['active' => true]);
-        $items = $this->makeController()
-            ->getCollection($request)
-            ->get_data();
+        expect($response->get_status())->toBe(200)
+            ->and($response->get_data())->toBe([]);
+    });
+});
 
-        $this->assertCount(1, $items);
-        $this->assertSame(2, $items[0]['id']);
-    }
+// ──────────────────────────────────────────────
+//  GET /privacy-policies/active
+// ──────────────────────────────────────────────
+describe('GET /privacy-policies/active', function () {
+    it('returns the single active policy', function () {
+        seedPolicy(1, '2026-01-01 00:00:00', active: false);
+        seedPolicy(2, '2026-02-01 00:00:00', active: true);
+        seedPolicy(3, '2026-03-01 00:00:00', active: false);
 
-    #[Test]
-    public function the_collection_route_returns_an_empty_array_when_no_policies_exist(): void
-    {
-        // No 404 here — an empty array is a perfectly valid answer
-        // for "list everything"; only the /active convenience route
-        // 404s on absence.
-        $response = $this->makeController()
-            ->getCollection(new WP_REST_Request());
+        $response = policyController()->getActive();
 
-        $this->assertSame(200, $response->get_status());
-        $this->assertSame([], $response->get_data());
-    }
+        expect($response->get_status())->toBe(200)
+            ->and($response->get_data()['id'])->toBe(2);
+    });
 
-    // ──────────────────────────────────────────────
-    //  GET /privacy-policies/active
-    // ──────────────────────────────────────────────
-    #[Test]
-    public function the_active_route_returns_the_single_active_policy(): void
-    {
-        $this->seedPolicy(1, '2026-01-01 00:00:00', active: false);
-        $this->seedPolicy(2, '2026-02-01 00:00:00', active: true);
-        $this->seedPolicy(3, '2026-03-01 00:00:00', active: false);
+    it('picks the newest when several are active', function () {
+        // The schema doesn't enforce a single-active invariant — if two posts
+        // are both flagged active (a config error), the newer one wins. This
+        // pins the documented tiebreaker.
+        seedPolicy(1, '2026-01-01 00:00:00', active: true);
+        seedPolicy(2, '2026-02-01 00:00:00', active: true);
+        seedPolicy(3, '2026-03-01 00:00:00', active: true);
 
-        $response = $this->makeController()->getActive();
+        expect(policyController()->getActive()->get_data()['id'])->toBe(3);
+    });
 
-        $this->assertSame(200, $response->get_status());
-        $this->assertSame(2, $response->get_data()['id']);
-    }
+    it('returns 404 when no policy is active', function () {
+        seedPolicy(1, '2026-01-01 00:00:00', active: false);
 
-    #[Test]
-    public function the_active_route_picks_the_newest_when_multiple_are_active(): void
-    {
-        // The schema doesn't enforce a single-active invariant — if
-        // two posts are both flagged active (a config error), the
-        // newer one wins. This pins the documented tiebreaker.
-        $this->seedPolicy(1, '2026-01-01 00:00:00', active: true);
-        $this->seedPolicy(2, '2026-02-01 00:00:00', active: true);
-        $this->seedPolicy(3, '2026-03-01 00:00:00', active: true);
+        $response = policyController()->getActive();
 
-        $response = $this->makeController()->getActive();
+        expect($response->get_status())->toBe(404)
+            ->and($response->get_data()['code'])->toBe('scrutiny_no_active_policy');
+    });
 
-        $this->assertSame(3, $response->get_data()['id']);
-    }
+    it('returns 404 when no policies exist at all', function () {
+        expect(policyController()->getActive()->get_status())->toBe(404);
+    });
+});
 
-    #[Test]
-    public function the_active_route_returns_404_when_no_policy_is_active(): void
-    {
-        $this->seedPolicy(1, '2026-01-01 00:00:00', active: false);
+// ──────────────────────────────────────────────
+//  GET /privacy-policies/{id}
+// ──────────────────────────────────────────────
+describe('GET /privacy-policies/{id}', function () {
+    it('returns the named policy', function () {
+        seedPolicy(7, '2026-02-01 00:00:00', active: true);
 
-        $response = $this->makeController()->getActive();
+        $response = policyController()->getItem(new WP_REST_Request(['id' => 7]));
 
-        $this->assertSame(404, $response->get_status());
-        $this->assertSame('scrutiny_no_active_policy', $response->get_data()['code']);
-    }
+        expect($response->get_status())->toBe(200)
+            ->and($response->get_data()['id'])->toBe(7);
+    });
 
-    #[Test]
-    public function the_active_route_returns_404_when_no_policies_exist_at_all(): void
-    {
-        $response = $this->makeController()->getActive();
+    it('returns 404 for a missing post', function () {
+        $response = policyController()->getItem(new WP_REST_Request(['id' => 999]));
 
-        $this->assertSame(404, $response->get_status());
-    }
+        expect($response->get_status())->toBe(404)
+            ->and($response->get_data()['code'])->toBe('scrutiny_policy_not_found');
+    });
 
-    // ──────────────────────────────────────────────
-    //  GET /privacy-policies/{id}
-    // ──────────────────────────────────────────────
-    #[Test]
-    public function the_item_route_returns_the_named_policy(): void
-    {
-        $this->seedPolicy(7, '2026-02-01 00:00:00', active: true);
-
-        $response = $this->makeController()
-            ->getItem(new WP_REST_Request(['id' => 7]));
-
-        $this->assertSame(200, $response->get_status());
-        $this->assertSame(7, $response->get_data()['id']);
-    }
-
-    #[Test]
-    public function the_item_route_returns_404_for_a_missing_post(): void
-    {
-        $response = $this->makeController()
-            ->getItem(new WP_REST_Request(['id' => 999]));
-
-        $this->assertSame(404, $response->get_status());
-        $this->assertSame('scrutiny_policy_not_found', $response->get_data()['code']);
-    }
-
-    #[Test]
-    public function the_item_route_returns_404_for_the_wrong_post_type(): void
-    {
-        // Defence in depth: even if a caller knows a real post ID
-        // for some other CPT, the endpoint must refuse to leak it
-        // through this surface.
+    it('returns 404 for the wrong post type', function () {
+        // Defence in depth: even if a caller knows a real post ID for some
+        // other CPT, the endpoint must refuse to leak it through this surface.
         $GLOBALS['scrutiny_test_posts'][50] = new WP_Post([
             'ID'          => 50,
             'post_type'   => 'page',
             'post_status' => 'publish',
         ]);
 
-        $response = $this->makeController()
-            ->getItem(new WP_REST_Request(['id' => 50]));
+        expect(policyController()->getItem(new WP_REST_Request(['id' => 50]))->get_status())->toBe(404);
+    });
 
-        $this->assertSame(404, $response->get_status());
-    }
-
-    #[Test]
-    public function the_item_route_returns_404_for_unpublished_policies(): void
-    {
-        // A draft or trashed policy must never escape via the public
-        // endpoint — privacy text in flight is exactly the kind of
-        // thing that shouldn't be readable until the editor hits
-        // publish.
-        foreach (['draft', 'trash', 'private', 'pending'] as $status) {
-            $GLOBALS['scrutiny_test_posts'] = [];
-            $GLOBALS['scrutiny_test_posts'][12] = new WP_Post([
-                'ID'          => 12,
-                'post_type'   => PrivacyPolicyController::POST_TYPE,
-                'post_status' => $status,
-            ]);
-
-            $response = $this->makeController()
-                ->getItem(new WP_REST_Request(['id' => 12]));
-
-            $this->assertSame(
-                404,
-                $response->get_status(),
-                "Expected 404 for post_status={$status}"
-            );
-        }
-    }
-
-    // ──────────────────────────────────────────────
-    //  Helpers
-    // ──────────────────────────────────────────────
-
-    private function makePost(int $id, string $gmt = '2026-01-01 00:00:00'): WP_Post
-    {
-        return new WP_Post([
-            'ID'                => $id,
-            'post_title'        => "Policy {$id}",
-            'post_type'         => PrivacyPolicyController::POST_TYPE,
-            'post_status'       => 'publish',
-            'post_modified_gmt' => $gmt,
-            'post_date_gmt'     => $gmt,
+    // A draft or trashed policy must never escape via the public endpoint —
+    // privacy text in flight is exactly the kind of thing that shouldn't be
+    // readable until the editor hits publish.
+    it('returns 404 for an unpublished policy', function (string $status) {
+        $GLOBALS['scrutiny_test_posts'][12] = new WP_Post([
+            'ID'          => 12,
+            'post_type'   => PrivacyPolicyController::POST_TYPE,
+            'post_status' => $status,
         ]);
-    }
 
-    /**
-     * Seed a published policy fixture in both the post store and
-     * the ACF store, with sensible defaults for the fields that
-     * tests don't otherwise care about.
-     */
-    private function seedPolicy(int $id, string $gmt, bool $active = false): void
-    {
-        $GLOBALS['scrutiny_test_posts'][$id] = $this->makePost($id, $gmt);
-        $GLOBALS['scrutiny_test_acf_fields'][$id] = [
-            'gdpr-policy'         => "<p>Policy {$id} body.</p>",
-            'gdpr-policy-version' => "1.{$id}",
-            'gdpr-policy-active'  => $active,
-        ];
-    }
-}
+        expect(policyController()->getItem(new WP_REST_Request(['id' => 12]))->get_status())
+            ->toBe(404, "Expected 404 for post_status={$status}");
+    })->with(['draft', 'trash', 'private', 'pending']);
+});

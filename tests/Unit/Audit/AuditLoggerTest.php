@@ -4,117 +4,102 @@ declare(strict_types=1);
 
 namespace Scrutiny\Tests\Unit\Audit;
 
-use PHPUnit\Framework\Attributes\Test;
-use function Brain\Monkey\Functions\when;
 use BleedingDeacons\WpMocks\WpState;
+use Brain\Monkey\Functions;
 use Mockery;
 use Scrutiny\Audit\GdprAuditLogger;
 use Scrutiny\Audit\Interfaces\AuditLogger;
 use Scrutiny\Audit\Interfaces\AuditRepository;
 use Scrutiny\Privacy\PersonalDataFields;
-use Scrutiny\Tests\TestCase;
+
+/*
+ * Tests for GdprAuditLogger.
+ */
 
 /**
- * Tests for GdprAuditLogger
+ * Create a GdprAuditLogger without WP dependencies by using reflection.
  */
-class AuditLoggerTest extends TestCase
+function loggerOver(AuditRepository $repository): GdprAuditLogger
 {
-    /**
-     * Create an GdprAuditLogger without WP dependencies by using reflection
-     */
-    private function createLogger(AuditRepository $repository): GdprAuditLogger
-    {
-        $reflection = new \ReflectionClass(GdprAuditLogger::class);
-        $instance = $reflection->newInstanceWithoutConstructor();
+    $reflection = new \ReflectionClass(GdprAuditLogger::class);
+    $instance = $reflection->newInstanceWithoutConstructor();
 
-        // No setAccessible() call: a no-op since PHP 8.1 — this plugin's
-        // floor — and deprecated as of 8.5.
-        $reflection->getProperty('repository')->setValue($instance, $repository);
+    // No setAccessible() call: a no-op since PHP 8.1 — this plugin's floor —
+    // and deprecated as of 8.5.
+    $reflection->getProperty('repository')->setValue($instance, $repository);
 
-        return $instance;
-    }
-
-    #[Test]
-    public function log_batch_calls_log_for_each_field(): void
-    {
-        // Previously this test could not call logBatch() at all — log() reaches
-        // for wp_get_current_user() and get_current_user_id() — so it set a
-        // times(3) expectation it never met and asserted something unrelated.
-        // Both are available now, so it exercises the real delegation.
-        when('wp_get_current_user')->justReturn($this->currentUser('auditor'));
-        WpState::$currentUserId = 7;
-
-        $fields = [
-            PersonalDataFields::PERSONAL_EMAIL,
-            PersonalDataFields::MOBILE_NUMBER,
-        ];
-
-        $inserted = [];
-        $repository = Mockery::mock(AuditRepository::class);
-        $repository->shouldReceive('insert')
-            ->times(count($fields))
-            ->andReturnUsing(function (array $row) use (&$inserted): int {
-                $inserted[] = $row;
-                return 1;
-            });
-
-        $logger = $this->createLogger($repository);
-
-        $logger->logBatch(
-            AuditLogger::ACTION_VIEW,
-            AuditLogger::ENTITY_MEMBER,
-            42,
-            $fields,
-            'Bulk export'
-        );
-
-        $this->assertSame($fields, array_column($inserted, 'field_name'));
-        $this->assertSame([42, 42], array_column($inserted, 'entity_id'));
-        $this->assertSame(['auditor', 'auditor'], array_column($inserted, 'user_login'));
-    }
-
-    #[Test]
-    public function personal_data_fields_are_correctly_defined(): void
-    {
-        // Hyphens, not underscores. These values are the audit log's field_name
-        // column and the keys of PersonalDataFields::LABELS, and both have used
-        // the hyphenated form throughout.
-        $this->assertSame('personal-email', PersonalDataFields::PERSONAL_EMAIL);
-        $this->assertSame('mobile-number', PersonalDataFields::MOBILE_NUMBER);
-        $this->assertSame('landline-number', PersonalDataFields::LANDLINE_NUMBER);
-    }
-
-    #[Test]
-    public function all_fields_constant_contains_all_fields(): void
-    {
-        $this->assertContains(PersonalDataFields::PERSONAL_EMAIL, PersonalDataFields::ALL_FIELDS);
-        $this->assertContains(PersonalDataFields::MOBILE_NUMBER, PersonalDataFields::ALL_FIELDS);
-        $this->assertContains(PersonalDataFields::LANDLINE_NUMBER, PersonalDataFields::ALL_FIELDS);
-        $this->assertCount(3, PersonalDataFields::ALL_FIELDS);
-    }
-
-    #[Test]
-    public function labels_exist_for_all_fields(): void
-    {
-        foreach (PersonalDataFields::ALL_FIELDS as $field) {
-            $this->assertArrayHasKey($field, PersonalDataFields::LABELS);
-            $this->assertNotEmpty(PersonalDataFields::LABELS[$field]);
-        }
-    }
-
-    /**
-     * A current-user stand-in with the given login.
-     *
-     * wp-mocks types wp_get_current_user() as returning WP_User, and Patchwork
-     * keeps a function's original signature when Brain Monkey redefines it, so
-     * an ad-hoc stdClass is a TypeError now — which is the more faithful
-     * behaviour anyway: real WordPress always hands back a WP_User.
-     */
-    private function currentUser(string $login): \WP_User
-    {
-        $user = new \WP_User();
-        $user->user_login = $login;
-
-        return $user;
-    }
+    return $instance;
 }
+
+/**
+ * A current-user stand-in with the given login.
+ *
+ * wp-mocks types wp_get_current_user() as returning WP_User, and Patchwork
+ * keeps a function's original signature when Brain Monkey redefines it, so an
+ * ad-hoc stdClass is a TypeError now — which is the more faithful behaviour
+ * anyway: real WordPress always hands back a WP_User.
+ */
+function userWithLogin(string $login): \WP_User
+{
+    $user = new \WP_User();
+    $user->user_login = $login;
+
+    return $user;
+}
+
+it('calls log for each field in a batch', function () {
+    // Previously this test could not call logBatch() at all — log() reaches
+    // for wp_get_current_user() and get_current_user_id() — so it set a
+    // times(3) expectation it never met and asserted something unrelated.
+    // Both are available now, so it exercises the real delegation.
+    Functions\when('wp_get_current_user')->justReturn(userWithLogin('auditor'));
+    WpState::$currentUserId = 7;
+
+    $fields = [
+        PersonalDataFields::PERSONAL_EMAIL,
+        PersonalDataFields::MOBILE_NUMBER,
+    ];
+
+    $inserted = [];
+    $repository = Mockery::mock(AuditRepository::class);
+    $repository->shouldReceive('insert')
+        ->times(count($fields))
+        ->andReturnUsing(function (array $row) use (&$inserted): int {
+            $inserted[] = $row;
+            return 1;
+        });
+
+    loggerOver($repository)->logBatch(
+        AuditLogger::ACTION_VIEW,
+        AuditLogger::ENTITY_MEMBER,
+        42,
+        $fields,
+        'Bulk export'
+    );
+
+    expect(array_column($inserted, 'field_name'))->toBe($fields)
+        ->and(array_column($inserted, 'entity_id'))->toBe([42, 42])
+        ->and(array_column($inserted, 'user_login'))->toBe(['auditor', 'auditor']);
+});
+
+it('defines the personal data fields correctly', function () {
+    // Hyphens, not underscores. These values are the audit log's field_name
+    // column and the keys of PersonalDataFields::LABELS, and both have used
+    // the hyphenated form throughout.
+    expect(PersonalDataFields::PERSONAL_EMAIL)->toBe('personal-email')
+        ->and(PersonalDataFields::MOBILE_NUMBER)->toBe('mobile-number')
+        ->and(PersonalDataFields::LANDLINE_NUMBER)->toBe('landline-number');
+});
+
+it('lists every field in ALL_FIELDS', function () {
+    expect(PersonalDataFields::ALL_FIELDS)
+        ->toContain(PersonalDataFields::PERSONAL_EMAIL, PersonalDataFields::MOBILE_NUMBER, PersonalDataFields::LANDLINE_NUMBER)
+        ->toHaveCount(3);
+});
+
+it('has a label for every field', function () {
+    foreach (PersonalDataFields::ALL_FIELDS as $field) {
+        expect(PersonalDataFields::LABELS)->toHaveKey($field)
+            ->and(PersonalDataFields::LABELS[$field])->not->toBeEmpty();
+    }
+});

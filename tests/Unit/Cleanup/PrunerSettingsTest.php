@@ -4,271 +4,196 @@ declare(strict_types=1);
 
 namespace Scrutiny\Tests\Unit\Cleanup;
 
-use PHPUnit\Framework\Attributes\Test;
-use PHPUnit\Framework\TestCase;
 use Scrutiny\Cleanup\PrunerSettings;
 
-/**
+/*
  * Tests for PrunerSettings.
  *
  * The class is a thin wrapper over get_option / update_option, but the
- * clamping behaviour and default values matter — a misconfigured
- * wp_options row must not be allowed to pull pruner cutoffs into the
- * future. These tests exercise the wrapper against the in-memory
- * option store stubbed in the bootstrap.
+ * clamping behaviour and default values matter — a misconfigured wp_options
+ * row must not be allowed to pull pruner cutoffs into the future. These tests
+ * exercise the wrapper against the in-memory option store stubbed in the
+ * bootstrap.
  */
-class PrunerSettingsTest extends TestCase
-{
-    protected function setUp(): void
-    {
-        // Reset the in-memory option store before every test so one
-        // test's writes can't leak into the next.
-        $GLOBALS['scrutiny_test_options'] = [];
-    }
 
-    #[Test]
-    public function it_returns_the_documented_defaults_when_no_value_is_stored(): void
-    {
-        $settings = new PrunerSettings();
+beforeEach(function () {
+    // Reset the in-memory option store before every test so one test's writes
+    // can't leak into the next.
+    $GLOBALS['scrutiny_test_options'] = [];
 
-        $this->assertSame(
-            PrunerSettings::DEFAULT_ROTATION_GRACE_MONTHS,
-            $settings->getRotationGraceMonths()
-        );
-        $this->assertSame(
-            PrunerSettings::DEFAULT_INACTIVITY_MONTHS,
-            $settings->getInactivityMonths()
-        );
-    }
+    $this->settings = new PrunerSettings();
+});
 
-    #[Test]
-    public function it_round_trips_a_saved_rotation_grace_value(): void
-    {
-        $settings = new PrunerSettings();
+describe('grace and inactivity months', function () {
+    it('returns the documented defaults when no value is stored', function () {
+        expect($this->settings->getRotationGraceMonths())->toBe(PrunerSettings::DEFAULT_ROTATION_GRACE_MONTHS)
+            ->and($this->settings->getInactivityMonths())->toBe(PrunerSettings::DEFAULT_INACTIVITY_MONTHS);
+    });
 
-        $settings->setRotationGraceMonths(6);
+    it('round-trips a saved rotation grace value', function () {
+        $this->settings->setRotationGraceMonths(6);
 
-        $this->assertSame(6, $settings->getRotationGraceMonths());
-    }
+        expect($this->settings->getRotationGraceMonths())->toBe(6);
+    });
 
-    #[Test]
-    public function it_round_trips_a_saved_inactivity_value(): void
-    {
-        $settings = new PrunerSettings();
+    it('round-trips a saved inactivity value', function () {
+        $this->settings->setInactivityMonths(18);
 
-        $settings->setInactivityMonths(18);
+        expect($this->settings->getInactivityMonths())->toBe(18);
+    });
 
-        $this->assertSame(18, $settings->getInactivityMonths());
-    }
+    it('clamps negative values to zero in the setters', function () {
+        // A negative grace period would slide the cutoff into the future and
+        // start trashing currently-valid members. The setter must reject this
+        // even if the admin form somehow bypassed its own validation.
+        $this->settings->setRotationGraceMonths(-5);
+        $this->settings->setInactivityMonths(-12);
 
-    #[Test]
-    public function setters_clamp_negative_values_to_zero(): void
-    {
-        // A negative grace period would slide the cutoff into the
-        // future and start trashing currently-valid members. The
-        // setter must reject this even if the admin form somehow
-        // bypassed its own validation.
-        $settings = new PrunerSettings();
+        expect($this->settings->getRotationGraceMonths())->toBe(0)
+            ->and($this->settings->getInactivityMonths())->toBe(0);
+    });
 
-        $settings->setRotationGraceMonths(-5);
-        $settings->setInactivityMonths(-12);
-
-        $this->assertSame(0, $settings->getRotationGraceMonths());
-        $this->assertSame(0, $settings->getInactivityMonths());
-    }
-
-    #[Test]
-    public function getters_clamp_negative_stored_values_to_zero(): void
-    {
-        // Defence in depth: a negative integer in wp_options written
-        // by hand or by an older buggy version of the code must not
-        // be returned as-is. The getter clamps too, so the pruner
-        // can trust whatever PrunerSettings hands it.
+    it('clamps negative stored values to zero in the getters', function () {
+        // Defence in depth: a negative integer in wp_options written by hand
+        // or by an older buggy version of the code must not be returned
+        // as-is. The getter clamps too, so the pruner can trust whatever
+        // PrunerSettings hands it.
         $GLOBALS['scrutiny_test_options'][PrunerSettings::OPTION_ROTATION_GRACE_MONTHS] = -3;
         $GLOBALS['scrutiny_test_options'][PrunerSettings::OPTION_INACTIVITY_MONTHS] = -7;
 
         $settings = new PrunerSettings();
 
-        $this->assertSame(0, $settings->getRotationGraceMonths());
-        $this->assertSame(0, $settings->getInactivityMonths());
-    }
+        expect($settings->getRotationGraceMonths())->toBe(0)
+            ->and($settings->getInactivityMonths())->toBe(0);
+    });
 
-    #[Test]
-    public function getters_coerce_string_values_into_integers(): void
-    {
-        // WordPress sometimes stores option values as strings (e.g.
-        // when written via the Settings API). The getter must not
-        // hand a string to a downstream caller that expects int.
+    it('coerces stored string values into integers', function () {
+        // WordPress sometimes stores option values as strings (e.g. when
+        // written via the Settings API). The getter must not hand a string to
+        // a downstream caller that expects int.
         $GLOBALS['scrutiny_test_options'][PrunerSettings::OPTION_ROTATION_GRACE_MONTHS] = '4';
         $GLOBALS['scrutiny_test_options'][PrunerSettings::OPTION_INACTIVITY_MONTHS] = '24';
 
         $settings = new PrunerSettings();
 
-        $this->assertSame(4, $settings->getRotationGraceMonths());
-        $this->assertSame(24, $settings->getInactivityMonths());
-    }
+        expect($settings->getRotationGraceMonths())->toBe(4)
+            ->and($settings->getInactivityMonths())->toBe(24);
+    });
 
-    #[Test]
-    public function rotation_and_inactivity_are_stored_under_distinct_keys(): void
-    {
-        // Regression guard: writing one must not silently overwrite
-        // the other.
-        $settings = new PrunerSettings();
+    it('stores rotation and inactivity under distinct keys', function () {
+        // Regression guard: writing one must not silently overwrite the other.
+        $this->settings->setRotationGraceMonths(2);
+        $this->settings->setInactivityMonths(15);
 
-        $settings->setRotationGraceMonths(2);
-        $settings->setInactivityMonths(15);
+        expect($this->settings->getRotationGraceMonths())->toBe(2)
+            ->and($this->settings->getInactivityMonths())->toBe(15)
+            ->and(PrunerSettings::OPTION_ROTATION_GRACE_MONTHS)->not->toBe(PrunerSettings::OPTION_INACTIVITY_MONTHS);
+    });
 
-        $this->assertSame(2, $settings->getRotationGraceMonths());
-        $this->assertSame(15, $settings->getInactivityMonths());
-        $this->assertNotSame(
-            PrunerSettings::OPTION_ROTATION_GRACE_MONTHS,
-            PrunerSettings::OPTION_INACTIVITY_MONTHS
-        );
-    }
-
-    #[Test]
-    public function zero_is_a_valid_persisted_value(): void
-    {
+    it('persists zero as a valid value', function () {
         // Zero means "no grace", which is a legitimate (if aggressive)
-        // configuration. It must round-trip without being mistaken for
-        // a default fallback.
-        $settings = new PrunerSettings();
+        // configuration. It must round-trip without being mistaken for a
+        // default fallback.
+        $this->settings->setRotationGraceMonths(0);
+        $this->settings->setInactivityMonths(0);
 
-        $settings->setRotationGraceMonths(0);
-        $settings->setInactivityMonths(0);
+        expect($this->settings->getRotationGraceMonths())->toBe(0)
+            ->and($this->settings->getInactivityMonths())->toBe(0);
+    });
+});
 
-        $this->assertSame(0, $settings->getRotationGraceMonths());
-        $this->assertSame(0, $settings->getInactivityMonths());
-    }
+// ──────────────────────────────────────────────
+//  Enabled flag
+// ──────────────────────────────────────────────
+describe('enabled flag', function () {
+    it('is disabled by default', function () {
+        // The pruner is destructive (even if recoverable from trash), so a
+        // fresh install must default to disabled. This test would fail loudly
+        // if anyone ever flipped DEFAULT_ENABLED to true — that change
+        // deserves to be caught at code review.
+        expect($this->settings->isEnabled())->toBeFalse()
+            ->and(PrunerSettings::DEFAULT_ENABLED)->toBeFalse();
+    });
 
-    // ──────────────────────────────────────────────
-    //  Enabled flag
-    // ──────────────────────────────────────────────
-    #[Test]
-    public function pruner_is_disabled_by_default(): void
-    {
-        // The pruner is destructive (even if recoverable from trash),
-        // so a fresh install must default to disabled. This test
-        // would fail loudly if anyone ever flipped DEFAULT_ENABLED
-        // to true — that change deserves to be caught at code review.
-        $settings = new PrunerSettings();
+    it('round-trips true', function () {
+        $this->settings->setEnabled(true);
 
-        $this->assertFalse($settings->isEnabled());
-        $this->assertFalse(PrunerSettings::DEFAULT_ENABLED);
-    }
+        expect($this->settings->isEnabled())->toBeTrue();
+    });
 
-    #[Test]
-    public function setEnabled_round_trips_true(): void
-    {
-        $settings = new PrunerSettings();
+    it('round-trips false', function () {
+        // Enable then disable — proves the off-state isn't just the default
+        // fallback being hit.
+        $this->settings->setEnabled(true);
+        $this->settings->setEnabled(false);
 
-        $settings->setEnabled(true);
+        expect($this->settings->isEnabled())->toBeFalse();
+    });
 
-        $this->assertTrue($settings->isEnabled());
-    }
+    // The Settings API and various WP option backends serialise checkbox
+    // state inconsistently — '1', 1, true, 'on' have all been seen. Anything
+    // truthy must read back as enabled so a hand-edited wp_options row still
+    // works.
+    it('reads truthy stored values as enabled', function (mixed $truthy) {
+        $GLOBALS['scrutiny_test_options'] = [PrunerSettings::OPTION_ENABLED => $truthy];
 
-    #[Test]
-    public function setEnabled_round_trips_false(): void
-    {
-        // Enable then disable — proves the off-state isn't just the
-        // default fallback being hit.
-        $settings = new PrunerSettings();
+        expect((new PrunerSettings())->isEnabled())->toBeTrue();
+    })->with([
+        "string '1'" => ['1'],
+        'integer 1'  => [1],
+        'true'       => [true],
+        "string 'on'" => ['on'],
+    ]);
 
-        $settings->setEnabled(true);
-        $settings->setEnabled(false);
+    // The complement of the above: anything PHP treats as falsy (empty
+    // string, '0', integer 0, false) must read back as disabled.
+    it('reads falsy stored values as disabled', function (mixed $falsy) {
+        $GLOBALS['scrutiny_test_options'] = [PrunerSettings::OPTION_ENABLED => $falsy];
 
-        $this->assertFalse($settings->isEnabled());
-    }
+        expect((new PrunerSettings())->isEnabled())->toBeFalse();
+    })->with([
+        'empty string' => [''],
+        "string '0'"   => ['0'],
+        'integer 0'    => [0],
+        'false'        => [false],
+    ]);
+});
 
-    #[Test]
-    public function isEnabled_coerces_string_truthy_values(): void
-    {
-        // The Settings API and various WP option backends serialise
-        // checkbox state inconsistently — '1', 1, true, 'on' have
-        // all been seen. Anything truthy must read back as enabled
-        // so a hand-edited wp_options row still works.
-        foreach (['1', 1, true, 'on'] as $truthy) {
-            $GLOBALS['scrutiny_test_options'] = [
-                PrunerSettings::OPTION_ENABLED => $truthy,
-            ];
+// ──────────────────────────────────────────────
+//  Trash retention
+// ──────────────────────────────────────────────
+describe('trash retention', function () {
+    it('defaults to seven days', function () {
+        // Default mirrors the cron interval so a member trashed in run N is
+        // permanently deleted in run N+1 unless restored. This test pins down
+        // the default.
+        expect(PrunerSettings::DEFAULT_TRASH_RETENTION_DAYS)->toBe(7)
+            ->and($this->settings->getTrashRetentionDays())->toBe(7);
+    });
 
-            $settings = new PrunerSettings();
-            $this->assertTrue(
-                $settings->isEnabled(),
-                'Expected enabled=true for stored value: ' . var_export($truthy, true)
-            );
-        }
-    }
+    it('round-trips', function () {
+        $this->settings->setTrashRetentionDays(14);
 
-    #[Test]
-    public function isEnabled_coerces_string_falsy_values(): void
-    {
-        // The complement of the above: anything PHP treats as falsy
-        // (empty string, '0', integer 0, false) must read back as
-        // disabled.
-        foreach (['', '0', 0, false] as $falsy) {
-            $GLOBALS['scrutiny_test_options'] = [
-                PrunerSettings::OPTION_ENABLED => $falsy,
-            ];
+        expect($this->settings->getTrashRetentionDays())->toBe(14);
+    });
 
-            $settings = new PrunerSettings();
-            $this->assertFalse(
-                $settings->isEnabled(),
-                'Expected enabled=false for stored value: ' . var_export($falsy, true)
-            );
-        }
-    }
-
-    // ──────────────────────────────────────────────
-    //  Trash retention
-    // ──────────────────────────────────────────────
-    #[Test]
-    public function trash_retention_defaults_to_seven_days(): void
-    {
-        // Default mirrors the cron interval so a member trashed in
-        // run N is permanently deleted in run N+1 unless restored.
-        // This test pins down the default.
-        $settings = new PrunerSettings();
-
-        $this->assertSame(7, PrunerSettings::DEFAULT_TRASH_RETENTION_DAYS);
-        $this->assertSame(7, $settings->getTrashRetentionDays());
-    }
-
-    #[Test]
-    public function trash_retention_round_trips(): void
-    {
-        $settings = new PrunerSettings();
-
-        $settings->setTrashRetentionDays(14);
-
-        $this->assertSame(14, $settings->getTrashRetentionDays());
-    }
-
-    #[Test]
-    public function trash_retention_clamps_negative_values_to_zero(): void
-    {
-        // Defence in depth — a hand-edited wp_options row containing
-        // a negative integer must not be returned as-is, and the
-        // setter must reject the same.
-        $settings = new PrunerSettings();
-        $settings->setTrashRetentionDays(-3);
-        $this->assertSame(0, $settings->getTrashRetentionDays());
+    it('clamps negative values to zero', function () {
+        // Defence in depth — a hand-edited wp_options row containing a
+        // negative integer must not be returned as-is, and the setter must
+        // reject the same.
+        $this->settings->setTrashRetentionDays(-3);
+        expect($this->settings->getTrashRetentionDays())->toBe(0);
 
         $GLOBALS['scrutiny_test_options'][PrunerSettings::OPTION_TRASH_RETENTION_DAYS] = -10;
-        $settings = new PrunerSettings();
-        $this->assertSame(0, $settings->getTrashRetentionDays());
-    }
+        expect((new PrunerSettings())->getTrashRetentionDays())->toBe(0);
+    });
 
-    #[Test]
-    public function trash_retention_zero_is_a_valid_persisted_value(): void
-    {
-        // Zero means "delete everything currently in trash" — a
-        // legitimate (if aggressive) configuration. It must
-        // round-trip without being mistaken for the default.
-        $settings = new PrunerSettings();
+    it('persists zero as a valid value', function () {
+        // Zero means "delete everything currently in trash" — a legitimate (if
+        // aggressive) configuration. It must round-trip without being
+        // mistaken for the default.
+        $this->settings->setTrashRetentionDays(0);
 
-        $settings->setTrashRetentionDays(0);
-
-        $this->assertSame(0, $settings->getTrashRetentionDays());
-    }
-}
+        expect($this->settings->getTrashRetentionDays())->toBe(0);
+    });
+});

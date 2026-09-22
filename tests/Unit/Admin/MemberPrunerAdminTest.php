@@ -4,9 +4,6 @@ declare(strict_types=1);
 
 namespace Scrutiny\Tests\Unit\Admin;
 
-use PHPUnit\Framework\Attributes\CoversClass;
-use PHPUnit\Framework\Attributes\Test;
-use PHPUnit\Framework\Attributes\DataProvider;
 use BleedingDeacons\WpMocks\Exceptions\WpDieException;
 use BleedingDeacons\WpMocks\WpState;
 use ReflectionMethod;
@@ -14,9 +11,8 @@ use Scrutiny\Admin\MemberPrunerAdmin;
 use Scrutiny\Admin\ScrutinyMenu;
 use Scrutiny\Cleanup\PrunerCron;
 use Scrutiny\Cleanup\PrunerSettings;
-use Scrutiny\Tests\TestCase;
 
-/**
+/*
  * Tests for the Pruner Settings screen.
  *
  * Three kinds of method, three techniques — the pattern Amber established and
@@ -25,7 +21,7 @@ use Scrutiny\Tests\TestCase;
  *   - Registration (the constructor's hooks, registerMenu) runs for real and
  *     is asserted against the recorded state.
  *   - The capability guards call wp_die(), which the shared stubs turn into a
- *     WpDieException, so each refusal is a plain expectException.
+ *     WpDieException, so each refusal is a plain ->throws().
  *   - renderPage() is called inside an output buffer and asserted on as HTML.
  *
  * Note this plugin's bootstrap predates wp-mocks and keeps its own recording
@@ -44,479 +40,337 @@ use Scrutiny\Tests\TestCase;
  * persistPostedSettings() and savedRedirectUrl(), which were split out of
  * handleSave() for exactly that reason.
  */
-#[CoversClass(\Scrutiny\Admin\MemberPrunerAdmin::class)]
-final class MemberPrunerAdminTest extends TestCase
+
+covers(MemberPrunerAdmin::class);
+
+/** Grant the capability the screen and the save both check. */
+function grantPrunerCapability(): void
 {
-    private PrunerSettings $settings;
-    private MemberPrunerAdmin $page;
+    $GLOBALS['scrutiny_test_capabilities'][MemberPrunerAdmin::CAPABILITY] = true;
+}
 
-    protected function setUp(): void
-    {
-        parent::setUp();
+/**
+ * @return array<string, int> each recorded action hook's priority
+ */
+function recordedActionPriorities(): array
+{
+    return array_column($GLOBALS['scrutiny_test_actions'], 'priority', 'hook');
+}
 
-        $GLOBALS['scrutiny_test_actions']      = [];
-        $GLOBALS['scrutiny_test_capabilities'] = [];
-        $GLOBALS['scrutiny_test_options']      = [];
-        $GLOBALS['scrutiny_test_cron_queue']   = [];
+/**
+ * Put the next pruner cron run $offset seconds from now.
+ */
+function scheduleNextPrune(int $offset): int
+{
+    $timestamp = time() + $offset;
+    $GLOBALS['scrutiny_test_cron_queue'][PrunerCron::HOOK] = [
+        'timestamp'  => $timestamp,
+        'recurrence' => 'weekly',
+    ];
 
-        $_GET  = [];
-        $_POST = [];
+    return $timestamp;
+}
 
-        $this->settings = new PrunerSettings();
-        $this->page     = new MemberPrunerAdmin($this->settings);
-    }
+beforeEach(function () {
+    $GLOBALS['scrutiny_test_actions']      = [];
+    $GLOBALS['scrutiny_test_capabilities'] = [];
+    $GLOBALS['scrutiny_test_options']      = [];
+    $GLOBALS['scrutiny_test_cron_queue']   = [];
 
-    protected function tearDown(): void
-    {
-        $_GET  = [];
-        $_POST = [];
+    $_GET  = [];
+    $_POST = [];
 
-        parent::tearDown();
-    }
+    $this->settings = new PrunerSettings();
+    $this->page     = new MemberPrunerAdmin($this->settings);
 
-    /** Grant the capability the screen and the save both check. */
-    private function grantCapability(): void
-    {
-        $GLOBALS['scrutiny_test_capabilities'][MemberPrunerAdmin::CAPABILITY] = true;
-    }
+    // Render the screen and hand back its markup with line endings normalised
+    // — the template is a heredoc-style PHP block, so on Windows every
+    // attribute is separated by "\r\n" and an assertion written against "\n"
+    // would pass on CI and fail locally. captureOutput() does the normalising.
+    $this->render = fn (): string => captureOutput(fn () => $this->page->renderPage());
 
-    /**
-     * Render the screen and hand back its markup with line endings
-     * normalised — the template is a heredoc-style PHP block, so on Windows
-     * every attribute is separated by "\r\n" and an assertion written against
-     * "\n" would pass on CI and fail locally.
-     */
-    private function render(): string
-    {
-        ob_start();
-        try {
-            $this->page->renderPage();
-        } finally {
-            $html = (string) ob_get_clean();
-        }
+    // persistPostedSettings() is reached through reflection: its live caller,
+    // handleSave(), exits.
+    $this->persist = function (array $post): void {
+        $_POST = $post;
 
-        return str_replace("\r\n", "\n", $html);
-    }
+        (new ReflectionMethod(MemberPrunerAdmin::class, 'persistPostedSettings'))->invoke($this->page);
+    };
+});
 
-    // ── registration ──────────────────────────────────────────────────
-    #[Test]
-    public function it_hooks_the_menu_and_the_save_handler_on_construction(): void
-    {
-        $hooks = [];
-        foreach ($GLOBALS['scrutiny_test_actions'] as $action) {
-            $hooks[$action['hook']] = $action['priority'];
-        }
+afterEach(function () {
+    $_GET  = [];
+    $_POST = [];
+});
 
-        $this->assertArrayHasKey('admin_menu', $hooks);
-        $this->assertArrayHasKey('admin_init', $hooks);
-    }
+// ── registration ──────────────────────────────────────────────────
+describe('registration', function () {
+    it('hooks the menu and the save handler on construction', function () {
+        expect(recordedActionPriorities())->toHaveKeys(['admin_menu', 'admin_init']);
+    });
 
-    /**
-     * ScrutinyMenu registers the parent at the default priority 10 and strips
-     * the auto-generated child at 999. This page has to land between the two,
-     * or it attaches to a menu that does not exist yet.
-     */
-    #[Test]
-    public function the_menu_registration_runs_after_the_parent_menu_is_created(): void
-    {
-        $priorities = [];
-        foreach ($GLOBALS['scrutiny_test_actions'] as $action) {
-            $priorities[$action['hook']] = $action['priority'];
-        }
+    // ScrutinyMenu registers the parent at the default priority 10 and strips
+    // the auto-generated child at 999. This page has to land between the two,
+    // or it attaches to a menu that does not exist yet.
+    it('registers the menu after the parent menu is created', function () {
+        expect(recordedActionPriorities()['admin_menu'])->toBe(20);
+    });
 
-        $this->assertSame(20, $priorities['admin_menu']);
-    }
-
-    #[Test]
-    public function it_registers_a_submenu_under_the_scrutiny_menu(): void
-    {
+    it('registers a submenu under the Scrutiny menu', function () {
         $this->page->registerMenu();
 
-        $this->assertCount(1, WpState::$menus);
-        $this->assertSame([
-            'type'   => 'submenu',
-            'parent' => ScrutinyMenu::MENU_SLUG,
-            'slug'   => MemberPrunerAdmin::MENU_SLUG,
-            'title'  => 'Pruner Settings',
-            'cap'    => MemberPrunerAdmin::CAPABILITY,
-        ], WpState::$menus[0]);
-    }
+        expect(WpState::$menus)->toHaveCount(1)
+            ->and(WpState::$menus[0])->toBe([
+                'type'   => 'submenu',
+                'parent' => ScrutinyMenu::MENU_SLUG,
+                'slug'   => MemberPrunerAdmin::MENU_SLUG,
+                'title'  => 'Pruner Settings',
+                'cap'    => MemberPrunerAdmin::CAPABILITY,
+            ]);
+    });
+});
 
-    // ── save: guards ──────────────────────────────────────────────────
-    /**
-     * admin_init fires on every admin request, so the handler has to leave
-     * unrelated screens alone rather than consuming their nonces or reading
-     * their POST values.
-     */
-    #[Test]
-    public function the_save_handler_ignores_a_request_that_is_not_its_own_form(): void
-    {
+// ── save: guards ──────────────────────────────────────────────────
+describe('the save guards', function () {
+    // admin_init fires on every admin request, so the handler has to leave
+    // unrelated screens alone rather than consuming their nonces or reading
+    // their POST values.
+    it('ignores a request that is not its own form', function () {
         $_POST = ['rotation_grace_months' => '99', 'enabled' => '1'];
 
         $this->page->handleSave();
 
-        $this->assertSame([], $GLOBALS['scrutiny_test_options'], 'nothing should have been written');
-        $this->assertSame([], WpState::$redirects, 'and no redirect should have been issued');
-    }
+        expect($GLOBALS['scrutiny_test_options'])->toBe([], 'nothing should have been written')
+            ->and(WpState::$redirects)->toBe([], 'and no redirect should have been issued');
+    });
 
-    /**
-     * The nonce proves the request came from the form; it does not prove the
-     * submitter is allowed to change the settings, so the capability is
-     * checked separately.
-     */
-    #[Test]
-    public function the_save_handler_refuses_a_user_without_the_capability(): void
-    {
+    // The nonce proves the request came from the form; it does not prove the
+    // submitter is allowed to change the settings, so the capability is
+    // checked separately.
+    it('refuses a user without the capability', function () {
         $_POST = [MemberPrunerAdmin::NONCE_FIELD => 'nonce-' . MemberPrunerAdmin::NONCE_ACTION];
 
-        $this->expectException(WpDieException::class);
         $this->page->handleSave();
-    }
+    })->throws(WpDieException::class);
 
-    #[Test]
-    public function nothing_is_written_when_the_capability_check_fails(): void
-    {
+    it('writes nothing when the capability check fails', function () {
         $_POST = [
             MemberPrunerAdmin::NONCE_FIELD => 'nonce-' . MemberPrunerAdmin::NONCE_ACTION,
             'rotation_grace_months'        => '99',
         ];
 
-        try {
-            $this->page->handleSave();
-            $this->fail('expected wp_die() to stop the save');
-        } catch (WpDieException) {
-            $this->assertSame([], $GLOBALS['scrutiny_test_options']);
-        }
-    }
+        expect(fn () => $this->page->handleSave())->toThrow(WpDieException::class)
+            ->and($GLOBALS['scrutiny_test_options'])->toBe([]);
+    });
+});
 
-    // ── save: persistence (reflection: the live caller exits) ─────────
-
-    /** @param array<string, mixed> $post */
-    private function persist(array $post): void
-    {
-        $_POST = $post;
-
-        (new ReflectionMethod(MemberPrunerAdmin::class, 'persistPostedSettings'))
-            ->invoke($this->page);
-    }
-
-    #[Test]
-    public function a_full_submission_is_written_through_to_the_settings(): void
-    {
-        $this->persist([
+// ── save: persistence (reflection: the live caller exits) ─────────
+describe('persisting a submission', function () {
+    it('writes a full submission through to the settings', function () {
+        ($this->persist)([
             'rotation_grace_months' => '6',
             'inactivity_months'     => '18',
             'trash_retention_days'  => '30',
             'enabled'               => '1',
         ]);
 
-        $this->assertSame(6, $this->settings->getRotationGraceMonths());
-        $this->assertSame(18, $this->settings->getInactivityMonths());
-        $this->assertSame(30, $this->settings->getTrashRetentionDays());
-        $this->assertTrue($this->settings->isEnabled());
-    }
+        expect($this->settings->getRotationGraceMonths())->toBe(6)
+            ->and($this->settings->getInactivityMonths())->toBe(18)
+            ->and($this->settings->getTrashRetentionDays())->toBe(30)
+            ->and($this->settings->isEnabled())->toBeTrue();
+    });
 
-    /**
-     * An unticked checkbox is not posted at all, so "field absent" has to mean
-     * disabled — otherwise the pruner could never be turned off from the form.
-     */
-    #[Test]
-    public function an_absent_checkbox_disables_the_pruner(): void
-    {
+    // An unticked checkbox is not posted at all, so "field absent" has to mean
+    // disabled — otherwise the pruner could never be turned off from the form.
+    it('disables the pruner when the checkbox is absent', function () {
         $this->settings->setEnabled(true);
 
-        $this->persist(['rotation_grace_months' => '3']);
+        ($this->persist)(['rotation_grace_months' => '3']);
 
-        $this->assertFalse($this->settings->isEnabled());
-    }
+        expect($this->settings->isEnabled())->toBeFalse();
+    });
 
-    #[Test]
-    public function a_checkbox_posted_as_zero_also_disables_the_pruner(): void
-    {
+    it('disables the pruner when the checkbox is posted as zero', function () {
         $this->settings->setEnabled(true);
 
-        $this->persist(['enabled' => '0']);
+        ($this->persist)(['enabled' => '0']);
 
-        $this->assertFalse($this->settings->isEnabled());
-    }
+        expect($this->settings->isEnabled())->toBeFalse();
+    });
 
-    /**
-     * Every field runs through the same clamp, so the boundaries are asserted
-     * once per field rather than once per case.
-     */
-    #[DataProvider('boundedValues')]
-    #[Test]
-    public function posted_values_are_clamped_into_range(
-        string $posted,
-        int $expectedMonths,
-        int $expectedDays
-    ): void {
-        $this->persist([
+    // Every field runs through the same clamp, so the boundaries are asserted
+    // once per field rather than once per case. Months clamp at 144, days at
+    // 365.
+    it('clamps posted values into range', function (string $posted, int $expectedMonths, int $expectedDays) {
+        ($this->persist)([
             'rotation_grace_months' => $posted,
             'inactivity_months'     => $posted,
             'trash_retention_days'  => $posted,
         ]);
 
-        $this->assertSame($expectedMonths, $this->settings->getRotationGraceMonths());
-        $this->assertSame($expectedMonths, $this->settings->getInactivityMonths());
-        $this->assertSame($expectedDays, $this->settings->getTrashRetentionDays());
-    }
+        expect($this->settings->getRotationGraceMonths())->toBe($expectedMonths)
+            ->and($this->settings->getInactivityMonths())->toBe($expectedMonths)
+            ->and($this->settings->getTrashRetentionDays())->toBe($expectedDays);
+    })->with([
+        'zero'                  => ['0', 0, 0],
+        'in range'              => ['12', 12, 12],
+        'negative becomes zero' => ['-5', 0, 0],
+        'non-numeric is zero'   => ['nonsense', 0, 0],
+        'empty string is zero'  => ['', 0, 0],
+        'at the months ceiling' => ['144', 144, 144],
+        'over the months ceiling, under the days one' => ['200', 144, 200],
+        'over both ceilings'    => ['9999', 144, 365],
+    ]);
 
-    /**
-     * Months clamp at 144, days at 365.
-     *
-     * @return array<string, array{0: string, 1: int, 2: int}>
-     */
-    public static function boundedValues(): array
-    {
-        return [
-            'zero'                  => ['0', 0, 0],
-            'in range'              => ['12', 12, 12],
-            'negative becomes zero' => ['-5', 0, 0],
-            'non-numeric is zero'   => ['nonsense', 0, 0],
-            'empty string is zero'  => ['', 0, 0],
-            'at the months ceiling' => ['144', 144, 144],
-            'over the months ceiling, under the days one' => ['200', 144, 200],
-            'over both ceilings'    => ['9999', 144, 365],
-        ];
-    }
-
-    /**
-     * A wiped input posts an empty string and a missing one posts nothing;
-     * both mean "no grace period" rather than "reject the submission".
-     */
-    #[Test]
-    public function a_missing_field_is_saved_as_zero_rather_than_left_alone(): void
-    {
+    // A wiped input posts an empty string and a missing one posts nothing;
+    // both mean "no grace period" rather than "reject the submission".
+    it('saves a missing field as zero rather than leaving it alone', function () {
         $this->settings->setRotationGraceMonths(9);
 
-        $this->persist(['inactivity_months' => '12']);
+        ($this->persist)(['inactivity_months' => '12']);
 
-        $this->assertSame(0, $this->settings->getRotationGraceMonths());
-    }
+        expect($this->settings->getRotationGraceMonths())->toBe(0);
+    });
 
-    #[Test]
-    public function the_success_redirect_returns_to_this_page_with_the_updated_flag(): void
-    {
-        $url = (new ReflectionMethod(MemberPrunerAdmin::class, 'savedRedirectUrl'))
-            ->invoke($this->page);
+    it('redirects back to this page with the updated flag on success', function () {
+        $url = (new ReflectionMethod(MemberPrunerAdmin::class, 'savedRedirectUrl'))->invoke($this->page);
 
-        $this->assertIsString($url);
-        $this->assertStringContainsString('admin.php', $url);
-        $this->assertStringContainsString('page=' . MemberPrunerAdmin::MENU_SLUG, $url);
-        $this->assertStringContainsString('updated=1', $url);
-    }
+        expect($url)->toBeString()->toContain(
+            'admin.php',
+            'page=' . MemberPrunerAdmin::MENU_SLUG,
+            'updated=1',
+        );
+    });
+});
 
-    // ── render: guard ─────────────────────────────────────────────────
-    #[Test]
-    public function the_screen_refuses_a_user_without_the_capability(): void
-    {
-        $this->expectException(WpDieException::class);
-        $this->page->renderPage();
-    }
+// ── render: guard ─────────────────────────────────────────────────
+it('refuses to render the screen for a user without the capability', function () {
+    $this->page->renderPage();
+})->throws(WpDieException::class);
 
-    // ── render: output ────────────────────────────────────────────────
-    #[Test]
-    public function the_screen_renders_a_form_with_a_nonce_and_the_three_fields(): void
-    {
-        $this->grantCapability();
+// ── render: output ────────────────────────────────────────────────
+describe('the rendered screen', function () {
+    beforeEach(function () {
+        grantPrunerCapability();
+    });
 
-        $html = $this->render();
+    it('renders a form with a nonce and the three fields', function () {
+        expect(($this->render)())->toContain(
+            'Scrutiny – Pruner Settings',
+            MemberPrunerAdmin::NONCE_FIELD,
+            'name="rotation_grace_months"',
+            'name="inactivity_months"',
+            'name="trash_retention_days"',
+            'name="enabled"',
+        );
+    });
 
-        $this->assertStringContainsString('Scrutiny – Pruner Settings', $html);
-        $this->assertStringContainsString(MemberPrunerAdmin::NONCE_FIELD, $html);
-        $this->assertStringContainsString('name="rotation_grace_months"', $html);
-        $this->assertStringContainsString('name="inactivity_months"', $html);
-        $this->assertStringContainsString('name="trash_retention_days"', $html);
-        $this->assertStringContainsString('name="enabled"', $html);
-    }
-
-    #[Test]
-    public function the_stored_values_are_rendered_into_the_inputs(): void
-    {
-        $this->grantCapability();
+    it('renders the stored values into the inputs', function () {
         $this->settings->setRotationGraceMonths(4);
         $this->settings->setInactivityMonths(24);
         $this->settings->setTrashRetentionDays(14);
 
-        $html = $this->render();
+        expect(($this->render)())
+            ->toMatch('/name="rotation_grace_months"\s+value="4"/')
+            ->toMatch('/name="inactivity_months"\s+value="24"/')
+            ->toMatch('/name="trash_retention_days"\s+value="14"/');
+    });
 
-        $this->assertMatchesRegularExpression('/name="rotation_grace_months"\s+value="4"/', $html);
-        $this->assertMatchesRegularExpression('/name="inactivity_months"\s+value="24"/', $html);
-        $this->assertMatchesRegularExpression('/name="trash_retention_days"\s+value="14"/', $html);
-    }
+    // The maxima are rendered as the inputs' max attribute, so the browser
+    // enforces the same bound the save clamps to.
+    it('advertises the same ceilings the save clamps to', function () {
+        $html = ($this->render)();
 
-    /**
-     * The maxima are rendered as the inputs' max attribute, so the browser
-     * enforces the same bound the save clamps to.
-     */
-    #[Test]
-    public function the_inputs_advertise_the_same_ceilings_the_save_clamps_to(): void
-    {
-        $this->grantCapability();
+        expect(substr_count($html, 'max="144"'))->toBe(2, 'both month fields')
+            ->and($html)->toContain('max="365"');
+    });
 
-        $html = $this->render();
-
-        $this->assertSame(2, substr_count($html, 'max="144"'), 'both month fields');
-        $this->assertStringContainsString('max="365"', $html);
-    }
-
-    /**
-     * Matched against the input element rather than the whole page: the
-     * field's own description reads "When unchecked, …", so a bare search for
-     * "checked" passes in both states.
-     */
-    #[Test]
-    public function the_enabled_checkbox_reflects_the_stored_state(): void
-    {
-        $this->grantCapability();
+    // Matched against the input element rather than the whole page: the
+    // field's own description reads "When unchecked, …", so a bare search for
+    // "checked" passes in both states.
+    it('reflects the stored state in the enabled checkbox', function () {
         $this->settings->setEnabled(true);
 
-        $this->assertMatchesRegularExpression(
-            '/name="enabled"\s+value="1"\s+checked\s*>/',
-            $this->render()
-        );
-    }
+        expect(($this->render)())->toMatch('/name="enabled"\s+value="1"\s+checked\s*>/');
+    });
 
-    #[Test]
-    public function the_checkbox_is_unchecked_when_the_pruner_is_disabled(): void
-    {
-        $this->grantCapability();
+    it('leaves the checkbox unchecked when the pruner is disabled', function () {
         $this->settings->setEnabled(false);
 
-        $this->assertMatchesRegularExpression(
-            '/name="enabled"\s+value="1"\s*>/',
-            $this->render()
-        );
-        $this->assertDoesNotMatchRegularExpression(
-            '/name="enabled"\s+value="1"\s+checked/',
-            $this->render()
-        );
-    }
+        expect(($this->render)())
+            ->toMatch('/name="enabled"\s+value="1"\s*>/')
+            ->not->toMatch('/name="enabled"\s+value="1"\s+checked/');
+    });
 
-    /**
-     * The banner is the at-a-glance answer to "is this about to do
-     * something?", so the two states have to be distinguishable.
-     */
-    #[Test]
-    public function an_enabled_pruner_gets_a_warning_banner(): void
-    {
-        $this->grantCapability();
+    // The banner is the at-a-glance answer to "is this about to do
+    // something?", so the two states have to be distinguishable.
+    it('gives an enabled pruner a warning banner', function () {
         $this->settings->setEnabled(true);
 
-        $html = $this->render();
+        expect(($this->render)())
+            ->toContain('The pruner is currently enabled.', 'notice-warning')
+            ->not->toContain('currently disabled');
+    });
 
-        $this->assertStringContainsString('The pruner is currently enabled.', $html);
-        $this->assertStringContainsString('notice-warning', $html);
-        $this->assertStringNotContainsString('currently disabled', $html);
-    }
+    it('gives a disabled pruner an info banner', function () {
+        expect(($this->render)())
+            ->toContain('The pruner is currently disabled.', 'notice-info')
+            ->not->toContain('currently enabled');
+    });
 
-    #[Test]
-    public function a_disabled_pruner_gets_an_info_banner(): void
-    {
-        $this->grantCapability();
-
-        $html = $this->render();
-
-        $this->assertStringContainsString('The pruner is currently disabled.', $html);
-        $this->assertStringContainsString('notice-info', $html);
-        $this->assertStringNotContainsString('currently enabled', $html);
-    }
-
-    #[Test]
-    public function the_saved_notice_appears_only_after_a_save(): void
-    {
-        $this->grantCapability();
-
-        $this->assertStringNotContainsString('Settings saved.', $this->render());
+    it('shows the saved notice only after a save', function () {
+        expect(($this->render)())->not->toContain('Settings saved.');
 
         $_GET['updated'] = '1';
 
-        $this->assertStringContainsString('Settings saved.', $this->render());
-    }
+        expect(($this->render)())->toContain('Settings saved.');
+    });
 
-    /**
-     * The flag is compared strictly against '1', so a truthy-but-different
-     * value in the query string does not fake a save.
-     */
-    #[Test]
-    public function an_unrecognised_updated_flag_does_not_show_the_saved_notice(): void
-    {
-        $this->grantCapability();
+    // The flag is compared strictly against '1', so a truthy-but-different
+    // value in the query string does not fake a save.
+    it('does not show the saved notice for an unrecognised updated flag', function () {
         $_GET['updated'] = 'yes';
 
-        $this->assertStringNotContainsString('Settings saved.', $this->render());
-    }
+        expect(($this->render)())->not->toContain('Settings saved.');
+    });
+});
 
-    // ── render: the next-run line ─────────────────────────────────────
-    /**
-     * The line is shown whether or not the pruner is enabled, because the cron
-     * schedule is independent of the flag — an admin re-enabling the pruner
-     * needs to know when the next run will land.
-     */
-    #[Test]
-    public function an_unscheduled_cron_event_is_reported_as_such(): void
-    {
-        $this->grantCapability();
-
-        $html = $this->render();
-
-        $this->assertStringContainsString('Cron event is not scheduled', $html);
-    }
-
-    #[Test]
-    public function a_future_run_is_reported_with_its_formatted_timestamp(): void
-    {
-        $this->grantCapability();
+// ── render: the next-run line ─────────────────────────────────────
+// The line is shown whether or not the pruner is enabled, because the cron
+// schedule is independent of the flag — an admin re-enabling the pruner
+// needs to know when the next run will land.
+describe('the next-run line', function () {
+    beforeEach(function () {
+        grantPrunerCapability();
         $GLOBALS['scrutiny_test_options']['date_format'] = 'Y-m-d';
         $GLOBALS['scrutiny_test_options']['time_format'] = 'H:i';
+    });
 
-        $future = time() + 3600;
-        $GLOBALS['scrutiny_test_cron_queue'][PrunerCron::HOOK] = [
-            'timestamp'  => $future,
-            'recurrence' => 'weekly',
-        ];
+    it('reports an unscheduled cron event as such', function () {
+        expect(($this->render)())->toContain('Cron event is not scheduled');
+    });
 
-        $html = $this->render();
+    it('reports a future run with its formatted timestamp', function () {
+        $future = scheduleNextPrune(3600);
 
-        $this->assertStringContainsString('Next scheduled run: ' . date('Y-m-d H:i', $future), $html);
-        $this->assertStringNotContainsString('overdue', $html);
-    }
+        expect(($this->render)())
+            ->toContain('Next scheduled run: ' . date('Y-m-d H:i', $future))
+            ->not->toContain('overdue');
+    });
 
-    /**
-     * A timestamp in the past means WP-Cron has not fired — common on a quiet
-     * site — rather than that the event is missing, so it gets its own wording.
-     */
-    #[Test]
-    public function a_past_timestamp_is_reported_as_overdue(): void
-    {
-        $this->grantCapability();
-        $GLOBALS['scrutiny_test_options']['date_format'] = 'Y-m-d';
-        $GLOBALS['scrutiny_test_options']['time_format'] = 'H:i';
+    // A timestamp in the past means WP-Cron has not fired — common on a quiet
+    // site — rather than that the event is missing, so it gets its own
+    // wording.
+    it('reports a past timestamp as overdue', function () {
+        scheduleNextPrune(-3600);
 
-        $GLOBALS['scrutiny_test_cron_queue'][PrunerCron::HOOK] = [
-            'timestamp'  => time() - 3600,
-            'recurrence' => 'weekly',
-        ];
+        expect(($this->render)())->toContain('overdue — will fire on the next site visit');
+    });
 
-        $html = $this->render();
-
-        $this->assertStringContainsString('overdue — will fire on the next site visit', $html);
-    }
-
-    #[Test]
-    public function the_next_run_line_is_shown_when_the_pruner_is_enabled_too(): void
-    {
-        $this->grantCapability();
+    it('is shown when the pruner is enabled too', function () {
         $this->settings->setEnabled(true);
-        $GLOBALS['scrutiny_test_cron_queue'][PrunerCron::HOOK] = [
-            'timestamp'  => time() + 3600,
-            'recurrence' => 'weekly',
-        ];
+        scheduleNextPrune(3600);
 
-        $html = $this->render();
-
-        $this->assertStringContainsString('Next scheduled run:', $html);
-        $this->assertStringContainsString('The pruner is currently enabled.', $html);
-    }
-}
+        expect(($this->render)())->toContain('Next scheduled run:', 'The pruner is currently enabled.');
+    });
+});

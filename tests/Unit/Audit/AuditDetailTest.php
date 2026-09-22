@@ -4,15 +4,11 @@ declare(strict_types=1);
 
 namespace Scrutiny\Tests\Unit\Audit;
 
-use PHPUnit\Framework\Attributes\CoversClass;
-use PHPUnit\Framework\Attributes\Test;
-use PHPUnit\Framework\Attributes\DataProvider;
-use function Brain\Monkey\Functions\when;
+use Brain\Monkey\Functions;
 use Scrutiny\Audit\AuditDetail;
-use Scrutiny\Tests\TestCase;
 use stdClass;
 
-/**
+/*
  * Tests for AuditDetail, the Detail-column renderer shared by the Audit Log
  * admin page and the GdprAuditHistory field.
  *
@@ -22,147 +18,99 @@ use stdClass;
  * than disappearing or half-parsing, so the fallback path gets as much
  * attention here as the happy one.
  */
-#[CoversClass(\Scrutiny\Audit\AuditDetail::class)]
-class AuditDetailTest extends TestCase
+
+covers(AuditDetail::class);
+
+function auditEntry(string $action, string $detail): stdClass
 {
-    private function entry(string $action, string $detail): stdClass
-    {
-        $entry = new stdClass();
-        $entry->action = $action;
-        $entry->detail = $detail;
+    $entry = new stdClass();
+    $entry->action = $action;
+    $entry->detail = $detail;
 
-        return $entry;
-    }
+    return $entry;
+}
 
-    // ──────────────────────────────────────────────
-    //  Plain-text fallback
-    // ──────────────────────────────────────────────
-    #[Test]
-    public function it_renders_other_actions_as_plain_text(): void
-    {
-        $this->assertSame(
-            'Changed from x to y',
-            AuditDetail::render($this->entry('update', 'Changed from x to y'))
-        );
-    }
+// ──────────────────────────────────────────────
+//  Plain-text fallback
+// ──────────────────────────────────────────────
+describe('plain-text fallback', function () {
+    it('renders other actions as plain text', function () {
+        expect(AuditDetail::render(auditEntry('update', 'Changed from x to y')))->toBe('Changed from x to y');
+    });
 
-    #[Test]
-    public function it_escapes_the_plain_text_it_falls_back_to(): void
-    {
-        $html = AuditDetail::render($this->entry('update', '<script>alert(1)</script>'));
+    it('escapes the plain text it falls back to', function () {
+        expect(AuditDetail::render(auditEntry('update', '<script>alert(1)</script>')))->not->toContain('<script');
+    });
 
-        $this->assertStringNotContainsString('<script', $html);
-    }
+    it('falls back when the caller string does not parse', function (string $detail) {
+        // A half-parsed caller string would put a wrong name against a
+        // member's record, which is worse than showing the raw value.
+        expect(AuditDetail::render(auditEntry('view', $detail)))->toBe($detail);
+    })->with([
+        'no caller prefix'   => ['Viewed contact details'],
+        'empty result label' => ['caller:John D.#7;result:'],
+        'no hash at all'     => ['caller:John D.'],
+        'empty name'         => ['caller:#7'],
+        'non-numeric id'     => ['caller:John D.#abc'],
+        'zero id'            => ['caller:John D.#0'],
+    ]);
+});
 
-    #[DataProvider('unparseableDetails')]
-    #[Test]
-    public function it_falls_back_when_the_caller_string_does_not_parse(string $detail): void
-    {
-        // A half-parsed caller string would put a wrong name against a member's
-        // record, which is worse than showing the raw value.
-        $this->assertSame($detail, AuditDetail::render($this->entry('view', $detail)));
-    }
+// ──────────────────────────────────────────────
+//  Structured caller strings
+// ──────────────────────────────────────────────
+describe('structured caller strings', function () {
+    it('labels a view row as a requester and links them', function () {
+        Functions\when('get_edit_post_link')->justReturn('https://example.test/edit-7');
 
-    /**
-     * @return array<string, array{0:string}>
-     */
-    public static function unparseableDetails(): array
-    {
-        return [
-            'no caller prefix'   => ['Viewed contact details'],
-            'empty result label' => ['caller:John D.#7;result:'],
-            'no hash at all'     => ['caller:John D.'],
-            'empty name'         => ['caller:#7'],
-            'non-numeric id'     => ['caller:John D.#abc'],
-            'zero id'            => ['caller:John D.#0'],
-        ];
-    }
+        expect(AuditDetail::render(auditEntry('view', 'caller:John D.#7')))
+            ->toContain('Requester: ', 'href="https://example.test/edit-7"', '>John D.</a>');
+    });
 
-    // ──────────────────────────────────────────────
-    //  Structured caller strings
-    // ──────────────────────────────────────────────
-    #[Test]
-    public function it_labels_a_view_row_as_a_requester_and_links_them(): void
-    {
-        when('get_edit_post_link')->justReturn('https://example.test/edit-7');
+    it('labels a call row as a caller and shows the result', function () {
+        Functions\when('get_edit_post_link')->justReturn('https://example.test/edit-7');
 
-        $html = AuditDetail::render($this->entry('view', 'caller:John D.#7'));
+        expect(AuditDetail::render(auditEntry('call', 'caller:John D.#7;result:No answer')))
+            ->toContain('Caller: ', 'Result: No answer');
+    });
 
-        $this->assertStringContainsString('Requester: ', $html);
-        $this->assertStringContainsString('href="https://example.test/edit-7"', $html);
-        $this->assertStringContainsString('>John D.</a>', $html);
-    }
-
-    #[Test]
-    public function it_labels_a_call_row_as_a_caller_and_shows_the_result(): void
-    {
-        when('get_edit_post_link')->justReturn('https://example.test/edit-7');
-
-        $html = AuditDetail::render($this->entry('call', 'caller:John D.#7;result:No answer'));
-
-        $this->assertStringContainsString('Caller: ', $html);
-        $this->assertStringContainsString('Result: No answer', $html);
-    }
-
-    #[Test]
-    public function it_drops_the_link_when_the_caller_has_no_edit_screen(): void
-    {
+    it('drops the link when the caller has no edit screen', function () {
         // get_edit_post_link() returns null for a post the current user cannot
         // edit, or one that no longer exists. The name still has to render.
-        when('get_edit_post_link')->justReturn(null);
+        Functions\when('get_edit_post_link')->justReturn(null);
 
-        $html = AuditDetail::render($this->entry('view', 'caller:John D.#7'));
+        expect(AuditDetail::render(auditEntry('view', 'caller:John D.#7')))
+            ->toContain('Requester: John D.')
+            ->not->toContain('<a ');
+    });
 
-        $this->assertStringContainsString('Requester: John D.', $html);
-        $this->assertStringNotContainsString('<a ', $html);
-    }
+    it('renders the unknown sentinel without a link', function () {
+        expect(AuditDetail::render(auditEntry('view', 'caller:unknown')))->toBe('Requester: unknown');
+    });
 
-    #[Test]
-    public function it_renders_the_unknown_sentinel_without_a_link(): void
-    {
-        $html = AuditDetail::render($this->entry('view', 'caller:unknown'));
+    it('renders the unknown sentinel with a call result', function () {
+        expect(AuditDetail::render(auditEntry('call', 'caller:unknown;result:Engaged')))
+            ->toContain('Caller: unknown', 'Result: Engaged');
+    });
 
-        $this->assertSame('Requester: unknown', $html);
-    }
+    it('splits on the last hash so names containing one survive', function () {
+        Functions\when('get_edit_post_link')->justReturn('https://example.test/edit-7');
 
-    #[Test]
-    public function it_renders_the_unknown_sentinel_with_a_call_result(): void
-    {
-        $html = AuditDetail::render($this->entry('call', 'caller:unknown;result:Engaged'));
+        expect(AuditDetail::render(auditEntry('view', 'caller:John #2 D.#7')))
+            ->toContain('John #2 D.', 'edit-7');
+    });
 
-        $this->assertStringContainsString('Caller: unknown', $html);
-        $this->assertStringContainsString('Result: Engaged', $html);
-    }
+    it('escapes a name and result taken from the detail string', function () {
+        Functions\when('get_edit_post_link')->justReturn(null);
 
-    #[Test]
-    public function it_splits_on_the_last_hash_so_names_containing_one_survive(): void
-    {
-        when('get_edit_post_link')->justReturn('https://example.test/edit-7');
+        expect(AuditDetail::render(auditEntry('call', 'caller:<b>John</b>#7;result:<script>alert(1)</script>')))
+            ->not->toContain('<b>')
+            ->not->toContain('<script');
+    });
 
-        $html = AuditDetail::render($this->entry('view', 'caller:John #2 D.#7'));
-
-        $this->assertStringContainsString('John #2 D.', $html);
-        $this->assertStringContainsString('edit-7', $html);
-    }
-
-    #[Test]
-    public function it_escapes_a_name_and_result_taken_from_the_detail_string(): void
-    {
-        when('get_edit_post_link')->justReturn(null);
-
-        $html = AuditDetail::render(
-            $this->entry('call', 'caller:<b>John</b>#7;result:<script>alert(1)</script>')
-        );
-
-        $this->assertStringNotContainsString('<b>', $html);
-        $this->assertStringNotContainsString('<script', $html);
-    }
-
-    #[Test]
-    public function it_tolerates_a_row_with_no_detail_or_action_at_all(): void
-    {
+    it('tolerates a row with no detail or action at all', function () {
         // $wpdb rows are NOT NULL in the schema, but the renderer is handed
         // whatever the caller has; an absent property must not fatal.
-        $this->assertSame('', AuditDetail::render(new stdClass()));
-    }
-}
+        expect(AuditDetail::render(new stdClass()))->toBe('');
+    });
+});
