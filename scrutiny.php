@@ -3,7 +3,7 @@
 /**
  * Plugin Name: Scrutiny
  * Description: GDPR-compliant audit logging and personal data obscuring for Unity. Required by Amber.
- * Version: 2.0.3
+ * Version: 2.0.4
  * Requires at least: 6.0
  * Requires PHP: 8.4
  * GitHub Plugin URI: https://github.com/bleedingdeacons/scrutiny
