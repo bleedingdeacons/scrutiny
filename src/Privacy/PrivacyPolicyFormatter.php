@@ -11,6 +11,7 @@ if (!defined('ABSPATH')) {
 
 use Unity\PrivacyPolicies\Interfaces\PrivacyPolicy;
 use function mysql2date;
+use function wp_kses_post;
 
 /**
  * Privacy Policy Formatter
@@ -75,8 +76,32 @@ final class PrivacyPolicyFormatter
             'title'    => $policy->getTitle(),
             'version'  => $policy->getVersion(),
             'active'   => $policy->isActive(),
-            'policy'   => $policy->getPolicy(),
+            'policy'   => $this->sanitiseBody($policy->getPolicy()),
             'modified' => $modified === false ? '' : $modified,
         ];
+    }
+
+    /**
+     * Filter the WYSIWYG body down to safe post-content markup.
+     *
+     * Every surface that renders the body gets it from here: the shortcode,
+     * and REST consumers such as the Register app, which drops it verbatim
+     * into the HTML acceptance email. An administrator with unfiltered_html
+     * can store anything in the field, so kses has to run here rather than
+     * only in the shortcode — it removes <script>, on* handlers and links
+     * with schemes WordPress does not allow (javascript:, data:, vbscript:).
+     *
+     * <style> and <script> blocks are dropped first, contents and all. kses
+     * lets <style> through, and a leaked one is almost always an accidental
+     * paste from a styled source that can surface as visible CSS text; the
+     * explicit <script> strip means a reader need not verify kses to know
+     * scripts are gone.
+     */
+    private function sanitiseBody(string $body): string
+    {
+        $body = preg_replace('#<style\b[^>]*>.*?</style>#is', '', $body) ?? $body;
+        $body = preg_replace('#<script\b[^>]*>.*?</script>#is', '', $body) ?? $body;
+
+        return wp_kses_post($body);
     }
 }

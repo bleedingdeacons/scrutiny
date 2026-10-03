@@ -64,6 +64,22 @@ function seedPolicy(int $id, string $gmt, bool $active = false): void
     ];
 }
 
+/**
+ * The body the active route serves, seeded with $body. Register drops this
+ * verbatim into an HTML email, so whatever survives here reaches a mail client.
+ */
+function activePolicyBody(string $body): string
+{
+    $GLOBALS['scrutiny_test_posts'][1] = policyPost(1);
+    $GLOBALS['scrutiny_test_acf_fields'][1] = [
+        'gdpr-policy'         => $body,
+        'gdpr-policy-version' => '1.0',
+        'gdpr-policy-active'  => true,
+    ];
+
+    return policyController()->getActive()->get_data()['policy'];
+}
+
 beforeEach(function () {
     // Reset every in-memory store so one test's fixtures can't bleed into the
     // next.
@@ -190,6 +206,40 @@ describe('the response shape', function () {
             ->policy->toBe('')
             ->version->toBe('')
             ->active->toBeFalse();
+    });
+});
+
+// ──────────────────────────────────────────────
+//  The policy body over REST
+// ──────────────────────────────────────────────
+describe('the policy body over REST', function () {
+    it('drops a link to a scheme WordPress does not allow, keeping its text', function (string $href) {
+        expect(activePolicyBody('<p><a href="' . $href . '">Read more</a></p>'))
+            ->not->toContain($href)
+            ->not->toContain('href=')
+            ->toContain('Read more');
+    })->with([
+        'javascript:' => ['javascript:alert(1)'],
+        'JavaScript:' => ['JavaScript:alert(1)'],
+        'data:'       => ['data:text/html;base64,PHNjcmlwdD5hbGVydCgxKTwvc2NyaXB0Pg=='],
+        'vbscript:'   => ['vbscript:msgbox(1)'],
+    ]);
+
+    it('keeps web and mail links', function (string $href) {
+        expect(activePolicyBody('<p><a href="' . $href . '">Contact</a></p>'))
+            ->toBe('<p><a href="' . $href . '">Contact</a></p>');
+    })->with([
+        'https'  => ['https://example.org/privacy'],
+        'mailto' => ['mailto:privacy@example.org'],
+    ]);
+
+    it('drops script and style blocks and event handlers', function () {
+        expect(activePolicyBody(
+            '<style>body { color: red; }</style>'
+            . '<p>Safe.</p>'
+            . '<script>alert(1)</script>'
+            . '<p onclick="alert(2)">Click</p>'
+        ))->toBe('<p>Safe.</p><p>Click</p>');
     });
 });
 

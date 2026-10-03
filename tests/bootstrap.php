@@ -562,7 +562,8 @@ $GLOBALS['scrutiny_test_rest_routes'] = [];
 //  Shortcode + escaping stubs
 //
 //  PrivacyPolicyShortcode registers a tag via add_shortcode() and
-//  passes its rendered fields through esc_html() / wp_kses_post().
+//  passes its rendered fields through esc_html() / wp_kses_post()
+//  (the latter supplied by wp-mocks; see below).
 //  Tests assert on the registered tag and on the rendered HTML, so
 //  each stub records exactly what the production function would
 //  produce — minus the WP-specific filter chain we don't have a
@@ -600,24 +601,9 @@ if (!function_exists('esc_html')) {
     }
 }
 
-if (!function_exists('wp_kses_post')) {
-    /**
-     * Stand-in for wp_kses_post(), which strips dangerous tags
-     * while preserving the standard "post content" tag set. The
-     * real implementation runs a full whitelist; for the shortcode
-     * tests we only need to verify (a) safe markup passes through
-     * intact, and (b) clearly-dangerous markup (script/onerror) is
-     * removed. A minimal regex-based filter covers both.
-     */
-    function wp_kses_post(string $html): string
-    {
-        // Drop <script>…</script> blocks entirely.
-        $html = preg_replace('#<script\b[^>]*>.*?</script>#is', '', $html) ?? $html;
-        // Drop inline event handlers like onclick="…" / onerror='…'.
-        $html = preg_replace('#\son\w+\s*=\s*("[^"]*"|\'[^\']*\')#i', '', $html) ?? $html;
-        return $html;
-    }
-}
+// wp_kses_post() is deliberately not stubbed here. wp-mocks' version, loaded
+// at the foot of this file, also refuses href/src schemes WordPress does not
+// allow; a stand-in here would shadow it and let a javascript: link through.
 
 if (!class_exists('WP_Post')) {
     /**
