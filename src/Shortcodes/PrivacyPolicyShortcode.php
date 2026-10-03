@@ -108,12 +108,10 @@ final class PrivacyPolicyShortcode
         // The two scalar fields render as plain text — escape them
         // aggressively so a malformed version string can never inject
         // markup. The policy body is the exception: it is the WYSIWYG
-        // output the editor authored, so it goes through a layered
-        // pipeline — explicit removal of <style> and <script> blocks
-        // (which can leak verbatim into the rendered page from a
-        // careless paste), then wp_kses_post() to strip any remaining
-        // dangerous tags while preserving the formatting paragraphs,
-        // lists, links and inline styles the editor expects to see.
+        // output the editor authored, and arrives from the formatter
+        // already filtered — <style> and <script> blocks removed, then
+        // wp_kses_post() — so it keeps the paragraphs, lists, links
+        // and inline styles the editor expects to see.
         $version  = esc_html((string) $shape['version']);
         $modified = esc_html((string) $shape['modified']);
 
@@ -129,21 +127,10 @@ final class PrivacyPolicyShortcode
             .   '<dt>Updated</dt><dd>' . $modified . '</dd>'
             . '</dl>';
 
-        // Strip any <style>…</style> blocks before the kses pass.
-        // wp_kses_post() allows <style> through (WP uses it for
-        // editor-injected inline styles), but in the privacy-policy
-        // context a leaked <style> block is almost always an
-        // accidental copy-paste from a styled source — and depending
-        // on where the rendered shortcode lands in the DOM, the
-        // browser may treat the contents as visible text rather than
-        // as a stylesheet, which is exactly what produced the "body
-        // { font-family: … }" rendering bug. We also drop <script>
-        // explicitly even though kses removes it, so that callers
-        // reading this code don't have to verify the kses behaviour
-        // to know dangerous tags are gone.
+        // The <style>/<script> strip that fixed the "body
+        // { font-family: … }" rendering bug lives in the formatter
+        // now, so the REST surface gets it too.
         $rawBody = (string) $shape['policy'];
-        $rawBody = preg_replace('#<style\b[^>]*>.*?</style>#is', '', $rawBody) ?? $rawBody;
-        $rawBody = preg_replace('#<script\b[^>]*>.*?</script>#is', '', $rawBody) ?? $rawBody;
 
         // Append the metadata block to the end of the body. The
         // metadata is the "small print" tail of a privacy notice
